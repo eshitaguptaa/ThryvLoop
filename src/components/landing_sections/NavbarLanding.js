@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function NavbarLanding() {
+export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
   return (
     <nav className="fixed top-0 w-full bg-white/95 backdrop-blur-md z-[1000]">
       <div className="max-w-[1200px] mx-auto px-8 py-1.5 flex justify-between items-center">
@@ -43,18 +43,18 @@ export default function NavbarLanding() {
           </li>
         </ul>
         <div className="flex gap-4">
-          <Link 
-            href="/auth/signin" 
+          <button
+            onClick={onSignInClick}
             className="px-5 py-2 rounded-lg font-semibold no-underline transition-all bg-transparent text-indigo-500 border-2 border-indigo-500 hover:bg-indigo-500 hover:text-white"
           >
             Sign In
-          </Link>
-          <Link 
-            href="/auth/signup" 
+          </button>
+          <button
+            onClick={onGetStartedClick}
             className="px-5 py-2 rounded-lg font-semibold no-underline transition-all bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/30"
           >
             Get Started
-          </Link>
+          </button>
         </div>
       </div>
     </nav>

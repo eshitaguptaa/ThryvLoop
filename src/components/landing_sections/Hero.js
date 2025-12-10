@@ -1,7 +1,6 @@
-import Link from "next/link";
 import Image from "next/image";
 
-export default function Hero() {
+export default function Hero({ onGetStartedClick }) {
   return (
     <section className="mt-6 px-6 py-10 flex justify-center bg-white relative overflow-visible min-h-screen">
       {/* Grey inner area with dotted background pattern */}
@@ -22,7 +21,7 @@ export default function Hero() {
           {/* Ambience image in top right corner */}
           <div className="absolute top-0 right-0 z-20">
             <Image 
-              src={`/LandingPageImages/ambience.png?${Date.now()}`} 
+              src="/LandingPageImages/ambience.png" 
               alt="Ambience" 
               width={290} 
               height={210}
@@ -34,7 +33,7 @@ export default function Hero() {
           {/* Analytics image in top left corner */}
           <div className="absolute top-5 left-0 z-20">
             <Image 
-              src={`/LandingPageImages/analytic.png?v=${Date.now()}`} 
+              src="/LandingPageImages/analytic.png" 
               alt="Analytics" 
               width={290} 
               height={240}
@@ -46,7 +45,7 @@ export default function Hero() {
           {/* Integrations image in bottom right corner */}
           <div className="absolute bottom-0 right-4 z-20">
             <Image 
-              src={`/LandingPageImages/Integrations.png?v=${Date.now()}`} 
+              src="/LandingPageImages/Integrations.png" 
               alt="Integrations" 
               width={280} 
               height={200}
@@ -58,7 +57,7 @@ export default function Hero() {
           {/* Tasks image in bottom left corner */}
           <div className="absolute bottom-0 left-4 z-20">
             <Image 
-              src={`/LandingPageImages/tasks.png?v=${Date.now()}`} 
+              src="/LandingPageImages/tasks.png" 
               alt="Tasks" 
               width={270} 
               height={200}
@@ -96,12 +95,12 @@ export default function Hero() {
               </p>
 
               <div className="flex justify-center">
-                <Link 
-                  href="/auth/signup"
+                <button
+                  onClick={onGetStartedClick}
                   className="px-8 py-3 rounded-lg font-semibold bg-indigo-500 text-white hover:bg-indigo-600 shadow-lg transition-colors"
                 >
                   Get free demo
-                </Link>
+                </button>
               </div>
             </div>
           </div>
