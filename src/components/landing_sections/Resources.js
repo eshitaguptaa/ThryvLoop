@@ -1,39 +1,274 @@
-import Link from 'next/link';
+import Link from "next/link";
+
+// Define the custom structural classes, now relying on CSS variables for color values
+const cardClasses = "relative overflow-hidden bg-[var(--white)] border border-[var(--light)] rounded-4xl transition-all duration-300 ease-out hover:border-[var(--secondary)] hover:shadow-2xl hover:shadow-[var(--secondary)]/30 hover:-translate-y-2";
+const iconBtnClasses = "flex items-center justify-center w-10 h-10 rounded-full bg-[var(--white)]/50 backdrop-blur-sm text-[var(--white)] transition-all duration-300 hover:bg-[var(--white)]/75 hover:scale-110";
 
 export default function Resources() {
   return (
-    <section className="py-24 px-8 bg-slate-50" id="resources">
-        <div className="max-w-[1200px] mx-auto">
-          <div className="text-center max-w-[700px] mx-auto mb-16">
-            <span className="inline-block bg-indigo-100 text-indigo-600 px-4 py-2 rounded-full font-semibold text-sm mb-4">
-              RESOURCES
+    // Base colors using variables
+    <div className="relative min-h-screen w-full font-display bg-[var(--white)] text-[var(--gray)] antialiased">
+      {/* Background Glows (Emphasizing Purple/Secondary) */}
+      <div className="absolute inset-0 -z-10 overflow-hidden">
+        {/* Glow 1: Primary (Purple) */}
+        <div className="absolute top-0 left-0 w-96 h-96 bg-[var(--primary)]/20 rounded-full blur-3xl opacity-60" />
+        {/* Glow 2: Secondary (Deep Purple) */}
+        <div className="absolute bottom-0 right-0 w-[30rem] h-[30rem] bg-[var(--secondary)]/20 rounded-full blur-3xl opacity-50" />
+      </div>
+
+      <main className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
+        {/* Header */}
+        <header className="text-center max-w-4xl mx-auto mb-20">
+          {/* UPDATED: LEARN & GET STARTED BADGE 
+            The structure is replicated, using --primary for accent color and --light for borders/rings.
+          */}
+          <div className="relative z-20 inline-flex items-center gap-2 rounded-full bg-[var(--white)]/70 px-4 py-1.5 text-xs font-semibold text-[var(--primary)] ring-1 ring-inset ring-[var(--light)] shadow-sm uppercase">
+            <span className="relative flex h-2 w-2">
+              {/* Pulsing effect using --primary */}
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--primary)] opacity-75"></span>
+              {/* Solid dot using --primary */}
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--primary)]"></span>
             </span>
-            <h2 className="text-4xl font-extrabold mb-4 text-slate-900">Learn & Get Started</h2>
-            <p className="text-lg text-slate-600">Everything you need to maximize your productivity with ThryvLoop</p>
+            LEARN & GET STARTED
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            
-            <div className="p-8 bg-white rounded-2xl border border-slate-200 transition-all hover:-translate-y-1 hover:shadow-xl hover:border-indigo-500">
-              <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mb-6 text-3xl">❓</div>
-              <h3 className="text-2xl font-bold mb-4 text-slate-900">Help Center</h3>
-              <p className="text-slate-600 mb-6 leading-relaxed">Find answers to common questions, troubleshoot issues, and learn best practices for productivity and focus.</p>
-              <a href="#" className="text-indigo-600 font-semibold no-underline hover:text-indigo-700">Visit Help Center →</a>
+          
+          {/* Header Gradient: Primary Dark via Secondary back to Primary Dark */}
+          <h1 className="mt-4 text-5xl sm:text-7xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-dark)] via-[var(--secondary)] to-[var(--primary-dark)]">
+            Unlock Your Potential
+          </h1>
+          {/* Secondary text color: --gray */}
+          <p className="mt-6 text-lg sm:text-xl text-[var(--gray)] max-w-2xl mx-auto">
+            Dive into our curated resources. Everything you need to master your
+            workflow and accelerate your journey from novice to expert.
+          </p>
+        </header>
+
+        {/* Main grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {/* Help Center Card */}
+          <div className={`group md:col-span-2 lg:col-span-2 ${cardClasses} p-8 md:p-10 flex flex-col`}>
+            <div className="flex items-center gap-4">
+              {/* Icon Circle: Background --light, Text --primary */}
+              <div className="flex-shrink-0 flex items-center justify-center w-16 h-16 rounded-full bg-[var(--light)] text-[var(--primary)]">
+                <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48" }}>
+                  support_agent
+                </span>
+              </div>
+              <div>
+                {/* Title color: --dark */}
+                <h3 className="text-3xl font-bold tracking-tight text-[var(--dark)]">
+                  Help Center
+                </h3>
+                {/* Secondary text color: --gray */}
+                <p className="mt-1 text-lg text-[var(--gray)]">
+                  Your complete guide to our platform.
+                </p>
+              </div>
             </div>
-            <div className="p-8 bg-white rounded-2xl border border-slate-200 transition-all hover:-translate-y-1 hover:shadow-xl hover:border-indigo-500">
-              <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mb-6 text-3xl">🎥</div>
-              <h3 className="text-2xl font-bold mb-4 text-slate-900">Video Tutorials</h3>
-              <p className="text-slate-600 mb-6 leading-relaxed">Step-by-step video guides showing you how to set up integrations, use features, and optimize your workflow.</p>
-              <a href="#" className="text-indigo-600 font-semibold no-underline hover:text-indigo-700">Watch Videos →</a>
+
+            {/* Search */}
+            <div className="mt-8 relative search-container">
+              {/* Icon color: --gray */}
+              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[var(--gray)] text-2xl pointer-events-none z-10">
+                search
+              </span>
+              <input
+                type="text"
+                placeholder="How can we help?"
+                // Input focus ring/border is PRIMARY purple
+                className="w-full pl-12 pr-4 py-4 bg-[var(--light)] border-2 border-transparent rounded-xl text-[var(--dark-light)] placeholder:text-[var(--gray)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] focus:bg-[var(--white)] transition-all duration-300 shadow-sm focus:shadow-md"
+              />
+              <div className="search-suggestions absolute top-full left-0 right-0 mt-2 bg-[var(--white)] border border-[var(--light)] rounded-xl shadow-lg p-2 opacity-0 transform -translate-y-2 pointer-events-none transition-all duration-300 z-20">
+                {/* Hover state: text --primary */}
+                <a className="flex items-center gap-3 px-4 py-2 text-[var(--gray)] hover:bg-[var(--light)] hover:text-[var(--primary)] rounded-lg transition-colors" href="#">
+                    <span className="material-symbols-outlined text-xl">history</span>
+                    <span>How to add team members</span>
+                </a>
+                <a className="flex items-center gap-3 px-4 py-2 text-[var(--gray)] hover:bg-[var(--light)] hover:text-[var(--primary)] rounded-lg transition-colors" href="#">
+                    <span className="material-symbols-outlined text-xl">history</span>
+                    <span>Billing and invoices</span>
+                </a>
+              </div>
             </div>
-            <div className="p-8 bg-white rounded-2xl border border-slate-200 transition-all hover:-translate-y-1 hover:shadow-xl hover:border-indigo-500">
-              <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mb-6 text-3xl">💡</div>
-              <h3 className="text-2xl font-bold mb-4 text-slate-900">Productivity Tips</h3>
-              <p className="text-slate-600 mb-6 leading-relaxed">Expert advice on time management, focus techniques, and productivity strategies to help you achieve more.</p>
-              <a href="#" className="text-indigo-600 font-semibold no-underline hover:text-indigo-700">Read Tips →</a>
+
+            {/* FAQ */}
+            <div className="mt-10 flex-grow grid grid-cols-2 gap-x-8 gap-y-6">
+              {[
+                { q: "How do I reset my password?", a: 'Go to the login page and click "Forgot Password". Follow the instructions sent to your email to create a new one.' },
+                { q: "Where can I find my invoices?", a: "You can find all your past and current invoices under the 'Billing' section in your account settings." },
+                { q: "How do I upgrade my plan?", a: "To upgrade your plan, visit the 'Subscription' page in your account and select a new plan." },
+                { q: "Can I integrate with other apps?", a: "Yes, we support numerous third-party integrations. Visit our 'Integrations' marketplace to connect your favorite apps." },
+              ].map((item) => (
+                <div key={item.q} className="faq-item group/faq">
+                  <a className="flex items-start justify-between gap-4" href="#">
+                    {/* Text hover: --primary */}
+                    <span className="font-semibold text-[var(--dark-light)] group-hover/faq:text-[var(--primary)] transition-colors">
+                      {item.q}
+                    </span>
+                    {/* Icon Circle: Text --primary */}
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--light)] flex items-center justify-center text-[var(--primary)] faq-icon">
+                      <span className="material-symbols-outlined text-base">add</span>
+                    </div>
+                  </a>
+                  <p className="text-[var(--gray)] text-sm faq-answer">
+                    {item.a}
+                  </p>
+                </div>
+              ))}
             </div>
-            
+
+            <div className="mt-8 pt-6 border-t border-[var(--light)] flex justify-between items-center">
+              <p className="text-sm text-[var(--gray)]">
+                Can't find what you're looking for?
+              </p>
+              {/* Link color: --primary */}
+              <Link
+                href="#"
+                className="inline-flex items-center font-bold text-[var(--primary)] group/link"
+              >
+                <span>Visit Full Help Center</span>
+                <span className="material-symbols-outlined ml-1.5 transition-transform duration-300 group-hover/link:translate-x-1">
+                  arrow_forward
+                </span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Right column: Video Tutorials & Productivity Tips */}
+          <div className="grid grid-cols-1 gap-8 lg:col-start-3">
+            {/* Video Tutorials */}
+            <div className={`group ${cardClasses} flex flex-col p-0`}>
+              {/* Background gradient: Primary Dark via Secondary to Primary Dark (More Purple) */}
+              <div className="relative aspect-video rounded-t-4xl overflow-hidden bg-gradient-to-br from-[var(--primary-dark)] via-[var(--secondary)] to-[var(--primary-dark)]">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {/* Play Button */}
+                  <button className="w-20 h-20 flex items-center justify-center rounded-full bg-[var(--white)]/30 backdrop-blur-md group-hover:scale-110 transition-transform duration-300">
+                    <span className="material-symbols-outlined text-[var(--white)] text-6xl !leading-none pl-1" style={{ fontVariationSettings: "'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 48" }}>
+                      play_arrow
+                    </span>
+                  </button>
+                </div>
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <span className="text-[var(--white)] font-semibold text-sm">1:23 / 3:45</span>
+                  <div className="flex items-center gap-2">
+                    {/* Fullscreen Icon color: Secondary purple */}
+                    <button className={iconBtnClasses}>
+                      <span className="material-symbols-outlined text-[var(--secondary)] text-base">fullscreen</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 flex-grow flex flex-col">
+                {/* Title color: --dark */}
+                <h4 className="text-3xl font-bold tracking-tight text-[var(--dark)] !text-2xl">
+                  Video Tutorials
+                </h4>
+                {/* Secondary text color: --gray */}
+                <p className="mt-2 text-[var(--gray)] flex-grow">
+                  Step-by-step video guides to master features.
+                </p>
+                {/* Link color: --primary */}
+                <Link
+                  href="#"
+                  className="mt-4 inline-flex items-center font-bold text-[var(--primary)] group/link"
+                >
+                  <span>Watch Series</span>
+                  <span className="material-symbols-outlined ml-1.5 transition-transform duration-300 group-hover/link:translate-x-1">
+                    arrow_forward
+                  </span>
+                </Link>
+              </div>
+            </div>
+
+            {/* Productivity Tips */}
+            <div className={`group ${cardClasses} p-6 flex flex-col`}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  {/* Icon Circle: Text --primary */}
+                  <div className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-[var(--light)] text-[var(--primary)]">
+                    <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48" }}>
+                      lightbulb
+                    </span>
+                  </div>
+                  <div>
+                    {/* Title color: --dark */}
+                    <h4 className="text-3xl font-bold tracking-tight text-[var(--dark)] !text-2xl">
+                      Productivity Tips
+                    </h4>
+                    {/* Secondary text color: --gray */}
+                    <p className="text-sm text-[var(--gray)]">
+                      Actionable advice to boost your workflow.
+                    </p>
+                  </div>
+                </div>
+                {/* Streak Badge: Text --primary */}
+                <div className="flex items-center gap-2 bg-[var(--light)] px-3 py-1.5 rounded-full text-[var(--primary)]">
+                    <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1, 'wght' 600" }}>local_fire_department</span>
+                    <span className="text-sm font-bold">5 Day Streak</span>
+                </div>
+              </div>
+
+              {/* Quick Win Card */}
+              <div className="mt-6 flex-grow flex flex-col justify-between">
+                <div className="relative">
+                  {/* Card background/border color: Background --light, Border --secondary/30 */}
+                  <div className="flex flex-col text-center p-6 border-2 border-dashed border-[var(--secondary)]/30 rounded-2xl bg-[var(--light)]">
+                    {/* Badge color: Text --primary */}
+                    <span className="text-xs font-bold tracking-wider text-[var(--primary)] bg-[var(--white)]/50 px-2.5 py-1 rounded-full self-center">
+                      QUICK WIN
+                    </span>
+                    {/* Title color: --dark */}
+                    <h5 className="mt-4 text-xl font-extrabold text-[var(--dark)]">
+                      Master Keyboard Shortcuts
+                    </h5>
+                    {/* Secondary text color: --gray */}
+                    <p className="mt-2 text-[var(--gray)] h-20">
+                      Utilize shortcuts like{" "}
+                      {/* Keyboard shortcut colors: Text --primary */}
+                      <kbd className="px-2 py-1.5 text-xs font-semibold text-[var(--primary)] bg-[var(--white)] border border-[var(--light)] rounded-md">
+                        Ctrl+K
+                      </kbd>{" "}
+                      to access commands instantly and speed up your workflow.
+                    </p>
+
+                    {/* Action Buttons: Text hover is PRIMARY purple */}
+                    <div className="mt-4 flex items-center justify-center gap-2">
+                        <button className="flex items-center justify-center w-10 h-10 rounded-full bg-[var(--white)] shadow hover:bg-[var(--light)] text-[var(--gray)] hover:text-[var(--primary)] transition-all duration-200 group/btn" title="Mark as Complete">
+                            <span className="material-symbols-outlined text-xl transition-transform duration-200 group-hover/btn:scale-110">task_alt</span>
+                        </button>
+                        <button className="flex items-center justify-center w-10 h-10 rounded-full bg-[var(--white)] shadow hover:bg-[var(--light)] text-[var(--gray)] hover:text-[var(--primary)] transition-all duration-200 group/btn" title="Share Tip">
+                            <span className="material-symbols-outlined text-xl transition-transform duration-200 group-hover/btn:scale-110">share</span>
+                        </button>
+                        <button className="flex items-center justify-center w-10 h-10 rounded-full bg-[var(--white)] shadow hover:bg-[var(--light)] text-[var(--gray)] hover:text-[var(--primary)] transition-all duration-200 group/btn" title="Save Tip">
+                            <span className="material-symbols-outlined text-xl transition-transform duration-200 group-hover/btn:scale-110">bookmark</span>
+                        </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Carousel controls: Text --primary */}
+                <div className="mt-6 flex items-center justify-between">
+                  {/* Button background: --light, Text --primary */}
+                  <button className="flex items-center justify-center w-10 h-10 rounded-full bg-[var(--light)] text-[var(--primary)] hover:bg-[var(--light)] transition-colors">
+                    <span className="material-symbols-outlined">chevron_left</span>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Active dot color: --primary */}
+                    <span className="w-2.5 h-2.5 rounded-full bg-[var(--primary)]" />
+                    {/* Inactive dot color: --light */}
+                    <span className="w-2.5 h-2.5 rounded-full bg-[var(--light)]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[var(--light)]" />
+                  </div>
+                  {/* Button background: --light, Text --primary */}
+                  <button className="flex items-center justify-center w-10 h-10 rounded-full bg-[var(--light)] text-[var(--primary)] hover:bg-[var(--light)] transition-colors">
+                    <span className="material-symbols-outlined">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </section>
+      </main>
+    </div>
   );
 }
