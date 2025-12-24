@@ -19,29 +19,50 @@ export default function MusicWidget() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    const updatePosition = () => {
+    const updatePositionAndSize = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      
+      // Responsive sizing: clamp between min and max, scale with viewport
+      const baseWidth = 500;
+      const baseHeight = 100;
+      const minWidth = Math.min(350, vw * 0.75);
+      const maxWidth = Math.min(650, vw * 0.85);
+      const minHeight = Math.min(80, vh * 0.08);
+      const maxHeight = Math.min(120, vh * 0.12);
+      
+      // Scale based on viewport
+      const widthScale = Math.min(1, vw / 1440);
+      const heightScale = Math.min(1, vh / 900);
+      const scale = Math.min(widthScale, heightScale, 1.2);
+      
+      const responsiveWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * scale));
+      const responsiveHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight * scale));
+      
       // Music widget: centered horizontally, positioned further down
-      const centerX = window.innerWidth / 2;
-      // Position it lower on the screen
-      const musicCenterY = window.innerHeight - 100; // Near bottom with minimal margin
+      const centerX = vw / 2;
+      // Responsive bottom margin: use percentage of viewport height
+      const bottomMargin = Math.max(50, Math.min(120, vh * 0.1));
+      const musicCenterY = vh - bottomMargin;
+      
       setPosition({ x: centerX, y: musicCenterY });
+      setSize({ width: responsiveWidth, height: responsiveHeight });
     };
     
-    updatePosition();
-    setSize({ width: 500, height: 100 });
+    updatePositionAndSize();
     
     // Listen for fullscreen changes to realign
     const handleFullscreenChange = () => {
       // Small delay to ensure window dimensions are updated
-      setTimeout(updatePosition, 100);
+      setTimeout(updatePositionAndSize, 100);
     };
     
     window.addEventListener('focus-fullscreen-change', handleFullscreenChange);
-    window.addEventListener('resize', updatePosition);
+    window.addEventListener('resize', updatePositionAndSize);
     
     return () => {
       window.removeEventListener('focus-fullscreen-change', handleFullscreenChange);
-      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('resize', updatePositionAndSize);
     };
   }, []);
 

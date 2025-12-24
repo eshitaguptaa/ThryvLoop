@@ -21,28 +21,48 @@ export default function TimerWidget() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    const updatePosition = () => {
+    const updatePositionAndSize = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      
+      // Responsive sizing: clamp between min and max, scale with viewport
+      const baseWidth = 450;
+      const baseHeight = 400;
+      const minWidth = Math.min(350, vw * 0.8);
+      const maxWidth = Math.min(550, vw * 0.9);
+      const minHeight = Math.min(300, vh * 0.4);
+      const maxHeight = Math.min(500, vh * 0.6);
+      
+      // Scale based on viewport, maintaining aspect ratio
+      const widthScale = Math.min(1, vw / 1440); // Scale factor based on 1440px reference
+      const heightScale = Math.min(1, vh / 900); // Scale factor based on 900px reference
+      const scale = Math.min(widthScale, heightScale, 1.2); // Cap at 1.2x for larger screens
+      
+      const responsiveWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * scale));
+      const responsiveHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight * scale));
+      
       // Timer widget: centered horizontally, positioned slightly above center
-      const centerX = window.innerWidth / 2;
-      const centerY = window.innerHeight / 2 - 50; // Slightly above center
+      const centerX = vw / 2;
+      const centerY = vh / 2 - Math.max(30, vh * 0.05); // Responsive offset from center
+      
       setPosition({ x: centerX, y: centerY });
+      setSize({ width: responsiveWidth, height: responsiveHeight });
     };
     
-    updatePosition();
-    setSize({ width: 450, height: 400 });
+    updatePositionAndSize();
     
     // Listen for fullscreen changes to realign
     const handleFullscreenChange = () => {
       // Small delay to ensure window dimensions are updated
-      setTimeout(updatePosition, 100);
+      setTimeout(updatePositionAndSize, 100);
     };
     
     window.addEventListener('focus-fullscreen-change', handleFullscreenChange);
-    window.addEventListener('resize', updatePosition);
+    window.addEventListener('resize', updatePositionAndSize);
     
     return () => {
       window.removeEventListener('focus-fullscreen-change', handleFullscreenChange);
-      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('resize', updatePositionAndSize);
     };
   }, []);
 

@@ -18,28 +18,50 @@ export default function FocusTaskBar({ task = "Drafting Q3 Report" }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    const updatePosition = () => {
+    const updatePositionAndSize = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      
+      // Responsive sizing: clamp between min and max, scale with viewport
+      const baseWidth = 450;
+      const baseHeight = 56;
+      const minWidth = Math.min(300, vw * 0.7);
+      const maxWidth = Math.min(550, vw * 0.85);
+      const minHeight = Math.min(48, vh * 0.06);
+      const maxHeight = Math.min(64, vh * 0.08);
+      
+      // Scale based on viewport
+      const widthScale = Math.min(1, vw / 1440);
+      const heightScale = Math.min(1, vh / 900);
+      const scale = Math.min(widthScale, heightScale, 1.2);
+      
+      const responsiveWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * scale));
+      const responsiveHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight * scale));
+      
       // Task bar: centered horizontally, positioned at the top
-      const centerX = window.innerWidth / 2;
-      const topY = 50; // At the top with comfortable margin
+      const centerX = vw / 2;
+      // Responsive top margin: use percentage of viewport height
+      const topMargin = Math.max(30, Math.min(60, vh * 0.05));
+      const topY = topMargin;
+      
       setPosition({ x: centerX, y: topY });
+      setSize({ width: responsiveWidth, height: responsiveHeight });
     };
     
-    updatePosition();
-    setSize({ width: 450, height: 56 });
+    updatePositionAndSize();
     
     // Listen for fullscreen changes to realign
     const handleFullscreenChange = () => {
       // Small delay to ensure window dimensions are updated
-      setTimeout(updatePosition, 100);
+      setTimeout(updatePositionAndSize, 100);
     };
     
     window.addEventListener('focus-fullscreen-change', handleFullscreenChange);
-    window.addEventListener('resize', updatePosition);
+    window.addEventListener('resize', updatePositionAndSize);
     
     return () => {
       window.removeEventListener('focus-fullscreen-change', handleFullscreenChange);
-      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('resize', updatePositionAndSize);
     };
   }, []);
 
