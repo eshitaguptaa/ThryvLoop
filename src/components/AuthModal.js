@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 
-export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
+export default function AuthModal({ isOpen, onClose, initialMode = 'signin', onSuccess }) {
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,6 +33,17 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       setIsLoading(false);
       // Handle authentication here
       console.log(mode === 'signin' ? 'Signing in...' : 'Signing up...', { email, password, name });
+      
+      // Set auth token in localStorage (simulating successful auth)
+      localStorage.setItem('authToken', 'authenticated');
+      
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        // Default behavior: close modal
+        onClose();
+      }
     }, 1000);
   };
 

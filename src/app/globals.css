@@ -95,6 +95,12 @@ body {
             0%, 100% { height: 4px; opacity: 0.5; }
             50% { height: 20px; opacity: 1; }
         }
+        @keyframes dance {
+            0%, 100% { transform: scaleY(1); }
+            25% { transform: scaleY(1.8); }
+            50% { transform: scaleY(0.6); }
+            75% { transform: scaleY(1.4); }
+        }
 
 
 @layer components {
@@ -138,5 +144,49 @@ body {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
+  }
+
+  /* Custom thin scrollbar for sidebar - visible on hover only */
+  .sidebar-scroll {
+    scrollbar-width: thin; /* Firefox - thin scrollbar */
+    scrollbar-color: transparent transparent; /* Firefox - hide by default */
+  }
+
+  .sidebar-scroll:hover {
+    scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05); /* Firefox - show on hover */
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 4px; /* Always thin width */
+    background: transparent;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 2px;
+  }
+
+  .sidebar-scroll:hover::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: transparent; /* Hidden by default */
+    border-radius: 2px;
+    transition: background 0.2s ease;
+  }
+
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2); /* Visible on hover */
+  }
+
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  /* Resize handles for draggable widgets - completely invisible */
+  .resize-handle {
+    background: transparent !important;
+    border: none !important;
   }
 }

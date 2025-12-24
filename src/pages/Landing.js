@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import AuthModal from '@/components/AuthModal';
 import NavbarLanding from '@/components/landing_sections/NavbarLanding';
 import Hero from '@/components/landing_sections/Hero';
@@ -12,15 +12,41 @@ import Resources from '@/components/landing_sections/Resources';
 import Pricing from '@/components/landing_sections/Pricing';
 
 export default function LandingPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [initialMode, setInitialMode] = useState('signin');
+
+  // Check URL query parameters to open modal
+  useEffect(() => {
+    const authParam = searchParams.get('auth');
+    if (authParam === 'signin' || authParam === 'signup') {
+      setInitialMode(authParam);
+      setIsAuthOpen(true);
+    }
+  }, [searchParams]);
 
   const openAuth = (mode) => {
     setInitialMode(mode);
     setIsAuthOpen(true);
+    // Update URL without causing navigation
+    const url = new URL(window.location.href);
+    url.searchParams.set('auth', mode);
+    window.history.replaceState({}, '', url);
   };
 
-  const closeAuth = () => setIsAuthOpen(false);
+  const closeAuth = () => {
+    setIsAuthOpen(false);
+    // Remove auth parameter from URL
+    const url = new URL(window.location.href);
+    url.searchParams.delete('auth');
+    window.history.replaceState({}, '', url);
+  };
+
+  const handleSuccess = () => {
+    // After successful auth, redirect to home
+    router.push('/home');
+  };
 
   return (
     <>
@@ -37,7 +63,8 @@ export default function LandingPage() {
       <AuthModal 
         isOpen={isAuthOpen} 
         onClose={closeAuth} 
-        initialMode={initialMode} 
+        initialMode={initialMode}
+        onSuccess={handleSuccess}
       />
     </>
   );

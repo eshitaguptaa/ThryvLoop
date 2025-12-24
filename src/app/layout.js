@@ -1,10 +1,12 @@
 import './globals.css';
 import { Poppins } from 'next/font/google';
+import DevAuthHelper from '@/components/DevAuthHelper';
 
 const poppins = Poppins({
   weight: ['400', '500', '600', '700', '800', '900'],
   subsets: ['latin'],
   display: 'swap',
+  variable: '--font-poppins',
 });
 
 export const metadata = {
@@ -15,7 +17,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={poppins.className}>{children}</body>
+      <body className={`${poppins.className} ${poppins.variable}`}>
+        <DevAuthHelper />
+        {children}
+      </body>
     </html>
   );
 }
