@@ -6,17 +6,20 @@ export default function FocusLayout({ children }) {
   return (
     <FocusProvider>
       <div className="relative min-h-screen">
-        {/* Landscape Background Image */}
+        {/* Landscape Background Video */}
         <div className="fixed inset-0 z-0">
-          <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{
-              backgroundImage: 'url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80)'
-            }}
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ objectFit: 'cover' }}
           >
-            {/* Overlay for better widget visibility */}
-            <div className="absolute inset-0 bg-black/10"></div>
-          </div>
+            <source src="/scenery1.mp4" type="video/mp4" />
+          </video>
+          {/* Overlay for better widget visibility */}
+          <div className="absolute inset-0 bg-black/10"></div>
         </div>
         
         {/* Content overlay */}

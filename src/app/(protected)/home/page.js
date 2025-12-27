@@ -14,7 +14,7 @@ import {
 
 export default function Dashboard() {
   return (
-    <div className="min-h-screen bg-[#F8F9F8] text-[#1A1A1A] px-4 pt-2 pb-4 sm:px-6 sm:pt-3 sm:pb-6 md:px-8 md:pt-4 md:pb-8 lg:px-12 lg:pt-6 lg:pb-10 font-[var(--font-poppins)]">
+    <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-2 pb-4 sm:px-6 sm:pt-3 sm:pb-6 md:px-8 md:pt-4 md:pb-8 lg:px-12 lg:pt-6 lg:pb-10 font-[var(--font-poppins)]">
       <div className="max-w-7xl mx-auto">
         
         {/* --- Header Section --- */}
@@ -46,7 +46,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 md:gap-8 mb-5 sm:mb-6 md:mb-8">
           
           {/* 1. Focus Mode Hero Card (Spans 8 columns) */}
-          <div className="lg:col-span-8 bg-gradient-to-br from-white via-indigo-50/20 to-purple-50/30 rounded-3xl sm:rounded-[40px] p-5 sm:p-6 md:p-8 lg:p-10 flex flex-col lg:flex-row relative overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-indigo-100/50 group">
+          <div className="lg:col-span-8 bg-gradient-to-br from-white via-indigo-50/20 to-purple-50/30 rounded-3xl sm:rounded-[40px] p-5 sm:p-6 md:p-8 lg:p-10 flex flex-col lg:flex-row relative overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 group">
             {/* Animated gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/40 via-transparent to-purple-50/30 pointer-events-none opacity-100 group-hover:opacity-80 transition-opacity duration-500"></div>
             
@@ -102,7 +102,7 @@ export default function Dashboard() {
           <div className="lg:col-span-4 flex flex-col gap-5 sm:gap-6 md:gap-8">
             
             {/* Time Focused Card */}
-            <div className="bg-gradient-to-br from-white to-indigo-50/30 p-5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[32px] shadow-lg hover:shadow-xl transition-all duration-300 border border-indigo-100/50 flex flex-col justify-between group relative overflow-hidden">
+            <div className="bg-gradient-to-br from-white to-indigo-50/30 p-5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 flex flex-col justify-between group relative overflow-hidden">
               {/* Background decorative elements */}
               <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-100/20 rounded-full blur-2xl"></div>
               <div className="absolute bottom-0 left-0 w-16 h-16 bg-purple-100/20 rounded-full blur-xl"></div>
@@ -153,7 +153,7 @@ export default function Dashboard() {
             </div>
 
             {/* Soundscape Music Card */}
-            <div className="bg-gradient-to-br from-[#2D2823] via-[#1F1B17] to-[#2D2823] text-white p-5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[32px] relative overflow-hidden flex flex-col justify-between shadow-xl hover:shadow-2xl transition-shadow duration-300 border border-gray-800/50 group">
+            <div className="bg-gradient-to-br from-[#2D2823] via-[#1F1B17] to-[#2D2823] text-white p-5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[32px] relative overflow-hidden flex flex-col justify-between shadow-[0_20px_50px_-12px_rgba(0,0,0,0.3)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.4)] transition-shadow duration-300 border-2 border-gray-800/70 group">
                {/* Blurred Tokyo Background Image */}
                <div className="absolute inset-0 z-0">
                  <img 
@@ -240,7 +240,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 md:gap-8 pb-4 sm:pb-6 md:pb-8">
           
           {/* Productivity Trend Graph */}
-          <div className="bg-gradient-to-br from-white to-indigo-50/30 p-5 sm:p-6 md:p-8 rounded-3xl sm:rounded-[40px] shadow-lg hover:shadow-xl transition-all duration-300 border border-indigo-100/50 flex flex-col justify-between group relative overflow-hidden">
+          <div className="bg-gradient-to-br from-white to-indigo-50/30 p-5 sm:p-6 md:p-8 rounded-3xl sm:rounded-[40px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 flex flex-col justify-between group relative overflow-hidden">
             {/* Background decorative elements */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100/20 rounded-full blur-2xl"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-100/20 rounded-full blur-xl"></div>
@@ -353,7 +353,7 @@ export default function Dashboard() {
           </div>
 
           {/* Upcoming & Alerts */}
-          <div className="bg-gradient-to-br from-white to-indigo-50/20 p-5 sm:p-6 md:p-8 rounded-3xl sm:rounded-[40px] shadow-lg hover:shadow-xl transition-all duration-300 border border-indigo-100/50 group relative overflow-hidden">
+          <div className="bg-gradient-to-br from-white to-indigo-50/20 p-5 sm:p-6 md:p-8 rounded-3xl sm:rounded-[40px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 group relative overflow-hidden">
             {/* Background decorative elements */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100/20 rounded-full blur-2xl"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-100/20 rounded-full blur-xl"></div>

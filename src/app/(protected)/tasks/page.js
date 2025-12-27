@@ -76,7 +76,7 @@ export default function TasksPage() {
                             tasks.inProgress.filter(t => t.priority?.level === 'High Priority').length;
 
   return (
-    <div className="min-h-screen bg-[#F8F9F8] text-[#1A1A1A] px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-6 md:px-8 md:pt-10 md:pb-8 lg:px-12 lg:pt-12 lg:pb-10 font-[var(--font-poppins)]">
+    <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-6 md:px-8 md:pt-10 md:pb-8 lg:px-12 lg:pt-12 lg:pb-10 font-[var(--font-poppins)]">
       <div className="max-w-7xl mx-auto">
         
         {/* Header Section */}
@@ -99,7 +99,7 @@ export default function TasksPage() {
                   placeholder="Quick capture"
                   value={quickCapture}
                   onChange={(e) => setQuickCapture(e.target.value)}
-                  className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm text-gray-700"
+                  className="w-full pl-4 pr-10 py-2.5 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm text-gray-700 shadow-sm hover:shadow-md transition-shadow"
                 />
                 <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,39 +110,39 @@ export default function TasksPage() {
             </div>
             
             {/* Right Side */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 w-full lg:w-auto">
               {/* View and New Task */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 font-medium">View</span>
+                  <span className="text-xs sm:text-sm text-gray-600 font-medium hidden sm:inline">View</span>
                   <button
                     onClick={() => setViewMode('list')}
-                    className={`p-2 rounded-lg transition-colors ${
+                    className={`p-2 rounded-xl transition-all ${
                       viewMode === 'list' 
-                        ? 'bg-gray-200 text-gray-900' 
-                        : 'bg-white text-gray-400 hover:text-gray-600'
+                        ? 'bg-gray-200 text-gray-900 shadow-sm' 
+                        : 'bg-white text-gray-400 hover:text-gray-600 border-2 border-gray-200 shadow-sm hover:shadow-md'
                     }`}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                   </button>
                   <button
                     onClick={() => setViewMode('grid')}
-                    className={`p-2 rounded-lg transition-colors ${
+                    className={`p-2 rounded-xl transition-all ${
                       viewMode === 'grid' 
-                        ? 'bg-gray-200 text-gray-900' 
-                        : 'bg-white text-gray-400 hover:text-gray-600'
+                        ? 'bg-gray-200 text-gray-900 shadow-sm' 
+                        : 'bg-white text-gray-400 hover:text-gray-600 border-2 border-gray-200 shadow-sm hover:shadow-md'
                     }`}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                     </svg>
                   </button>
                 </div>
                 
-                <button className="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-medium transition-colors flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-medium transition-all flex items-center gap-1.5 sm:gap-2 shadow-lg hover:shadow-xl text-xs sm:text-sm whitespace-nowrap">
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
                   <span>New Task</span>
@@ -150,10 +150,10 @@ export default function TasksPage() {
               </div>
               
               {/* Search and Filter */}
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="relative flex-1 min-w-0">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </div>
@@ -162,15 +162,15 @@ export default function TasksPage() {
                     placeholder="Search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm text-gray-700"
+                    className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-xs sm:text-sm text-gray-700 shadow-sm hover:shadow-md transition-shadow"
                   />
                 </div>
                 
-                <button className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-gray-700 font-medium">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-1.5 sm:gap-2 text-gray-700 font-medium shadow-sm hover:shadow-md text-xs sm:text-sm whitespace-nowrap">
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                   </svg>
-                  <span>Filter</span>
+                  <span className="hidden sm:inline">Filter</span>
                 </button>
               </div>
             </div>
@@ -178,14 +178,14 @@ export default function TasksPage() {
         </header>
 
         {/* Task Columns */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           
           {/* Today's Focus Column */}
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="w-2 h-2 bg-purple-500 rounded-full shrink-0"></div>
-                <h2 className="text-base font-semibold text-gray-900">Today's Focus</h2>
+                <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0 shadow-sm"></div>
+                <h2 className="text-base font-bold text-gray-900">Today's Focus</h2>
               </div>
               <button className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -205,8 +205,8 @@ export default function TasksPage() {
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="w-2 h-2 bg-orange-500 rounded-full shrink-0"></div>
-                <h2 className="text-base font-semibold text-gray-900">In Progress</h2>
+                <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shrink-0 shadow-sm"></div>
+                <h2 className="text-base font-bold text-gray-900">In Progress</h2>
               </div>
               <button className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -226,8 +226,8 @@ export default function TasksPage() {
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="w-2 h-2 bg-gray-300 rounded-full shrink-0"></div>
-                <h2 className="text-base font-semibold text-gray-900">Backlog</h2>
+                <div className="w-2.5 h-2.5 bg-gray-300 rounded-full shrink-0 shadow-sm"></div>
+                <h2 className="text-base font-bold text-gray-900">Backlog</h2>
               </div>
               <button className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -251,7 +251,7 @@ export default function TasksPage() {
 
 function TaskCard({ task }) {
   return (
-    <div className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow border border-gray-100 relative">
+    <div className="bg-white rounded-xl p-5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-gray-100/60 relative group">
       {/* Checkmark Icon */}
       <button className="absolute top-4 right-4 w-5 h-5 flex items-center justify-center text-gray-300 hover:text-gray-400 transition-colors">
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
