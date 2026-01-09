@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
+import { MusicProvider } from '@/contexts/MusicContext';
 
 export default function ProtectedLayout({ children }) {
   const router = useRouter();
@@ -75,12 +76,14 @@ export default function ProtectedLayout({ children }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {!isFullscreen && <Sidebar />}
-      <main className={`flex-1 ${!isFullscreen ? 'ml-24' : ''}`}>
-        {children}
-      </main>
-    </div>
+    <MusicProvider>
+      <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        {!isFullscreen && <Sidebar />}
+        <main className={`flex-1 ${!isFullscreen ? 'ml-24' : ''}`}>
+          {children}
+        </main>
+      </div>
+    </MusicProvider>
   );
 }
 

@@ -1,3 +1,5 @@
+'use client';
+
 import { 
   Bell, 
   Play, 
@@ -11,8 +13,28 @@ import {
   ArrowUpRight,
   Timer
 } from 'lucide-react';
+import { useMusic } from '@/contexts/MusicContext';
 
 export default function Dashboard() {
+  const { 
+    isPlaying, 
+    currentTime, 
+    duration, 
+    togglePlayPause, 
+    skipBackward, 
+    skipForward 
+  } = useMusic();
+
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const remainingTime = duration - currentTime;
+
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-2 pb-4 sm:px-6 sm:pt-3 sm:pb-6 md:px-8 md:pt-4 md:pb-8 lg:px-12 lg:pt-6 lg:pb-10 font-[var(--font-poppins)]">
       <div className="max-w-7xl mx-auto">
@@ -154,6 +176,7 @@ export default function Dashboard() {
 
             {/* Soundscape Music Card */}
             <div className="bg-gradient-to-br from-[#2D2823] via-[#1F1B17] to-[#2D2823] text-white p-5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[32px] relative overflow-hidden flex flex-col justify-between shadow-[0_20px_50px_-12px_rgba(0,0,0,0.3)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.4)] transition-shadow duration-300 border-2 border-gray-800/70 group">
+               
                {/* Blurred Tokyo Background Image */}
                <div className="absolute inset-0 z-0">
                  <img 
@@ -176,8 +199,16 @@ export default function Dashboard() {
                  <div className="flex items-center gap-1.5 sm:gap-2 bg-white/15 backdrop-blur-md px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-[9px] sm:text-[10px] font-semibold tracking-wider text-white shadow-lg border border-white/10">
                    <Music size={11} className="sm:w-3.5 sm:h-3.5" /> SOUNDSCAPE
                  </div>
-                 <div className="flex items-center gap-1.5 sm:gap-2 bg-red-500/30 backdrop-blur-sm text-red-200 px-2.5 sm:px-3 py-1.5 rounded-full text-[9px] sm:text-[10px] font-semibold shrink-0 shadow-lg border border-red-500/20">
-                   <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse shadow-sm shadow-red-400/50" /> LIVE
+                 <div className={`flex items-center gap-1.5 sm:gap-2 backdrop-blur-sm px-2.5 sm:px-3 py-1.5 rounded-full text-[9px] sm:text-[10px] font-semibold shrink-0 shadow-lg border transition-colors ${
+                   isPlaying 
+                     ? 'bg-red-500/30 text-red-200 border-red-500/20' 
+                     : 'bg-gray-500/30 text-gray-300 border-gray-500/20'
+                 }`}>
+                   <div className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors ${
+                     isPlaying 
+                       ? 'bg-red-400 animate-pulse shadow-red-400/50' 
+                       : 'bg-gray-400'
+                   }`} /> {isPlaying ? 'LIVE' : 'PAUSED'}
                  </div>
                </div>
                
@@ -197,11 +228,16 @@ export default function Dashboard() {
                     ].map((bar, i) => (
                       <div 
                         key={i} 
-                        className="w-1.5 sm:w-2 bg-gradient-to-t from-indigo-400 via-purple-400 to-pink-400 rounded-full shadow-lg shadow-indigo-500/30"
+                        className={`w-1.5 sm:w-2 bg-gradient-to-t from-indigo-400 via-purple-400 to-pink-400 rounded-full shadow-lg shadow-indigo-500/30 transition-opacity ${
+                          isPlaying ? 'opacity-100' : 'opacity-50'
+                        }`}
                         style={{
-                          animation: `dance ${bar.duration}s ease-in-out infinite`,
+                          animationName: isPlaying ? 'dance' : 'none',
+                          animationDuration: isPlaying ? `${bar.duration}s` : '0s',
+                          animationTimingFunction: isPlaying ? 'ease-in-out' : 'ease',
+                          animationIterationCount: isPlaying ? 'infinite' : '1',
                           animationDelay: `${bar.delay}s`,
-                          height: `${bar.base}%`,
+                          height: isPlaying ? `${bar.peak}%` : `${bar.base}%`,
                           minHeight: '4px'
                         }}
                       />
@@ -212,23 +248,41 @@ export default function Dashboard() {
                  <p className="text-[10px] sm:text-xs text-gray-300 mb-3 sm:mb-4 md:mb-5 font-medium uppercase tracking-wide">Night Cafe Jazz · Ambience</p>
                  
                  <div className="flex items-center justify-between gap-2">
-                   <span className="text-[9px] sm:text-[10px] text-gray-400 font-mono">14:20</span>
+                   <span className="text-[9px] sm:text-[10px] text-gray-400 font-mono">{formatTime(currentTime)}</span>
                    <div className="flex items-center gap-3 sm:gap-4">
-                     <button className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer">
+                     <button 
+                       onClick={skipBackward}
+                       className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                       title="Skip backward 10 seconds"
+                     >
                        <SkipBack size={14} className="sm:w-4 sm:h-4" />
                      </button>
-                     <button className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full flex items-center justify-center text-indigo-900 hover:scale-110 transition-transform shadow-lg hover:shadow-xl">
-                        <Pause size={14} className="sm:w-[18px] sm:h-[18px]" fill="currentColor" />
+                     <button 
+                       onClick={togglePlayPause}
+                       className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full flex items-center justify-center text-indigo-900 hover:scale-110 transition-transform shadow-lg hover:shadow-xl"
+                     >
+                        {isPlaying ? (
+                          <Pause size={14} className="sm:w-[18px] sm:h-[18px]" fill="currentColor" />
+                        ) : (
+                          <Play size={14} className="sm:w-[18px] sm:h-[18px]" fill="currentColor" />
+                        )}
                      </button>
-                     <button className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer">
+                     <button 
+                       onClick={skipForward}
+                       className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                       title="Skip forward 10 seconds"
+                     >
                        <SkipForward size={14} className="sm:w-4 sm:h-4" />
                      </button>
                    </div>
-                   <span className="text-[9px] sm:text-[10px] text-gray-400 font-mono">-30:40</span>
+                   <span className="text-[9px] sm:text-[10px] text-gray-400 font-mono">-{formatTime(remainingTime)}</span>
                  </div>
                  {/* Enhanced Progress Line */}
                  <div className="mt-2 sm:mt-3 h-0.5 sm:h-1 bg-white/10 rounded-full overflow-hidden shadow-inner">
-                    <div className="h-full bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 rounded-full shadow-sm" style={{ width: '33%' }} />
+                    <div 
+                      className="h-full bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 rounded-full shadow-sm transition-all duration-300" 
+                      style={{ width: `${progressPercentage}%` }} 
+                    />
                  </div>
                </div>
             </div>

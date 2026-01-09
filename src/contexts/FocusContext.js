@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 
-const FocusContext = createContext();
+export const FocusContext = createContext(null);
 
 export function FocusProvider({ children }) {
   // Load saved widget states from localStorage, default to all active
@@ -22,6 +22,17 @@ export function FocusProvider({ children }) {
   const [showMusic, setShowMusic] = useState(() => loadWidgetState('music', true));
   const [showTask, setShowTask] = useState(() => loadWidgetState('task', true));
   const [showTaskBar, setShowTaskBar] = useState(() => loadWidgetState('taskBar', true));
+  const [backgroundVideoId, setBackgroundVideoId] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const saved = localStorage.getItem('focus-background-video-id');
+    return saved || null;
+  });
+
+  const [volume, setVolume] = useState(() => {
+    if (typeof window === 'undefined') return 50;
+    const saved = localStorage.getItem('focus-video-volume');
+    return saved ? parseInt(saved) : 50;
+  });
 
   // Save widget states to localStorage when they change
   useEffect(() => {
@@ -39,6 +50,18 @@ export function FocusProvider({ children }) {
   useEffect(() => {
     saveWidgetState('taskBar', showTaskBar);
   }, [showTaskBar]);
+
+  useEffect(() => {
+    if (backgroundVideoId) {
+      localStorage.setItem('focus-background-video-id', backgroundVideoId);
+    } else {
+      localStorage.removeItem('focus-background-video-id');
+    }
+  }, [backgroundVideoId]);
+
+  useEffect(() => {
+    localStorage.setItem('focus-video-volume', volume.toString());
+  }, [volume]);
 
   const toggleTimer = () => {
     setShowTimer(prev => !prev);
@@ -68,6 +91,10 @@ export function FocusProvider({ children }) {
       toggleTimer,
       toggleMusic,
       toggleTask,
+      backgroundVideoId,
+      setBackgroundVideoId,
+      volume,
+      setVolume,
     }}>
       {children}
     </FocusContext.Provider>
