@@ -5,11 +5,14 @@ import { useFocus } from '@/contexts/FocusContext';
 
 export default function TimerWidget() {
   const { setShowTimer } = useFocus();
-  const [time, setTime] = useState(25 * 60); // 25 minutes in seconds
+  // Default to 25 minutes
+  const INITIAL_TIME = 25 * 60;
+  const [time, setTime] = useState(INITIAL_TIME);
   const [isRunning, setIsRunning] = useState(false);
-  const [mode, setMode] = useState('DEEP WORK');
+  
+  // Widget State
   const [position, setPosition] = useState(null);
-  const [size, setSize] = useState({ width: 450, height: 400 });
+  const [size, setSize] = useState({ width: 450, height: 450 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeHandle, setResizeHandle] = useState(null);
@@ -17,56 +20,45 @@ export default function TimerWidget() {
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0, left: 0, top: 0 });
   const widgetRef = useRef(null);
 
-  // Initialize default position and size (always use defaults on mount)
+  // --- LOGIC SECTION ---
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
     const updatePositionAndSize = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       
-      // Responsive sizing: clamp between min and max, scale with viewport
       const baseWidth = 450;
-      const baseHeight = 400;
+      const baseHeight = 450; 
       const minWidth = Math.min(350, vw * 0.8);
       const maxWidth = Math.min(550, vw * 0.9);
-      const minHeight = Math.min(300, vh * 0.4);
-      const maxHeight = Math.min(500, vh * 0.6);
+      const minHeight = Math.min(350, vh * 0.4);
+      const maxHeight = Math.min(550, vh * 0.6);
       
-      // Scale based on viewport, maintaining aspect ratio
-      const widthScale = Math.min(1, vw / 1440); // Scale factor based on 1440px reference
-      const heightScale = Math.min(1, vh / 900); // Scale factor based on 900px reference
-      const scale = Math.min(widthScale, heightScale, 1.2); // Cap at 1.2x for larger screens
+      const widthScale = Math.min(1, vw / 1440);
+      const heightScale = Math.min(1, vh / 900);
+      const scale = Math.min(widthScale, heightScale, 1.2);
       
       const responsiveWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * scale));
       const responsiveHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight * scale));
       
-      // Timer widget: centered horizontally, positioned slightly above center
       const centerX = vw / 2;
-      const centerY = vh / 2 - Math.max(30, vh * 0.05); // Responsive offset from center
+      const centerY = vh / 2 - Math.max(30, vh * 0.05);
       
       setPosition({ x: centerX, y: centerY });
       setSize({ width: responsiveWidth, height: responsiveHeight });
     };
     
     updatePositionAndSize();
-    
-    // Listen for fullscreen changes to realign
-    const handleFullscreenChange = () => {
-      // Small delay to ensure window dimensions are updated
-      setTimeout(updatePositionAndSize, 100);
-    };
-    
+    const handleFullscreenChange = () => setTimeout(updatePositionAndSize, 100);
     window.addEventListener('focus-fullscreen-change', handleFullscreenChange);
     window.addEventListener('resize', updatePositionAndSize);
-    
     return () => {
       window.removeEventListener('focus-fullscreen-change', handleFullscreenChange);
       window.removeEventListener('resize', updatePositionAndSize);
     };
   }, []);
 
-  // Save position and size to localStorage
   useEffect(() => {
     if (typeof window === 'undefined' || !position) return;
     localStorage.setItem('focus-timer-position', JSON.stringify(position));
@@ -79,7 +71,6 @@ export default function TimerWidget() {
     }
   }, [size]);
 
-  // Clear localStorage on unmount (when widget is toggled off)
   useEffect(() => {
     return () => {
       if (typeof window !== 'undefined') {
@@ -89,7 +80,6 @@ export default function TimerWidget() {
     };
   }, []);
 
-  // Timer logic
   useEffect(() => {
     let interval = null;
     if (isRunning && time > 0) {
@@ -103,7 +93,9 @@ export default function TimerWidget() {
         });
       }, 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+        if(interval) clearInterval(interval)
+    };
   }, [isRunning, time]);
 
   const formatTime = (seconds) => {
@@ -112,17 +104,14 @@ export default function TimerWidget() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handlePlayPause = () => {
-    setIsRunning(!isRunning);
-  };
-
+  const handlePlayPause = () => setIsRunning(!isRunning);
+  
   const handleReset = () => {
-    setTime(25 * 60);
+    setTime(INITIAL_TIME);
     setIsRunning(false);
   };
 
   const handleClose = () => {
-    // Clear saved position and size when closing
     if (typeof window !== 'undefined') {
       localStorage.removeItem('focus-timer-position');
       localStorage.removeItem('focus-timer-size');
@@ -130,11 +119,10 @@ export default function TimerWidget() {
     setShowTimer(false);
   };
 
-  // Drag handlers
+  // Drag Handlers
   const handleMouseDown = (e) => {
     if (e.target.closest('button') || e.target.closest('.resize-handle')) return;
     if (!position) return;
-    
     setIsDragging(true);
     const rect = widgetRef.current?.getBoundingClientRect();
     if (rect) {
@@ -145,7 +133,6 @@ export default function TimerWidget() {
     }
   };
 
-  // Resize handlers
   const handleResizeStart = (e, handle) => {
     e.stopPropagation();
     e.preventDefault();
@@ -164,68 +151,47 @@ export default function TimerWidget() {
     }
   };
 
-  // Drag effect
   useEffect(() => {
     if (!isDragging || !position) return;
-
     const handleMouseMove = (e) => {
       const newX = e.clientX - dragStart.x;
       const newY = e.clientY - dragStart.y;
-      
-      // Keep widget within viewport bounds
       const halfWidth = size.width / 2;
       const halfHeight = size.height / 2;
       const boundedX = Math.max(halfWidth, Math.min(newX, window.innerWidth - halfWidth));
       const boundedY = Math.max(halfHeight, Math.min(newY, window.innerHeight - halfHeight));
-      
       setPosition({ x: boundedX, y: boundedY });
     };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
+    const handleMouseUp = () => setIsDragging(false);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragStart, size]);
+  }, [isDragging, dragStart, size, position]);
 
-  // Resize effect
   useEffect(() => {
     if (!isResizing || !resizeHandle || !position) return;
-
     const handleMouseMove = (e) => {
       const deltaX = e.clientX - resizeStart.x;
       const deltaY = e.clientY - resizeStart.y;
-      
       let newWidth = resizeStart.width;
       let newHeight = resizeStart.height;
       let newX = resizeStart.left;
       let newY = resizeStart.top;
 
-      // Handle horizontal resizing
-      if (resizeHandle.includes('right')) {
-        newWidth = Math.max(350, resizeStart.width + deltaX);
-      }
+      if (resizeHandle.includes('right')) newWidth = Math.max(350, resizeStart.width + deltaX);
       if (resizeHandle.includes('left')) {
         newWidth = Math.max(350, resizeStart.width - deltaX);
         newX = resizeStart.left + deltaX;
       }
-
-      // Handle vertical resizing
-      if (resizeHandle.includes('bottom')) {
-        newHeight = Math.max(300, resizeStart.height + deltaY);
-      }
+      if (resizeHandle.includes('bottom')) newHeight = Math.max(300, resizeStart.height + deltaY);
       if (resizeHandle.includes('top')) {
         newHeight = Math.max(300, resizeStart.height - deltaY);
         newY = resizeStart.top + deltaY;
       }
 
-      // Keep widget within viewport
       const halfWidth = newWidth / 2;
       const halfHeight = newHeight / 2;
       const boundedX = Math.max(halfWidth, Math.min(newX, window.innerWidth - halfWidth));
@@ -234,15 +200,12 @@ export default function TimerWidget() {
       setSize({ width: newWidth, height: newHeight });
       setPosition({ x: boundedX, y: boundedY });
     };
-
     const handleMouseUp = () => {
       setIsResizing(false);
       setResizeHandle(null);
     };
-
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
@@ -251,12 +214,11 @@ export default function TimerWidget() {
 
   if (!position) return null;
 
-  // Calculate responsive sizes
-  const scale = Math.min(size.width / 450, size.height / 400);
-  const padding = Math.max(24, 48 * scale);
-  const fontSize = Math.max(32, 96 * scale);
-  const buttonSize = Math.max(40, 56 * scale);
-  const playButtonSize = Math.max(60, 80 * scale);
+  // --- VISUALIZATION CONSTANTS ---
+  const scale = Math.min(size.width / 450, size.height / 450);
+  const padding = Math.max(20, 36 * scale);
+  const fontSize = Math.max(56, 120 * scale);
+  const progress = (time / INITIAL_TIME) * 100;
 
   return (
     <div 
@@ -269,86 +231,133 @@ export default function TimerWidget() {
       }}
     >
       <div 
-        className={`bg-black/40 backdrop-blur-md rounded-3xl shadow-2xl border border-white/10 pointer-events-auto relative flex flex-col ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} ${isResizing ? 'select-none' : ''}`}
+        /* Main Container:
+          - Dark Glass effect (backdrop-blur)
+          - No warm gradient
+        */
+        className={`
+          relative flex flex-col justify-between overflow-hidden
+          bg-black/30 backdrop-blur-2xl
+          rounded-[48px] shadow-2xl border border-white/10 
+          pointer-events-auto select-none
+          ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} 
+        `}
         style={{ 
           width: `${size.width}px`, 
           height: `${size.height}px`,
-          paddingTop: `${padding}px`,
-          paddingBottom: `${padding}px`,
-          paddingLeft: `${padding}px`,
-          paddingRight: `${padding}px`
+          padding: `${padding}px`,
         }}
         onMouseDown={handleMouseDown}
       >
-        {/* Resize handles */}
-        <div className="resize-handle absolute top-0 left-0 w-6 h-6 cursor-nwse-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'top-left')} />
-        <div className="resize-handle absolute top-0 right-0 w-6 h-6 cursor-nesw-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'top-right')} />
-        <div className="resize-handle absolute bottom-0 left-0 w-6 h-6 cursor-nesw-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'bottom-left')} />
-        <div className="resize-handle absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'bottom-right')} />
-        <div className="resize-handle absolute top-0 left-1/2 -translate-x-1/2 w-12 h-6 cursor-ns-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'top')} />
-        <div className="resize-handle absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-6 cursor-ns-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'bottom')} />
-        <div className="resize-handle absolute left-0 top-1/2 -translate-y-1/2 w-6 h-12 cursor-ew-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'left')} />
-        <div className="resize-handle absolute right-0 top-1/2 -translate-y-1/2 w-6 h-12 cursor-ew-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'right')} />
+        {/* Invisible Resize Handles */}
+        <div className="resize-handle absolute top-0 left-0 w-8 h-8 cursor-nwse-resize z-20" onMouseDown={(e) => handleResizeStart(e, 'top-left')} />
+        <div className="resize-handle absolute top-0 right-0 w-8 h-8 cursor-nesw-resize z-20" onMouseDown={(e) => handleResizeStart(e, 'top-right')} />
+        <div className="resize-handle absolute bottom-0 left-0 w-8 h-8 cursor-nesw-resize z-20" onMouseDown={(e) => handleResizeStart(e, 'bottom-left')} />
+        <div className="resize-handle absolute bottom-0 right-0 w-8 h-8 cursor-nwse-resize z-20" onMouseDown={(e) => handleResizeStart(e, 'bottom-right')} />
 
-        {/* Close button */}
-        <button
-          onClick={handleClose}
-          className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-white/70 hover:text-white transition-colors z-10"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        
-        {/* Mode indicator */}
-        <div className="flex items-center gap-2 flex-shrink-0" style={{ marginBottom: `${padding * 0.5}px` }}>
-          <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-          <span className="text-white text-sm font-medium">• {mode}</span>
-        </div>
-        
-        {/* Timer display */}
-        <div className="text-center flex-1 flex items-center justify-center">
-          <div className="font-bold text-white tracking-tight" style={{ fontSize: `${fontSize}px` }}>
-            {formatTime(time)}
+        {/* --- HEADER --- */}
+        <div className="flex items-center justify-between w-full relative z-10 mb-2">
+          <div className="flex items-center gap-2.5">
+             {/* Small Purple Dot */}
+             <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]"></div>
+             {/* Title Text */}
+             <span className="text-[10px] font-bold tracking-[0.2em] text-white/60 uppercase">
+               ThryvLoop Session
+             </span>
           </div>
+          
+          {/* Top Right Close Icon */}
+          <button onClick={handleClose} className="text-white/40 hover:text-white transition-colors">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-        
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-4 flex-shrink-0" style={{ marginTop: `${padding * 0.5}px` }}>
-          <button
-            onClick={handleReset}
-            className="rounded-full bg-gray-800/80 hover:bg-gray-700/80 flex items-center justify-center transition-all duration-200 border border-white/10"
-            style={{ width: `${buttonSize}px`, height: `${buttonSize}px` }}
+
+        {/* --- TIMER DISPLAY --- */}
+        <div className="flex-1 flex items-center justify-center relative z-10 my-2">
+          <h1 
+            className="font-bold text-white tracking-tighter leading-none" 
+            style={{ fontSize: `${fontSize}px` }}
           >
-            <svg className="text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: `${buttonSize * 0.4}px`, height: `${buttonSize * 0.4}px` }}>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+            {formatTime(time)}
+          </h1>
+        </div>
+
+        {/* --- CONTROLS AREA --- */}
+        <div className="w-full flex flex-col gap-6 relative z-10">
           
-          <button
-            onClick={handlePlayPause}
-            className="rounded-full bg-yellow-400 hover:bg-yellow-500 flex items-center justify-center transition-all duration-200 shadow-lg shadow-yellow-400/30"
-            style={{ width: `${playButtonSize}px`, height: `${playButtonSize}px` }}
-          >
-            {isRunning ? (
-              <svg className="text-white ml-1" fill="currentColor" viewBox="0 0 24 24" style={{ width: `${playButtonSize * 0.4}px`, height: `${playButtonSize * 0.4}px` }}>
-                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-              </svg>
-            ) : (
-              <svg className="text-white ml-1" fill="currentColor" viewBox="0 0 24 24" style={{ width: `${playButtonSize * 0.4}px`, height: `${playButtonSize * 0.4}px` }}>
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            )}
-          </button>
-          
-          <button
-            className="rounded-full bg-gray-800/80 hover:bg-gray-700/80 flex items-center justify-center transition-all duration-200 border border-white/10"
-            style={{ width: `${buttonSize}px`, height: `${buttonSize}px` }}
-          >
-            <svg className="text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: `${buttonSize * 0.4}px`, height: `${buttonSize * 0.4}px` }}>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-            </svg>
-          </button>
+          {/* Progress Bar */}
+          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden relative">
+             <div 
+                className="h-full rounded-full transition-all duration-1000 ease-linear relative overflow-hidden"
+                style={{ 
+                  width: `${progress}%`,
+                  background: 'linear-gradient(90deg, #a855f7 0%, #9333ea 50%, #7e22ce 100%)',
+                  boxShadow: '0 0 20px rgba(168, 85, 247, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                }}
+             >
+               {/* Shine effect overlay */}
+               <div 
+                 className="absolute inset-0 rounded-full"
+                 style={{
+                   background: 'linear-gradient(180deg, rgba(255,255,255,0.3) 0%, transparent 50%)',
+                   pointerEvents: 'none'
+                 }}
+               />
+             </div>
+          </div>
+
+          {/* Buttons Row */}
+          <div className="flex items-center justify-center gap-8">
+            
+            {/* 1. Reset Button (Left) */}
+            <button 
+              onClick={handleReset}
+              className="group w-12 h-12 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-all"
+            >
+               <svg className="w-5 h-5 text-white/60 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                 <path d="M3 3v5h5" />
+               </svg>
+            </button>
+
+            {/* 2. Play/Pause Button (Center - Prominent) */}
+            <button 
+              onClick={handlePlayPause}
+              className="relative group flex items-center justify-center"
+            >
+                {/* Outer Glow Ring */}
+                <div className="absolute w-20 h-20 rounded-full bg-purple-500/20 group-hover:bg-purple-500/30 transition-all duration-300"></div>
+                
+                {/* Inner White Button */}
+                <div className="relative w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform duration-200">
+                    {isRunning ? (
+                         <svg className="w-6 h-6 text-purple-600 fill-current" viewBox="0 0 24 24">
+                           <rect x="6" y="4" width="4" height="16" rx="1" />
+                           <rect x="14" y="4" width="4" height="16" rx="1" />
+                         </svg>
+                    ) : (
+                        <svg className="w-6 h-6 text-purple-600 fill-current ml-1" viewBox="0 0 24 24">
+                           <path d="M5 3l14 9-14 9V3z" />
+                        </svg>
+                    )}
+                </div>
+            </button>
+
+            {/* 3. Settings Button (Right) */}
+            <button className="group w-12 h-12 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-all">
+               <svg className="w-5 h-5 text-white/60 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                 <line x1="4" x2="20" y1="21" y2="21" />
+                 <line x1="4" x2="20" y1="14" y2="14" />
+                 <line x1="4" x2="20" y1="7" y2="7" />
+                 <circle cx="12" cy="14" r="2" fill="currentColor" className="text-white/10" />
+                 <circle cx="8" cy="7" r="2" fill="currentColor" className="text-white/10" />
+                 <circle cx="16" cy="21" r="2" fill="currentColor" className="text-white/10" />
+               </svg>
+            </button>
+
+          </div>
         </div>
       </div>
     </div>

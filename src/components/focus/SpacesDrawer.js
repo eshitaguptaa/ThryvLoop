@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { FocusContext } from '@/contexts/FocusContext';
 
 export default function SpacesDrawer({ isOpen, onClose }) {
@@ -23,6 +23,35 @@ export default function SpacesDrawer({ isOpen, onClose }) {
   };
   
   const [volumeState, setVolumeState] = useState(getVolume);
+  const isUpdatingFromDrawerRef = useRef(false);
+  
+  // Listen for volume changes from SoundscapeComposer
+  useEffect(() => {
+    const handleVolumeChange = (e) => {
+      // Ignore if we're the one who triggered this event
+      if (isUpdatingFromDrawerRef.current) {
+        isUpdatingFromDrawerRef.current = false;
+        return;
+      }
+      
+      const newVolume = e.detail?.volume;
+      if (newVolume !== undefined) {
+        // Update context first (if available), then state
+        if (focusContext?.setVolume) {
+          focusContext.setVolume(newVolume);
+        }
+        // Always update local state as well (for when context is not available)
+        setVolumeState(newVolume);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus-volume-changed', handleVolumeChange);
+      return () => {
+        window.removeEventListener('focus-volume-changed', handleVolumeChange);
+      };
+    }
+  }, [focusContext?.setVolume]);
   
   // Sync volume with context
   useEffect(() => {
@@ -35,7 +64,9 @@ export default function SpacesDrawer({ isOpen, onClose }) {
   const volume = focusContext?.volume ?? volumeState;
   const setVolume = (val) => {
     const newVolume = Math.max(0, Math.min(100, val)); // Clamp between 0 and 100
-    console.log('Setting volume to:', newVolume);
+    
+    // Mark that we're updating from this component
+    isUpdatingFromDrawerRef.current = true;
     
     // Update context if available
     if (focusContext?.setVolume) {
@@ -51,6 +82,10 @@ export default function SpacesDrawer({ isOpen, onClose }) {
       window.dispatchEvent(new CustomEvent('focus-volume-changed', {
         detail: { volume: newVolume }
       }));
+      // Reset flag after event is dispatched
+      setTimeout(() => {
+        isUpdatingFromDrawerRef.current = false;
+      }, 0);
     }
   };
   

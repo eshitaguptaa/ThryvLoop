@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import SpacesDrawer from '@/components/focus/SpacesDrawer';
+import SoundscapeComposer from '@/components/focus/SoundscapeComposer';
 
 const navigationItems = [
   {
@@ -128,6 +129,7 @@ export default function Sidebar() {
     showTask: loadWidgetState('task', true),
   });
   const [showSpacesDrawer, setShowSpacesDrawer] = useState(false);
+  const [showSoundscapeComposer, setShowSoundscapeComposer] = useState(false);
   
   // Save expanded items to localStorage whenever they change
   useEffect(() => {
@@ -135,6 +137,18 @@ export default function Sidebar() {
       localStorage.setItem('sidebar-expanded-items', JSON.stringify(expandedItems));
     }
   }, [expandedItems]);
+
+  // Listen for open-soundscape-composer event from MusicWidget
+  useEffect(() => {
+    const handleOpenSoundscape = () => {
+      setShowSoundscapeComposer(true);
+    };
+
+    window.addEventListener('open-soundscape-composer', handleOpenSoundscape);
+    return () => {
+      window.removeEventListener('open-soundscape-composer', handleOpenSoundscape);
+    };
+  }, []);
   
   // Toggle widgets using custom events (since context is in child layout)
   const toggleTimer = () => {
@@ -461,6 +475,20 @@ export default function Sidebar() {
         <div className="h-px bg-gray-200"></div>
       </div>
 
+      {/* Soundscape Composer Button */}
+      <button
+        onClick={() => setShowSoundscapeComposer(true)}
+        className="flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 transition-all duration-200 mb-2 group"
+        title="Soundscape Composer"
+      >
+        <div className="w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-gray-100 transition-all duration-200 mb-1.5">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+        </div>
+        <span className="text-xs font-medium">Composer</span>
+      </button>
+
       {/* Logout Button */}
       <button
         onClick={handleLogout}
@@ -478,6 +506,9 @@ export default function Sidebar() {
 
       {/* Spaces Drawer */}
       <SpacesDrawer isOpen={showSpacesDrawer} onClose={() => setShowSpacesDrawer(false)} />
+      
+      {/* Soundscape Composer Modal */}
+      <SoundscapeComposer isOpen={showSoundscapeComposer} onClose={() => setShowSoundscapeComposer(false)} />
     </div>
   );
 }

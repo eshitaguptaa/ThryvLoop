@@ -253,8 +253,8 @@ export default function FocusTaskBar({ task = "Drafting Q3 Report" }) {
         <div className="resize-handle absolute right-0 top-1/2 -translate-y-1/2 w-6 h-12 cursor-ew-resize z-20" style={{ background: 'transparent' }} onMouseDown={(e) => handleResizeStart(e, 'right')} />
 
         {/* Checkmark icon */}
-        <div className="rounded-full bg-yellow-400/20 flex items-center justify-center flex-shrink-0" style={{ width: `${iconSize}px`, height: `${iconSize}px` }}>
-          <svg className="text-yellow-400" fill="currentColor" viewBox="0 0 24 24" style={{ width: `${iconSize * 0.6}px`, height: `${iconSize * 0.6}px` }}>
+        <div className="rounded-full bg-purple-400/20 flex items-center justify-center flex-shrink-0" style={{ width: `${iconSize}px`, height: `${iconSize}px` }}>
+          <svg className="text-purple-400" fill="currentColor" viewBox="0 0 24 24" style={{ width: `${iconSize * 0.6}px`, height: `${iconSize * 0.6}px` }}>
             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
           </svg>
         </div>
