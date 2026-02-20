@@ -1,10 +1,32 @@
 'use client';
 
 import { useState, useEffect, useRef, useContext } from 'react';
+import { usePathname } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
+import { getSupabaseClient, getUserStorageItem, getUserStorageJson, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 
 export default function SoundscapeComposer({ isOpen, onClose }) {
+  const { user } = useUser();
+  const userId = user?.id || null;
+  const pathname = usePathname();
   const focusContext = useContext(FocusContext);
+  const getItem = (key) => getUserStorageItem(userId, key, key);
+  const getJson = (key) => getUserStorageJson(userId, key, key);
+  const setItem = (key, value) => setUserStorageItem(userId, key, value);
+  const setJson = (key, value) => setUserStorageJson(userId, key, value);
+  const getSupabase = () => getSupabaseClient();
+
+  const getSessionActive = () => {
+    if (typeof window === 'undefined') return false;
+    const saved = getItem('soundscape-session-active');
+    return saved === 'true';
+  };
+
+  const setSessionActive = (value) => {
+    if (typeof window === 'undefined') return;
+    setItem('soundscape-session-active', value ? 'true' : 'false');
+  };
   
   // Get values from context or localStorage
   const getBackgroundVideoId = () => {
@@ -12,18 +34,20 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       return focusContext.backgroundVideoId;
     }
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('focus-background-video-id') || null;
+      return getItem('focus-background-video-id') || null;
     }
     return null;
   };
 
   const getSpacesVolume = () => {
     if (focusContext?.volume !== undefined) {
-      return focusContext.volume;
+      const v = focusContext.volume;
+      return v > 0 ? v : 50;
     }
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('focus-video-volume');
-      return saved ? parseInt(saved) : 50;
+      const saved = getItem('focus-video-volume');
+      const parsed = saved ? parseInt(saved) : 50;
+      return parsed > 0 ? parsed : 50;
     }
     return 50;
   };
@@ -36,7 +60,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     }
     // Always save to localStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('focus-video-volume', newVolume.toString());
+      setItem('focus-video-volume', newVolume.toString());
       // Dispatch custom event to ensure video player gets the update
       window.dispatchEvent(new CustomEvent('focus-volume-changed', {
         detail: { volume: newVolume }
@@ -44,10 +68,17 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     }
   };
 
+  const getEffectiveSpacesVolume = (baseVolume) => {
+    if (!isPlaying) return 0;
+    if (soloSoundId !== null) return 0;
+    return Math.round(baseVolume * (globalVolume / 100));
+  };
+
   const [activeTab, setActiveTab] = useState('Atmosphere');
+  const [spacesVolume, setSpacesVolumeState] = useState(() => getSpacesVolume());
   const [globalVolume, setGlobalVolume] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('soundscape-global-volume');
+      const saved = getItem('soundscape-global-volume');
       return saved ? parseInt(saved) : 75;
     }
     return 75;
@@ -55,7 +86,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   const [activeSounds, setActiveSounds] = useState([]);
   const [isPlaying, setIsPlaying] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('soundscape-is-playing');
+      const saved = getItem('soundscape-is-playing');
       return saved === null ? true : saved === 'true';
     }
     return true;
@@ -74,11 +105,36 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   const previousVolumesRef = useRef({}); // Store previous volumes when muting individual sounds
   const previousGlobalVolumeRef = useRef(75); // Store previous global volume when muting master
   const soundTimestampsRef = useRef({}); // Track when each sound was added to determine oldest
+  const hasStartedPlaybackRef = useRef(false);
+  const stateHydratedRef = useRef(false);
+  const saveStateTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedGlobalVolume = getItem('soundscape-global-volume');
+    setGlobalVolume(savedGlobalVolume ? parseInt(savedGlobalVolume) : 75);
+    if (pathname === '/focus') {
+      setSessionActive(true);
+      setIsPlaying(true);
+      setItem('soundscape-is-playing', 'true');
+    } else {
+      if (!getSessionActive()) {
+        setIsPlaying(false);
+      }
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (pathname !== '/focus') return;
+    setSessionActive(true);
+    setIsPlaying(true);
+    setItem('soundscape-is-playing', 'true');
+  }, [pathname, userId]);
 
   // Sound Library - only include sounds that exist in public/sounds
   const soundLibrary = {
     Atmosphere: [
-      { id: 'spaces', name: 'Spaces', description: 'Background • Video', isSpaces: true },
       { id: 'rain', name: 'Heavy Rain', description: 'Active' },
       { id: 'fire', name: 'Fire Crackle', description: 'Cozy • Interior' },
       { id: 'forest', name: 'Forest', description: 'Nature • Calm' },
@@ -91,6 +147,11 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       { id: 'lofi', name: 'Chill Lo-Fi', description: 'Relax • Study' },
       { id: 'synthwave', name: 'Synthwave', description: 'Retro • Vibes' },
     ],
+  };
+
+  const getSoundNameById = (soundId) => {
+    const allSounds = Object.values(soundLibrary).flat();
+    return allSounds.find(sound => sound.id === soundId)?.name || soundId;
   };
 
   const defaultRecipes = [
@@ -146,22 +207,121 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     },
   ];
 
-  // Load custom recipes from localStorage
+  // Load custom recipes from Supabase
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const saved = localStorage.getItem('soundscape-custom-recipes');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setCustomRecipes(parsed);
-      } catch (e) {
-        console.error('Error loading custom recipes:', e);
+    if (!userId) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    let cancelled = false;
+    const loadRecipes = async () => {
+      const { data, error } = await supabase
+        .from('soundscape_recipes')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        if (typeof window !== 'undefined') {
+          const saved = getJson('soundscape-custom-recipes');
+          if (saved) setCustomRecipes(saved);
+        }
+        return;
       }
-    }
-  }, []);
+      const mapped = (data || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        icon: row.icon,
+        sounds: row.sounds || [],
+        globalVolume: row.global_volume ?? 75,
+        timestamp: new Date(row.updated_at || row.created_at).getTime(),
+        isCustom: true,
+      }));
+      setCustomRecipes(mapped);
+      if (typeof window !== 'undefined') {
+        setJson('soundscape-custom-recipes', mapped);
+      }
+    };
+    loadRecipes();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   // Combine default and custom recipes
   const focusRecipes = [...defaultRecipes, ...customRecipes];
+
+  // Load soundscape state from Supabase
+  useEffect(() => {
+    if (!userId) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    let cancelled = false;
+    const loadState = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('soundscape_state')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!error && data) {
+          const masterVolume = typeof data.master_volume === 'number' ? data.master_volume : 75;
+          const rawSpaces = typeof data.spaces_volume === 'number' ? data.spaces_volume : getSpacesVolume();
+          const baseSpacesVolume = rawSpaces > 0 ? rawSpaces : 50;
+          setGlobalVolume(masterVolume);
+          setSpacesVolume(baseSpacesVolume);
+          setItem('soundscape-global-volume', masterVolume.toString());
+          const savedSounds = Array.isArray(data.active_sounds) ? data.active_sounds : [];
+          const normalizedSounds = savedSounds
+            .filter(sound => soundFileMap[sound.id])
+            .map(sound => ({
+              id: sound.id,
+              name: getSoundNameById(sound.id),
+              volume: sound.volume ?? 50,
+              category: sound.category || 'Atmosphere',
+            }));
+          setActiveSounds(normalizedSounds);
+          setJson('soundscape-active-sounds', normalizedSounds);
+        }
+      } finally {
+        stateHydratedRef.current = true;
+      }
+    };
+    loadState();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // Re-apply from cache when hydration completes (after login), so soundscape and Spaces volume restore
+  useEffect(() => {
+    if (!userId || typeof window === 'undefined') return;
+    const onHydrated = () => {
+      const savedVolume = getItem('soundscape-global-volume');
+      if (savedVolume) setGlobalVolume(parseInt(savedVolume, 10) || 75);
+      const savedSounds = getJson('soundscape-active-sounds');
+      if (Array.isArray(savedSounds) && savedSounds.length > 0) {
+        const normalized = savedSounds
+          .filter((s) => soundFileMap[s.id])
+          .map((s) => ({
+            id: s.id,
+            name: getSoundNameById(s.id),
+            volume: s.volume ?? 50,
+            category: s.category || 'Atmosphere',
+          }));
+        setActiveSounds(normalized);
+      }
+      const savedPlaying = getItem('soundscape-is-playing');
+      if (savedPlaying !== null) setIsPlaying(savedPlaying === 'true');
+      const savedSpacesVol = getItem('focus-video-volume');
+      if (savedSpacesVol !== null) {
+        const v = parseInt(savedSpacesVol, 10) || 0;
+        setSpacesVolume(v > 0 ? v : 50);
+      }
+    };
+    window.addEventListener('user-preferences-hydrated', onHydrated);
+    return () => window.removeEventListener('user-preferences-hydrated', onHydrated);
+  }, [userId]);
 
   // Sound file mapping - only sounds that exist
   const soundFileMap = {
@@ -346,36 +506,8 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     const timeoutId = setTimeout(() => {
       if (initializedRef.current) return;
       initializedRef.current = true;
-      
-      const currentVideoId = getBackgroundVideoId();
-      const currentSpacesVolume = getSpacesVolume();
-    
-      // Only add Spaces if it's actually playing (video exists and volume > 0)
-      const spacesIsActive = currentVideoId && currentSpacesVolume > 0;
-      
-      // Don't load from localStorage - only show what's actually playing
-      // This ensures active mixer only shows sounds that are being heard
-      const finalSounds = [];
-      
-      // Add Spaces if it's actually active
-      if (spacesIsActive) {
-        finalSounds.push({
-          id: 'spaces',
-          name: 'Spaces',
-          volume: currentSpacesVolume,
-          category: 'Atmosphere'
-        });
-        const now = Date.now();
-        soundTimestampsRef.current['spaces'] = now;
-      }
-      
-      // Set active sounds (only what's actually playing)
-      if (finalSounds.length > 0) {
-        setActiveSounds(finalSounds);
-      } else {
-        // Clear activeSounds if nothing is playing
-        setActiveSounds([]);
-      }
+      setActiveSounds([]);
+      setSpacesVolumeState(getSpacesVolume());
     }, 100); // Small delay to ensure context is loaded
     
     return () => clearTimeout(timeoutId);
@@ -391,35 +523,10 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       
       const newVolume = e.detail?.volume;
       if (newVolume !== undefined) {
-        // Update Spaces volume in activeSounds to match the video player volume
-        setActiveSounds(prevSounds => {
-          const spacesSound = prevSounds.find(s => s.id === 'spaces');
-          if (spacesSound && Math.abs(spacesSound.volume - newVolume) > 0.5) {
-            return prevSounds.map(s => 
-              s.id === 'spaces' ? { ...s, volume: newVolume } : s
-            );
-          }
-          // If Spaces is not in activeSounds but volume > 0, add it
-          if (!spacesSound && newVolume > 0) {
-            const currentVideoId = getBackgroundVideoId();
-            if (currentVideoId) {
-              const now = Date.now();
-              soundTimestampsRef.current['spaces'] = now;
-              return [...prevSounds, {
-                id: 'spaces',
-                name: 'Spaces',
-                volume: newVolume,
-                category: 'Atmosphere'
-              }].slice(-3); // Ensure max 3 layers
-            }
-          }
-          // If Spaces is in activeSounds but volume is 0, remove it
-          if (spacesSound && newVolume === 0) {
-            delete soundTimestampsRef.current['spaces'];
-            return prevSounds.filter(s => s.id !== 'spaces');
-          }
-          return prevSounds;
-        });
+        const baseVolume = globalVolume > 0
+          ? Math.round(newVolume / (globalVolume / 100))
+          : 0;
+        setSpacesVolumeState(Math.max(0, Math.min(100, baseVolume)));
       }
     };
 
@@ -431,10 +538,28 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     }
   }, []);
 
+  useEffect(() => {
+    const currentVideoId = getBackgroundVideoId();
+    if (!currentVideoId) return;
+    if (isUpdatingFromComposerRef.current) return;
+    const effectiveVolume = getEffectiveSpacesVolume(spacesVolume);
+    isUpdatingFromComposerRef.current = true;
+    setSpacesVolume(effectiveVolume);
+    setTimeout(() => {
+      isUpdatingFromComposerRef.current = false;
+    }, 0);
+  }, [spacesVolume, globalVolume, isPlaying, soloSoundId]);
+
   // Save play/pause state to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('soundscape-is-playing', isPlaying.toString());
+      setItem('soundscape-is-playing', isPlaying.toString());
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (isPlaying) {
+      hasStartedPlaybackRef.current = true;
     }
   }, [isPlaying]);
 
@@ -455,22 +580,13 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
   // Initialize and manage audio - keep playing even when modal is closed
   useEffect(() => {
-    const currentVideoId = getBackgroundVideoId();
+    const canAutoplay = pathname === '/focus' || hasStartedPlaybackRef.current;
+    if (!canAutoplay && isPlaying) {
+      return;
+    }
     
     // Start playing active sounds (regardless of modal state)
     activeSounds.forEach((sound) => {
-      // Skip Spaces - it's handled by the video player
-      if (sound.id === 'spaces') {
-        // Ensure Spaces volume is synced
-        if (currentVideoId) {
-          const currentVolume = getSpacesVolume();
-          if (Math.abs(sound.volume - currentVolume) > 0.5) {
-            setSpacesVolume(sound.volume);
-          }
-        }
-        return;
-      }
-      
       if (!audioRefs.current[sound.id] && soundFileMap[sound.id]) {
         const audio = new Audio(soundFileMap[sound.id]);
         audio.loop = true;
@@ -512,7 +628,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         }
       }
     });
-  }, [activeSounds, globalVolume, isPlaying]); // Added isPlaying dependency
+  }, [activeSounds, globalVolume, isPlaying, pathname]); // Added isPlaying dependency
 
   // Enforce 3-layer limit as a safeguard (runs after any state update)
   useEffect(() => {
@@ -534,19 +650,11 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       // Clean up removed sounds
       toRemove.forEach(sound => {
         delete soundTimestampsRef.current[sound.id];
-        if (sound.id === 'spaces') {
-          isUpdatingFromComposerRef.current = true;
-          setSpacesVolume(0);
-          setTimeout(() => {
-            isUpdatingFromComposerRef.current = false;
-          }, 0);
-        } else {
-          const audio = audioRefs.current[sound.id];
-          if (audio) {
-            fadeOutAudio(audio, 500).then(() => {
-              delete audioRefs.current[sound.id];
-            });
-          }
+        const audio = audioRefs.current[sound.id];
+        if (audio) {
+          fadeOutAudio(audio, 500).then(() => {
+            delete audioRefs.current[sound.id];
+          });
         }
         if (soloSoundId === sound.id) {
           setSoloSoundId(null);
@@ -561,62 +669,90 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!initializedRef.current) return; // Don't save during initialization
-    localStorage.setItem('soundscape-global-volume', globalVolume.toString());
+    setItem('soundscape-global-volume', globalVolume.toString());
   }, [globalVolume]);
 
   // Save active sounds to localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!initializedRef.current) return; // Don't save during initialization
-    
-    const currentVideoId = getBackgroundVideoId();
-    const soundsToSave = activeSounds.filter(sound => {
-      if (sound.id === 'spaces') {
-        return !!currentVideoId;
-      }
-      return true;
-    });
-    
-    localStorage.setItem('soundscape-active-sounds', JSON.stringify(soundsToSave));
+    setJson('soundscape-active-sounds', activeSounds);
   }, [activeSounds]);
+
+  const stopAllSoundscape = () => {
+    setIsPlaying(false);
+    setActiveSounds([]);
+    Object.keys(audioRefs.current).forEach((soundId) => {
+      const audio = audioRefs.current[soundId];
+      if (audio) {
+        audio.pause();
+        audio.src = '';
+      }
+    });
+    audioRefs.current = {};
+    soundTimestampsRef.current = {};
+    previousVolumesRef.current = {};
+    previousGlobalVolumeRef.current = globalVolume || 75;
+    setSpacesVolumeState(0);
+    setSpacesVolume(0);
+  };
+
+  useEffect(() => {
+    const handleStop = () => {
+      stopAllSoundscape();
+      setSessionActive(false);
+      setItem('soundscape-is-playing', 'false');
+      setItem('soundscape-session-active', 'false');
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('soundscape-stop-all', handleStop);
+      return () => {
+        window.removeEventListener('soundscape-stop-all', handleStop);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopAllSoundscape();
+    };
+  }, []);
+
+  // Persist soundscape state to Supabase
+  useEffect(() => {
+    if (!userId) return;
+    if (!stateHydratedRef.current) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    if (saveStateTimeoutRef.current) {
+      clearTimeout(saveStateTimeoutRef.current);
+    }
+    saveStateTimeoutRef.current = setTimeout(async () => {
+      const payload = {
+        user_id: userId,
+        active_sounds: activeSounds.map((sound) => ({
+          id: sound.id,
+          volume: sound.volume,
+          category: sound.category,
+        })),
+        master_volume: globalVolume,
+        spaces_volume: spacesVolume,
+        updated_at: new Date().toISOString(),
+      };
+      await supabase.from('soundscape_state').upsert(payload, { onConflict: 'user_id' });
+    }, 500);
+    return () => {
+      if (saveStateTimeoutRef.current) {
+        clearTimeout(saveStateTimeoutRef.current);
+      }
+    };
+  }, [activeSounds, globalVolume, spacesVolume, userId]);
 
   // Update audio volumes when they change
   useEffect(() => {
-    // Skip if user is currently updating Spaces volume (prevents circular updates)
-    if (isUpdatingFromComposerRef.current) {
-      return;
-    }
-    
     activeSounds.forEach((sound) => {
-      // Handle Spaces separately (uses video player volume)
-      if (sound.id === 'spaces') {
-        // Apply play/pause and solo effect
-        let calculatedVolume = sound.volume;
-        
-        // If paused, mute Spaces
-        if (!isPlaying) {
-          calculatedVolume = 0;
-        } else if (soloSoundId !== null) {
-          // Apply solo effect
-          calculatedVolume = soloSoundId === 'spaces' ? sound.volume : 0;
-        }
-        
-        // Only update if the calculated volume is different from current
-        const currentVolume = getSpacesVolume();
-        if (Math.abs(calculatedVolume - currentVolume) > 0.1) {
-          isUpdatingFromComposerRef.current = true;
-          setSpacesVolume(calculatedVolume);
-          setTimeout(() => {
-            isUpdatingFromComposerRef.current = false;
-          }, 0);
-        }
-        return;
-      }
-      
-      // Handle regular audio files
       const audio = audioRefs.current[sound.id];
       if (audio) {
-        // Control play/pause first
         if (isPlaying) {
           if (audio.paused) {
             audio.play().catch(() => {});
@@ -625,17 +761,14 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
           audio.pause();
         }
         
-        // Then set volume (only if playing)
         if (isPlaying) {
-          // If solo is active, only play the soloed sound, mute others
           if (soloSoundId !== null) {
             if (sound.id === soloSoundId) {
               audio.volume = (sound.volume / 100) * (globalVolume / 100);
             } else {
-              audio.volume = 0; // Mute other sounds
+              audio.volume = 0;
             }
           } else {
-            // Normal volume when no solo is active
             audio.volume = (sound.volume / 100) * (globalVolume / 100);
           }
         }
@@ -643,59 +776,12 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     });
   }, [activeSounds, globalVolume, soloSoundId, isPlaying]);
 
-  // Sync active sounds when modal opens - only add sounds that are actually playing, but don't remove existing ones
+  // Sync Spaces volume when modal opens
   useEffect(() => {
-    if (!isOpen) return; // Only sync when modal opens
-    
-    // Skip if we're updating from this component (prevents interference with user actions)
-    if (isUpdatingFromComposerRef.current) {
-      return;
-    }
-    
-    const currentVideoId = getBackgroundVideoId();
-    const currentSpacesVolume = getSpacesVolume();
-    
-    setActiveSounds(prevSounds => {
-      let updated = [...prevSounds]; // Start with existing sounds (don't remove them)
-      
-      // Add Spaces only if it's actually playing (video exists and volume > 0) and not already in activeSounds
-      const hasSpaces = updated.some(s => s.id === 'spaces');
-      if (currentVideoId && currentSpacesVolume > 0 && !hasSpaces) {
-        const now = Date.now();
-        if (!soundTimestampsRef.current['spaces']) {
-          soundTimestampsRef.current['spaces'] = now;
-        }
-        updated.push({
-          id: 'spaces',
-          name: 'Spaces',
-          volume: currentSpacesVolume,
-          category: 'Atmosphere'
-        });
-      }
-      
-      // Remove Spaces only if video is gone (not just muted)
-      if (hasSpaces && !currentVideoId) {
-        updated = updated.filter(s => s.id !== 'spaces');
-        delete soundTimestampsRef.current['spaces'];
-      }
-      
-      // Don't remove regular sounds - they should stay in activeSounds even if muted by solo
-      // The playableSounds filter will handle visibility, but activeSounds should preserve all sounds
-      
-      // Ensure we don't exceed 3 layers
-      if (updated.length > 3) {
-        // Sort by timestamp and keep newest 3
-        updated.sort((a, b) => {
-          const aTime = soundTimestampsRef.current[a.id] || 0;
-          const bTime = soundTimestampsRef.current[b.id] || 0;
-          return bTime - aTime; // Newest first
-        });
-        updated = updated.slice(0, 3);
-      }
-      
-      return updated;
-    });
-  }, [isOpen]); // Only sync when modal opens
+    if (!isOpen) return;
+    if (isUpdatingFromComposerRef.current) return;
+    setSpacesVolumeState(getSpacesVolume());
+  }, [isOpen]);
 
   // Handle body scroll lock
   useEffect(() => {
@@ -711,121 +797,6 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
   const handleSoundClick = (soundId, category) => {
     const isActive = activeSounds.some((s) => s.id === soundId);
-    const currentVideoId = getBackgroundVideoId();
-    
-    // Special handling for Spaces
-    if (soundId === 'spaces') {
-      if (!currentVideoId) {
-        return; // Can't add Spaces if no video is selected
-      }
-      
-      if (isActive) {
-        // Remove Spaces - mute the video player
-        if (soloSoundId === 'spaces') {
-          setSoloSoundId(null);
-        }
-        // Update UI immediately
-        setActiveSounds(activeSounds.filter((s) => s.id !== 'spaces'));
-        // Clean up timestamp
-        delete soundTimestampsRef.current['spaces'];
-        // Mark that we're updating from composer and set volume to 0
-        isUpdatingFromComposerRef.current = true;
-        setSpacesVolume(0);
-        // Reset flag in background
-        setTimeout(() => {
-          isUpdatingFromComposerRef.current = false;
-        }, 0);
-      } else {
-        // Add Spaces if video is available
-        const currentVolume = getSpacesVolume();
-        const volumeToUse = currentVolume > 0 ? currentVolume : 50;
-        
-        // Mark that we're updating from composer to prevent sync interference
-        isUpdatingFromComposerRef.current = true;
-        
-        // Check if we need to remove the oldest sound to stay within 3 layers
-        let soundsToRemove = [];
-        if (activeSounds.length >= 3) {
-          // Find the oldest sound by timestamp
-          const oldestSound = activeSounds.reduce((oldest, current) => {
-            const oldestTime = soundTimestampsRef.current[oldest.id] || 0;
-            const currentTime = soundTimestampsRef.current[current.id] || 0;
-            if (oldestTime > 0 && currentTime > 0) {
-              return oldestTime < currentTime ? oldest : current;
-            }
-            if (oldestTime > 0 && currentTime === 0) return current;
-            if (currentTime > 0 && oldestTime === 0) return oldest;
-            return oldest; // Use array order if no timestamps
-          });
-          soundsToRemove.push(oldestSound);
-        }
-        
-        // Update UI immediately - remove sounds from state
-        const remainingSounds = activeSounds.filter(s => !soundsToRemove.some(r => r.id === s.id));
-        const now = Date.now();
-        soundTimestampsRef.current['spaces'] = now;
-        
-        // Final safeguard: ensure we never exceed 3 sounds
-        const newSoundsArray = [...remainingSounds, { 
-          id: 'spaces', 
-          name: 'Spaces', 
-          volume: volumeToUse, 
-          category: 'Atmosphere' 
-        }];
-        const finalSounds = newSoundsArray.length > 3 
-          ? newSoundsArray.slice(-3) // Keep only the last 3 (newest)
-          : newSoundsArray;
-        
-        // If we had to trim, remove timestamps for trimmed sounds
-        if (newSoundsArray.length > 3) {
-          const trimmedIds = newSoundsArray.slice(0, -3).map(s => s.id);
-          trimmedIds.forEach(id => {
-            delete soundTimestampsRef.current[id];
-            // Also fade out and clean up audio for trimmed sounds
-            if (id !== 'spaces') {
-              const audio = audioRefs.current[id];
-              if (audio) {
-                fadeOutAudio(audio, 500).then(() => {
-                  delete audioRefs.current[id];
-                });
-              }
-            }
-          });
-        }
-        
-        setActiveSounds(finalSounds);
-        
-        // Handle solo state immediately
-        soundsToRemove.forEach(soundToRemove => {
-          if (soloSoundId === soundToRemove.id) {
-            setSoloSoundId(null);
-          }
-        });
-        
-        // Restore Spaces volume immediately
-        setSpacesVolume(volumeToUse);
-        
-        // Fade out removed sounds in background (non-blocking)
-        soundsToRemove.forEach(soundToRemove => {
-          if (soundToRemove.id === 'spaces') {
-            // Already handled above
-          } else {
-            const audio = audioRefs.current[soundToRemove.id];
-            if (audio) {
-              fadeOutAudio(audio, 500).then(() => {
-                delete audioRefs.current[soundToRemove.id];
-              });
-            }
-          }
-        });
-        
-        // Reset flag in background
-        setTimeout(() => {
-          isUpdatingFromComposerRef.current = false;
-        }, 0);
-      }
-      return;
-    }
     
     if (isActive) {
       // Update UI immediately - remove from active sounds
@@ -903,19 +874,8 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       
       // Handle solo state immediately
       soundsToRemove.forEach(soundToRemove => {
-        if (soundToRemove.id === 'spaces') {
-          if (soloSoundId === 'spaces') {
-            setSoloSoundId(null);
-          }
-          isUpdatingFromComposerRef.current = true;
-          setSpacesVolume(0);
-          setTimeout(() => {
-            isUpdatingFromComposerRef.current = false;
-          }, 0);
-        } else {
-          if (soloSoundId === soundToRemove.id) {
-            setSoloSoundId(null);
-          }
+        if (soloSoundId === soundToRemove.id) {
+          setSoloSoundId(null);
         }
       });
       
@@ -930,13 +890,11 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       
       // Fade out removed sounds in background (non-blocking)
       soundsToRemove.forEach(soundToRemove => {
-        if (soundToRemove.id !== 'spaces') {
-          const audio = audioRefs.current[soundToRemove.id];
-          if (audio) {
-            fadeOutAudio(audio, 500).then(() => {
-              delete audioRefs.current[soundToRemove.id];
-            });
-          }
+        const audio = audioRefs.current[soundToRemove.id];
+        if (audio) {
+          fadeOutAudio(audio, 500).then(() => {
+            delete audioRefs.current[soundToRemove.id];
+          });
         }
       });
     }
@@ -945,28 +903,6 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   const updateSoundVolume = (soundId, newVolume) => {
     // Update UI immediately
     setActiveSounds(prevSounds => prevSounds.map((s) => s.id === soundId ? { ...s, volume: newVolume } : s));
-    
-    if (soundId === 'spaces') {
-      const currentVideoId = getBackgroundVideoId();
-      if (!currentVideoId) {
-        return;
-      }
-      
-      isUpdatingFromComposerRef.current = true;
-      
-      // Apply solo effect if needed for the actual video player volume
-      const actualVolume = soloSoundId !== null
-        ? (soloSoundId === 'spaces' ? newVolume : 0)
-        : newVolume;
-      
-      // Update Spaces volume through FocusContext and dispatch event
-      setSpacesVolume(actualVolume);
-      
-      // Reset flag in background
-      setTimeout(() => {
-        isUpdatingFromComposerRef.current = false;
-      }, 0);
-    }
   };
 
   const handleSaveRecipe = () => {
@@ -977,37 +913,54 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     setShowSaveModal(true);
   };
 
-  const handleConfirmSaveRecipe = () => {
+  const handleConfirmSaveRecipe = async () => {
     if (!recipeName.trim()) {
       alert('Please enter a recipe name.');
       return;
     }
 
     const currentVideoId = getBackgroundVideoId();
-    const soundsToSave = activeSounds.filter(sound => {
-      if (sound.id === 'spaces') {
-        return !!currentVideoId;
-      }
-      return true;
-    }).map(sound => ({
+    const soundsToSave = activeSounds.map(sound => ({
       id: sound.id,
       volume: sound.volume,
       category: sound.category,
     }));
+    if (currentVideoId && spacesVolume > 0) {
+      soundsToSave.push({ id: 'spaces', volume: spacesVolume, category: 'Atmosphere' });
+    }
     
-    const newRecipe = {
-      id: `custom-${Date.now()}`,
-      name: recipeName.trim(),
-      icon: recipeType,
-      sounds: soundsToSave,
-      globalVolume,
-      timestamp: Date.now(),
-      isCustom: true,
-    };
-
-    const updatedCustomRecipes = [...customRecipes, newRecipe];
-    setCustomRecipes(updatedCustomRecipes);
-    localStorage.setItem('soundscape-custom-recipes', JSON.stringify(updatedCustomRecipes));
+    const supabase = getSupabase();
+    if (supabase && userId) {
+      const { data, error } = await supabase
+        .from('soundscape_recipes')
+        .insert({
+          user_id: userId,
+          name: recipeName.trim(),
+          icon: recipeType,
+          sounds: soundsToSave,
+          global_volume: globalVolume,
+          updated_at: new Date().toISOString(),
+        })
+        .select('*')
+        .single();
+      if (!error && data) {
+        const newRecipe = {
+          id: data.id,
+          name: data.name,
+          icon: data.icon,
+          sounds: data.sounds || [],
+          globalVolume: data.global_volume ?? 75,
+          timestamp: new Date(data.updated_at || data.created_at).getTime(),
+          isCustom: true,
+        };
+        const updatedCustomRecipes = [...customRecipes, newRecipe];
+        setCustomRecipes(updatedCustomRecipes);
+        setJson('soundscape-custom-recipes', updatedCustomRecipes);
+      } else {
+        alert('Unable to save recipe. Please try again.');
+        return;
+      }
+    }
     
     // Reset form
     setRecipeName('');
@@ -1022,11 +975,19 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     setShowDeleteConfirm(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (recipeToDelete) {
+      const supabase = getSupabase();
+      if (supabase && userId) {
+        await supabase
+          .from('soundscape_recipes')
+          .delete()
+          .eq('id', recipeToDelete.id)
+          .eq('user_id', userId);
+      }
       const updated = customRecipes.filter(r => r.id !== recipeToDelete.id);
       setCustomRecipes(updated);
-      localStorage.setItem('soundscape-custom-recipes', JSON.stringify(updated));
+      setJson('soundscape-custom-recipes', updated);
     }
     setShowDeleteConfirm(false);
     setRecipeToDelete(null);
@@ -1041,9 +1002,9 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     // Don't set selectedRecipe - we'll determine active state by matching sounds
     const recipe = focusRecipes.find(r => r.id === recipeId);
     if (recipe && recipe.sounds) {
-      // Load recipe sounds - filter out invalid sounds and remove Spaces from recipe (handle separately)
+      // Load recipe sounds - filter out invalid sounds (Spaces handled separately)
       const newSounds = recipe.sounds
-        .filter(sound => (soundFileMap[sound.id] || sound.id === 'spaces') && sound.id !== 'spaces')
+        .filter(sound => soundFileMap[sound.id])
         .map(sound => ({
           id: sound.id,
           name: soundLibrary[sound.category]?.find(s => s.id === sound.id)?.name || sound.id,
@@ -1051,57 +1012,21 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
           category: sound.category,
         }));
 
-      // Handle Spaces separately - check if recipe includes Spaces and if video exists
       const currentVideoId = getBackgroundVideoId();
       const recipeHasSpaces = recipe.sounds.some(s => s.id === 'spaces');
-      const spacesSoundInActive = activeSounds.find(s => s.id === 'spaces');
-      
-      let finalSounds = [...newSounds];
-      
-      // Determine if Spaces should be included
-      let shouldIncludeSpaces = false;
-      let spacesToAdd = null;
-      
       if (recipeHasSpaces && currentVideoId) {
-        // Recipe includes Spaces - use recipe's Spaces volume
-        const spacesVolume = recipe.sounds.find(s => s.id === 'spaces')?.volume || 50;
-        spacesToAdd = {
-          id: 'spaces',
-          name: 'Spaces',
-          volume: spacesVolume,
-          category: 'Atmosphere'
-        };
-        shouldIncludeSpaces = true;
-      } else if (!recipeHasSpaces && spacesSoundInActive && currentVideoId) {
-        // Recipe doesn't include Spaces, but Spaces is already active - keep it
-        spacesToAdd = spacesSoundInActive;
-        shouldIncludeSpaces = true;
-      } else if (spacesSoundInActive && !currentVideoId) {
-        // Remove Spaces if video is gone
-        setSpacesVolume(0);
+        const recipeSpacesVolume = recipe.sounds.find(s => s.id === 'spaces')?.volume || 50;
+        isUpdatingFromComposerRef.current = true;
+        setSpacesVolume(recipeSpacesVolume);
+        setSpacesVolumeState(recipeSpacesVolume);
+        setTimeout(() => {
+          isUpdatingFromComposerRef.current = false;
+        }, 0);
       }
 
-      // Add Spaces if it should be included
-      if (shouldIncludeSpaces && spacesToAdd) {
-        finalSounds.push(spacesToAdd);
-      }
-
-      // Always enforce 3-layer limit - remove oldest sounds if needed
+      let finalSounds = [...newSounds];
       if (finalSounds.length > 3) {
-        const spacesInFinal = finalSounds.find(s => s.id === 'spaces');
-        const nonSpaces = finalSounds.filter(s => s.id !== 'spaces');
-        // Keep the most recent 3 non-Spaces sounds, then add Spaces if it exists
-        const toKeep = nonSpaces.slice(-3);
-        finalSounds = spacesInFinal ? [...toKeep, spacesInFinal] : toKeep;
-        
-        // If Spaces was removed due to limit, mute it
-        if (spacesInFinal && !finalSounds.find(s => s.id === 'spaces')) {
-          isUpdatingFromComposerRef.current = true;
-          setSpacesVolume(0);
-          setTimeout(() => {
-            isUpdatingFromComposerRef.current = false;
-          }, 0);
-        }
+        finalSounds = finalSounds.slice(-3);
       }
 
       // Update timestamps for all sounds in the recipe (they're all "new" when recipe loads)
@@ -1122,7 +1047,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
       // Fade out old sounds in background (non-blocking)
       Object.entries(audioRefs.current)
-        .filter(([soundId]) => soundId !== 'spaces' && !finalSounds.some(s => s.id === soundId))
+        .filter(([soundId]) => !finalSounds.some(s => s.id === soundId))
         .forEach(([soundId, audio]) => {
           if (audio) {
             fadeOutAudio(audio, 500).then(() => {
@@ -1133,14 +1058,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
       // Start playing new sounds immediately with fade in
       finalSounds.forEach((sound) => {
-        if (sound.id === 'spaces') {
-          const spacesVolume = sound.volume || 50;
-          isUpdatingFromComposerRef.current = true;
-          setSpacesVolume(spacesVolume);
-          setTimeout(() => {
-            isUpdatingFromComposerRef.current = false;
-          }, 0);
-        } else if (soundFileMap[sound.id] && !audioRefs.current[sound.id]) {
+        if (soundFileMap[sound.id] && !audioRefs.current[sound.id]) {
           const audio = new Audio(soundFileMap[sound.id]);
           audio.loop = true;
           const targetVolume = (sound.volume / 100) * (globalVolume / 100);
@@ -1169,36 +1087,20 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     
     // Immediately apply solo effect to all sounds
     activeSounds.forEach((sound) => {
-      if (sound.id === 'spaces') {
-        // Handle Spaces separately
-        const calculatedVolume = newSoloId !== null
-          ? (newSoloId === 'spaces' ? sound.volume : 0)
-          : sound.volume;
-        isUpdatingFromComposerRef.current = true;
-        setSpacesVolume(calculatedVolume);
-        setTimeout(() => {
-          isUpdatingFromComposerRef.current = false;
-        }, 0);
-      } else {
-        // Handle regular audio files
-        const audio = audioRefs.current[sound.id];
-        if (audio) {
-          if (newSoloId !== null) {
-            if (sound.id === newSoloId) {
-              // This is the soloed sound - play it at full volume
-              const targetVolume = (sound.volume / 100) * (globalVolume / 100);
-              audio.volume = targetVolume;
-              if (audio.paused) {
-                audio.play().catch(() => {}); // Ensure it's playing
-              }
-            } else {
-              // This is not the soloed sound - mute it
-              audio.volume = 0;
+      const audio = audioRefs.current[sound.id];
+      if (audio) {
+        if (newSoloId !== null) {
+          if (sound.id === newSoloId) {
+            const targetVolume = (sound.volume / 100) * (globalVolume / 100);
+            audio.volume = targetVolume;
+            if (audio.paused) {
+              audio.play().catch(() => {});
             }
           } else {
-            // Solo is off - restore normal volume for all sounds
-            audio.volume = (sound.volume / 100) * (globalVolume / 100);
+            audio.volume = 0;
           }
+        } else {
+          audio.volume = (sound.volume / 100) * (globalVolume / 100);
         }
       }
     });
@@ -1249,8 +1151,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     if (!recipe || !recipe.sounds || recipe.sounds.length === 0) return false;
     
     const currentVideoId = getBackgroundVideoId();
-    const currentSpacesVolume = getSpacesVolume();
-    const spacesIsActive = currentVideoId && currentSpacesVolume > 0;
+    const spacesIsActive = currentVideoId && spacesVolume > 0;
     
     // Get recipe sound IDs (excluding Spaces for now)
     const recipeSoundIds = recipe.sounds
@@ -1261,11 +1162,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     // Get active sound IDs (excluding Spaces) - only sounds that are actually playing
     // Check if audio ref exists (sound is actually playing)
     const activeSoundIds = activeSounds
-      .filter(s => {
-        if (s.id === 'spaces') return false;
-        // Only include if audio ref exists (sound is playing)
-        return !!audioRefs.current[s.id];
-      })
+      .filter(s => !!audioRefs.current[s.id])
       .map(s => s.id)
       .sort();
     
@@ -1304,18 +1201,10 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   // Also deduplicate to prevent duplicate keys
   const playableSounds = activeSounds
     .filter(sound => {
-      if (sound.id === 'spaces') {
-        const videoId = getBackgroundVideoId();
-        // Show Spaces if video exists (regardless of volume - solo can mute it temporarily)
-        return !!videoId;
-      }
-      // For regular sounds, show if audio exists (even if muted by solo)
-      // Solo affects volume, not visibility - sounds should remain visible
       const audio = audioRefs.current[sound.id];
       return !!audio;
     })
     .filter((sound, index, self) => 
-      // Remove duplicates by keeping only the first occurrence of each id
       index === self.findIndex(s => s.id === sound.id)
     );
 
@@ -1351,7 +1240,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                 const newPlayingState = !isPlaying;
                 setIsPlaying(newPlayingState);
                 if (typeof window !== 'undefined') {
-                  localStorage.setItem('soundscape-is-playing', newPlayingState.toString());
+                  setItem('soundscape-is-playing', newPlayingState.toString());
                   window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
                     detail: { isPlaying: newPlayingState }
                   }));
@@ -1396,12 +1285,13 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
           <section>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-medium text-white">Active Mixer</h3>
-              {/* Master Volume */}
-              <div className="flex items-center gap-3 w-48 opacity-60 hover:opacity-100 transition-opacity">
+              {/* Master + Spaces Volume */}
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3 w-48 opacity-60 hover:opacity-100 transition-opacity">
                 <button
                   onClick={handleMasterMuteToggle}
                   type="button"
-                  className="flex-shrink-0 transition-colors hover:opacity-100 cursor-pointer p-1 -ml-1"
+                  className="shrink-0 transition-colors hover:opacity-100 cursor-pointer p-1 -ml-1"
                   title={globalVolume === 0 ? "Unmute master volume" : "Mute master volume"}
                   style={{ pointerEvents: 'auto' }}
                 >
@@ -1429,6 +1319,34 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                     pointerEvents: 'auto',
                   }}
                 />
+              </div>
+                <div className="flex items-center gap-3 w-48 opacity-60 hover:opacity-100 transition-opacity">
+                  <div className="text-white/60 flex items-center gap-2 text-xs">
+                    <SoundIcon soundId="spaces" className="w-4 h-4" />
+                    <span>Spaces</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={spacesVolume}
+                    onChange={(e) => {
+                      const newVolume = parseInt(e.target.value);
+                      if (Number.isNaN(newVolume)) return;
+                      setSpacesVolumeState(newVolume);
+                      isUpdatingFromComposerRef.current = true;
+                      setSpacesVolume(getEffectiveSpacesVolume(newVolume));
+                      setTimeout(() => {
+                        isUpdatingFromComposerRef.current = false;
+                      }, 0);
+                    }}
+                    className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer slider-purple"
+                    style={{
+                      background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${spacesVolume}%, rgba(255,255,255,0.1) ${spacesVolume}%, rgba(255,255,255,0.1) 100%)`,
+                      pointerEvents: 'auto',
+                    }}
+                  />
+                </div>
               </div>
             </div>
 
@@ -1559,25 +1477,14 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
             {/* Library Grid */}
             <div className="grid grid-cols-4 gap-4">
               {soundLibrary[activeTab]?.map(sound => {
-                const currentVideoId = getBackgroundVideoId();
-                const isActive = sound.id === 'spaces' 
-                  ? !!currentVideoId && activeSounds.some(s => s.id === 'spaces')
-                  : activeSounds.some(s => s.id === sound.id);
-                
-                // For Spaces: Enable if video exists, disable only if no video
-                // Note: We allow adding Spaces even at 3 layers (it will remove the oldest)
-                const isSpacesDisabled = sound.id === 'spaces' && !currentVideoId;
-                
+                const isActive = activeSounds.some(s => s.id === sound.id);
                 return (
                   <button
                     key={sound.id}
                     onClick={() => handleSoundClick(sound.id, activeTab)}
-                    disabled={isSpacesDisabled}
                     className={`
                       relative px-6 py-8 rounded-3xl border transition-all duration-200 flex flex-col items-center justify-center gap-4 group
-                      ${isSpacesDisabled 
-                        ? 'bg-[#18181b]/50 border-white/5 opacity-50 cursor-not-allowed'
-                        : isActive 
+                      ${isActive 
                         ? 'bg-[#8b5cf6]/10 border-[#8b5cf6] shadow-[0_0_15px_rgba(139,92,246,0.15)]' 
                         : 'bg-[#18181b] border-white/5 hover:border-white/10 hover:bg-[#202024]'
                       }
@@ -1653,7 +1560,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
       {/* Save Recipe Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             onClick={() => setShowSaveModal(false)}
@@ -1741,14 +1648,14 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             onClick={handleCancelDelete}
           />
           <div className="relative bg-[#0f0f12] rounded-2xl border border-white/5 shadow-2xl p-8 w-full max-w-md">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
                 <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>

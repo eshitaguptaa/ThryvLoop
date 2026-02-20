@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useAuth, useUser } from '@clerk/nextjs';
 import { X, Plus, Calendar, Clock, User, Edit2, Trash2, ArrowRight, ArrowLeft } from 'lucide-react';
+import { getSupabaseClient, getUserStorageItem, setSupabaseAuthToken, setUserStorageItem } from '@/utils/userStorage';
 
 // Category colors mapping
 const categoryColors = {
@@ -22,84 +24,48 @@ const priorityOptions = [
   { level: 'Low Priority', color: 'bg-gray-400', label: 'Low' },
 ];
 
-// Default tasks
-const defaultTasks = {
-  'todaysFocus': [
-    {
-      id: 1,
-      category: 'Finance',
-      categoryColor: 'bg-purple-100 text-purple-700',
-      title: 'Finalize Q3 Budget Deck',
-      assignedUsers: [
-        { name: 'Alex', avatar: 'https://i.pravatar.cc/150?u=alex' },
-        { name: 'Sarah', avatar: 'https://i.pravatar.cc/150?u=sarah' }
-      ],
-      dueTime: 'Due 2:00 PM',
-      dueDate: new Date().toISOString(),
-      priority: { level: 'High Priority', color: 'bg-red-500' },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      category: 'Hiring',
-      categoryColor: 'bg-blue-100 text-blue-700',
-      title: 'Review Intern Candidates',
-      assignedUsers: [],
-      dueTime: '5:00 PM',
-      dueDate: new Date().toISOString(),
-      priority: { level: 'Medium Priority', color: 'bg-orange-500' },
-      createdAt: new Date().toISOString(),
-    }
-  ],
-  'inProgress': [
-    {
-      id: 3,
-      category: 'Dev',
-      categoryColor: 'bg-orange-100 text-orange-700',
-      title: 'API Integration w/ Vendor',
-      assignedUsers: [
-        { name: 'Mike', avatar: 'https://i.pravatar.cc/150?u=mike' }
-      ],
-      dueTime: 'Thu',
-      dueDate: new Date(Date.now() + 86400000).toISOString(),
-      priority: { level: 'High Priority', color: 'bg-red-500' },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 4,
-      category: 'Legal',
-      categoryColor: 'bg-green-100 text-green-700',
-      title: 'Update Compliance Docs',
-      assignedUsers: [],
-      dueDate: new Date(Date.now() + 172800000).toISOString(),
-      priority: { level: 'Low Priority', color: 'bg-gray-400' },
-      createdAt: new Date().toISOString(),
-    }
-  ],
-  'backlog': [
-    {
-      id: 5,
-      category: 'Finance',
-      categoryColor: 'bg-purple-100 text-purple-700',
-      title: 'Research Competitor UI',
-      assignedUsers: [],
-      priority: null,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 6,
-      category: 'Project',
-      categoryColor: 'bg-blue-100 text-blue-700',
-      title: 'Schedule Team Lunch',
-      assignedUsers: [],
-      priority: null,
-      createdAt: new Date().toISOString(),
-    }
-  ]
+const emptyTasks = {
+  todaysFocus: [],
+  inProgress: [],
+  backlog: [],
 };
 
+const defaultTaskSeed = () => ([
+  {
+    title: 'Finalize Q3 Budget Deck',
+    category: 'Finance',
+    column_key: 'todaysFocus',
+    assigned_users: [
+      { name: 'Alex', avatar: 'https://i.pravatar.cc/150?u=alex' },
+      { name: 'Sarah', avatar: 'https://i.pravatar.cc/150?u=sarah' },
+    ],
+    due_date: new Date().toISOString(),
+    priority: { level: 'High Priority', color: 'bg-red-500' },
+  },
+  {
+    title: 'API Integration w/ Vendor',
+    category: 'Dev',
+    column_key: 'inProgress',
+    assigned_users: [
+      { name: 'Mike', avatar: 'https://i.pravatar.cc/150?u=mike' },
+    ],
+    due_date: new Date(Date.now() + 86400000).toISOString(),
+    priority: { level: 'High Priority', color: 'bg-red-500' },
+  },
+  {
+    title: 'Research Competitor UI',
+    category: 'Finance',
+    column_key: 'backlog',
+    assigned_users: [],
+    priority: null,
+  },
+]);
+
 export default function TasksPage() {
-  const [tasks, setTasks] = useState(defaultTasks);
+  const { user } = useUser();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const userId = user?.id || null;
+  const [tasks, setTasks] = useState(emptyTasks);
   const [searchQuery, setSearchQuery] = useState('');
   const [quickCapture, setQuickCapture] = useState('');
   const [viewMode, setViewMode] = useState('grid');
@@ -111,32 +77,36 @@ export default function TasksPage() {
   const [draggedTask, setDraggedTask] = useState(null);
   const [draggedFromColumn, setDraggedFromColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+  const [taskError, setTaskError] = useState('');
+  const seedGuardRef = useRef(false);
 
-  // Load tasks from localStorage on mount
+  const getSupabase = () => getSupabaseClient();
+
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedTasks = localStorage.getItem('thryv-tasks');
-      if (savedTasks) {
-        try {
-          setTasks(JSON.parse(savedTasks));
-        } catch (e) {
-          console.error('Error loading tasks:', e);
-        }
-      }
-    }
-  }, []);
+    if (typeof window === 'undefined') return;
+    const savedViewMode = getUserStorageItem(userId, 'tasks-view-mode', 'tasks-view-mode');
+    if (savedViewMode) setViewMode(savedViewMode);
+    const savedCategory = getUserStorageItem(userId, 'tasks-filter-category', 'tasks-filter-category');
+    if (savedCategory) setFilterCategory(savedCategory);
+    const savedPriority = getUserStorageItem(userId, 'tasks-filter-priority', 'tasks-filter-priority');
+    if (savedPriority) setFilterPriority(savedPriority);
+  }, [userId]);
 
-  // Save tasks to localStorage whenever they change
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('thryv-tasks', JSON.stringify(tasks));
-    }
-  }, [tasks]);
+    if (typeof window === 'undefined') return;
+    setUserStorageItem(userId, 'tasks-view-mode', viewMode);
+  }, [viewMode, userId]);
 
-  // Generate unique ID
-  const generateId = () => {
-    return Date.now() + Math.random();
-  };
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setUserStorageItem(userId, 'tasks-filter-category', filterCategory);
+  }, [filterCategory, userId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setUserStorageItem(userId, 'tasks-filter-priority', filterPriority);
+  }, [filterPriority, userId]);
 
   // Format due time
   const formatDueTime = (dueDate) => {
@@ -159,83 +129,252 @@ export default function TasksPage() {
     }
   };
 
-  // Add task
-  const addTask = (taskData) => {
-    const newTask = {
-      id: generateId(),
-      category: taskData.category || 'Other',
-      categoryColor: categoryColors[taskData.category] || categoryColors['Other'],
-      title: taskData.title,
-      assignedUsers: taskData.assignedUsers || [],
-      dueTime: taskData.dueDate ? formatDueTime(taskData.dueDate) : null,
-      dueDate: taskData.dueDate || null,
-      priority: taskData.priority || null,
-      createdAt: new Date().toISOString(),
+  const mapRowToTask = (row) => {
+    const category = row.category || 'Other';
+    return {
+      id: row.id,
+      category,
+      categoryColor: categoryColors[category] || categoryColors['Other'],
+      title: row.title,
+      assignedUsers: row.assigned_users || [],
+      dueTime: row.due_date ? formatDueTime(row.due_date) : null,
+      dueDate: row.due_date || null,
+      priority: row.priority || null,
+      createdAt: row.created_at || new Date().toISOString(),
+      column: row.column_key || 'backlog',
     };
+  };
 
-    const column = taskData.column || 'backlog';
-    setTasks(prev => ({
-      ...prev,
-      [column]: [...prev[column], newTask]
+  const groupTasksByColumn = (rows) => {
+    const grouped = { ...emptyTasks };
+    const seen = new Set();
+    rows.forEach((row) => {
+      const task = mapRowToTask(row);
+      if (seen.has(task.id)) return;
+      seen.add(task.id);
+      const column = grouped[task.column] ? task.column : 'backlog';
+      grouped[column].push(task);
+    });
+    return grouped;
+  };
+
+  const ensureSupabase = () => {
+    const supabase = getSupabase();
+    if (!supabase || !userId) {
+      if (!supabase) {
+        setTaskError('Supabase client not ready. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+      } else if (!userId) {
+        setTaskError('User not loaded. Please sign in again.');
+      }
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Supabase not ready or user missing; tasks will not sync.');
+      }
+      return false;
+    }
+    return true;
+  };
+
+  const seedDefaultTasks = async () => {
+    const supabase = getSupabase();
+    if (!ensureSupabase()) return [];
+    const seedMarker = {
+      user_id: userId,
+      key: 'tasks_seeded',
+      value: true,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: seedFlagError } = await supabase
+      .from('user_preferences')
+      .insert(seedMarker);
+    if (seedFlagError) {
+      if (seedFlagError.code === '23505') return [];
+      throw seedFlagError;
+    }
+    const seedRows = defaultTaskSeed().map((task) => ({
+      ...task,
+      user_id: userId,
     }));
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert(seedRows)
+      .select('*');
+    if (error) {
+      await supabase
+        .from('user_preferences')
+        .delete()
+        .eq('user_id', userId)
+        .eq('key', 'tasks_seeded');
+      throw error;
+    }
+    return data || [];
+  };
+
+  const fetchTasks = async () => {
+    const supabase = getSupabase();
+    if (!ensureSupabase()) {
+      setIsLoadingTasks(false);
+      return;
+    }
+    setIsLoadingTasks(true);
+    setTaskError('');
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        if (seedGuardRef.current) {
+          setTasks(emptyTasks);
+          return;
+        }
+        seedGuardRef.current = true;
+        const seeded = await seedDefaultTasks();
+        setTasks(groupTasksByColumn(seeded));
+      } else {
+        setTasks(groupTasksByColumn(data));
+      }
+    } catch (error) {
+      const message = error?.message || error?.details || error?.hint || 'Unable to load tasks from Supabase.';
+      console.error('Error loading tasks:', error, message);
+      setTaskError(message);
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !userId) return;
+    const ensureTokenAndFetch = async () => {
+      const token = await getToken({ template: 'supabase' });
+      if (!token) {
+        setIsLoadingTasks(false);
+        setTaskError('Supabase token unavailable. Check Clerk JWT template.');
+        return;
+      }
+      setSupabaseAuthToken(token);
+      await fetchTasks();
+    };
+    ensureTokenAndFetch();
+  }, [getToken, isLoaded, isSignedIn, userId]);
+
+  // Add task
+  const addTask = async (taskData) => {
+    const supabase = getSupabase();
+    if (!ensureSupabase()) return;
+    setTaskError('');
+    const row = {
+      user_id: userId,
+      title: taskData.title,
+      category: taskData.category || 'Other',
+      column_key: taskData.column || 'backlog',
+      assigned_users: taskData.assignedUsers || [],
+      due_date: taskData.dueDate || null,
+      priority: taskData.priority || null,
+    };
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert(row)
+        .select('*')
+        .single();
+      if (error) throw error;
+      const task = mapRowToTask(data);
+      setTasks((prev) => {
+        const next = { ...prev };
+        Object.keys(next).forEach((column) => {
+          next[column] = next[column].filter((item) => item.id !== task.id);
+        });
+        const column = next[task.column] ? task.column : 'backlog';
+        next[column] = [...next[column], task];
+        return next;
+      });
+    } catch (error) {
+      console.error('Error adding task:', error);
+      setTaskError('Unable to add task.');
+    }
   };
 
   // Update task
-  const updateTask = (taskId, updates) => {
-    setTasks(prev => {
-      const newTasks = { ...prev };
-      Object.keys(newTasks).forEach(column => {
-        const index = newTasks[column].findIndex(t => t.id === taskId);
-        if (index !== -1) {
-          const updatedTask = {
-            ...newTasks[column][index],
-            ...updates,
-            categoryColor: categoryColors[updates.category] || newTasks[column][index].categoryColor,
-            dueTime: updates.dueDate ? formatDueTime(updates.dueDate) : newTasks[column][index].dueTime,
-          };
-          newTasks[column][index] = updatedTask;
-        }
+  const updateTask = async (taskId, updates) => {
+    const supabase = getSupabase();
+    if (!ensureSupabase()) return;
+    setTaskError('');
+    const payload = { updated_at: new Date().toISOString() };
+    if (updates.title !== undefined) payload.title = updates.title;
+    if (updates.category !== undefined) payload.category = updates.category;
+    if (updates.column !== undefined) payload.column_key = updates.column;
+    if (updates.assignedUsers !== undefined) payload.assigned_users = updates.assignedUsers;
+    if (updates.dueDate !== undefined) payload.due_date = updates.dueDate ?? null;
+    if (updates.priority !== undefined) payload.priority = updates.priority ?? null;
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update(payload)
+        .eq('id', taskId)
+        .eq('user_id', userId)
+        .select('*')
+        .single();
+      if (error) throw error;
+      const updatedTask = mapRowToTask(data);
+      setTasks((prev) => {
+        const next = { ...prev };
+        const fromColumn = Object.keys(next).find((column) =>
+          next[column].some((task) => task.id === taskId)
+        );
+        if (!fromColumn) return prev;
+        next[fromColumn] = next[fromColumn].filter((task) => task.id !== taskId);
+        const toColumn = next[updatedTask.column] ? updatedTask.column : 'backlog';
+        next[toColumn] = [...next[toColumn], updatedTask];
+        return next;
       });
-      return newTasks;
-    });
+    } catch (error) {
+      console.error('Error updating task:', error);
+      setTaskError('Unable to update task.');
+    }
   };
 
   // Delete task
-  const deleteTask = (taskId) => {
-    setTasks(prev => {
-      const newTasks = { ...prev };
-      Object.keys(newTasks).forEach(column => {
-        newTasks[column] = newTasks[column].filter(t => t.id !== taskId);
+  const deleteTask = async (taskId) => {
+    const supabase = getSupabase();
+    if (!ensureSupabase()) return;
+    setTaskError('');
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId)
+        .eq('user_id', userId);
+      if (error) throw error;
+      setTasks((prev) => {
+        const next = { ...prev };
+        Object.keys(next).forEach((column) => {
+          next[column] = next[column].filter((task) => task.id !== taskId);
+        });
+        return next;
       });
-      return newTasks;
-    });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      setTaskError('Unable to delete task.');
+    }
   };
 
   // Move task between columns
-  const moveTask = (taskId, fromColumn, toColumn) => {
+  const moveTask = async (taskId, fromColumn, toColumn) => {
     if (fromColumn === toColumn) return;
-
-    setTasks(prev => {
-      const task = prev[fromColumn].find(t => t.id === taskId);
-      if (!task) return prev;
-
-      return {
-        ...prev,
-        [fromColumn]: prev[fromColumn].filter(t => t.id !== taskId),
-        [toColumn]: [...prev[toColumn], task]
-      };
-    });
+    await updateTask(taskId, { column: toColumn });
   };
 
   // Complete task (move to completed or delete)
   const completeTask = (taskId) => {
-    deleteTask(taskId);
+    void deleteTask(taskId);
   };
 
   // Handle quick capture
   const handleQuickCapture = (e) => {
     if (e.key === 'Enter' && quickCapture.trim()) {
-      addTask({
+      void addTask({
         title: quickCapture.trim(),
         column: 'backlog',
       });
@@ -271,16 +410,29 @@ export default function TasksPage() {
     return filtered;
   };
 
+  const dedupeTasks = (taskList) => {
+    const seen = new Set();
+    return taskList.filter((task) => {
+      if (seen.has(task.id)) return false;
+      seen.add(task.id);
+      return true;
+    });
+  };
+
   // Get all unique categories
   const categories = Array.from(new Set(
     Object.values(tasks).flat().map(t => t.category)
   ));
 
-  const highPriorityCount = tasks.todaysFocus.filter(t => t.priority?.level === 'High Priority').length +
-    tasks.inProgress.filter(t => t.priority?.level === 'High Priority').length;
+  // Use the same deduplicated + filtered lists that are actually displayed in the columns
+  const displayTodaysFocus = dedupeTasks(filterTasks(tasks.todaysFocus));
+  const displayInProgress = dedupeTasks(filterTasks(tasks.inProgress));
+  const displayBacklog = dedupeTasks(filterTasks(tasks.backlog));
+  const highPriorityCount = [...displayTodaysFocus, ...displayInProgress, ...displayBacklog]
+    .filter(t => t.priority?.level === 'High Priority').length;
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-6 md:px-8 md:pt-10 md:pb-8 lg:px-12 lg:pt-12 lg:pb-10 font-[var(--font-poppins)]">
+    <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-6 md:px-8 md:pt-10 md:pb-8 lg:px-12 lg:pt-12 lg:pb-10 font-(--font-poppins)">
       <div className="max-w-7xl mx-auto">
         
         {/* Header Section */}
@@ -309,7 +461,7 @@ export default function TasksPage() {
                 <button
                   onClick={() => {
                     if (quickCapture.trim()) {
-                      addTask({ title: quickCapture.trim(), column: 'backlog' });
+                      void addTask({ title: quickCapture.trim(), column: 'backlog' });
                       setQuickCapture('');
                     }
                   }}
@@ -445,8 +597,16 @@ export default function TasksPage() {
           </div>
         </header>
 
+        {taskError && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {taskError}
+          </div>
+        )}
+
         {/* Task Columns - Grid View */}
-        {viewMode === 'grid' ? (
+        {isLoadingTasks ? (
+          <div className="text-center py-12 text-gray-500 text-sm">Loading tasks...</div>
+        ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             
             {/* Today's Focus Column */}
@@ -454,7 +614,7 @@ export default function TasksPage() {
               title="Today's Focus"
               color="purple"
               columnKey="todaysFocus"
-              tasks={filterTasks(tasks.todaysFocus)}
+              tasks={dedupeTasks(filterTasks(tasks.todaysFocus))}
               onMoveTask={(taskId, toColumn) => moveTask(taskId, 'todaysFocus', toColumn)}
               onCompleteTask={completeTask}
               onEditTask={(task) => {
@@ -491,7 +651,7 @@ export default function TasksPage() {
               title="In Progress"
               color="orange"
               columnKey="inProgress"
-              tasks={filterTasks(tasks.inProgress)}
+              tasks={dedupeTasks(filterTasks(tasks.inProgress))}
               onMoveTask={(taskId, toColumn) => moveTask(taskId, 'inProgress', toColumn)}
               onCompleteTask={completeTask}
               onEditTask={(task) => {
@@ -528,7 +688,7 @@ export default function TasksPage() {
               title="Backlog"
               color="gray"
               columnKey="backlog"
-              tasks={filterTasks(tasks.backlog)}
+              tasks={dedupeTasks(filterTasks(tasks.backlog))}
               onMoveTask={(taskId, toColumn) => moveTask(taskId, 'backlog', toColumn)}
               onCompleteTask={completeTask}
               onEditTask={(task) => {
@@ -595,16 +755,16 @@ export default function TasksPage() {
                     dragOverColumn === 'todaysFocus' ? 'bg-blue-50 border-2 border-dashed border-blue-300 p-4' : 'p-0 border-2 border-transparent'
                   }`}
                 >
-                  {(filterTasks(tasks.todaysFocus).length > 0 || dragOverColumn === 'todaysFocus') && (
+                  {(dedupeTasks(filterTasks(tasks.todaysFocus)).length > 0 || dragOverColumn === 'todaysFocus') && (
                     <>
                       <div className="flex items-center gap-2.5 mb-4">
                         <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0 shadow-sm"></div>
                         <h3 className="text-base font-bold text-gray-900">Today's Focus</h3>
-                        <span className="text-xs text-gray-500 font-medium">({filterTasks(tasks.todaysFocus).length})</span>
+                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(tasks.todaysFocus)).length})</span>
                       </div>
-                      {filterTasks(tasks.todaysFocus).length > 0 ? (
+                      {dedupeTasks(filterTasks(tasks.todaysFocus)).length > 0 ? (
                         <div className="space-y-3">
-                          {filterTasks(tasks.todaysFocus).map((task) => (
+                          {dedupeTasks(filterTasks(tasks.todaysFocus)).map((task) => (
                             <TaskCard
                               key={task.id}
                               task={task}
@@ -669,16 +829,16 @@ export default function TasksPage() {
                     dragOverColumn === 'inProgress' ? 'bg-blue-50 border-2 border-dashed border-blue-300 p-4' : 'p-0 border-2 border-transparent'
                   }`}
                 >
-                  {(filterTasks(tasks.inProgress).length > 0 || dragOverColumn === 'inProgress') && (
+                  {(dedupeTasks(filterTasks(tasks.inProgress)).length > 0 || dragOverColumn === 'inProgress') && (
                     <>
                       <div className="flex items-center gap-2.5 mb-4 mt-6">
                         <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shrink-0 shadow-sm"></div>
                         <h3 className="text-base font-bold text-gray-900">In Progress</h3>
-                        <span className="text-xs text-gray-500 font-medium">({filterTasks(tasks.inProgress).length})</span>
+                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(tasks.inProgress)).length})</span>
                       </div>
-                      {filterTasks(tasks.inProgress).length > 0 ? (
+                      {dedupeTasks(filterTasks(tasks.inProgress)).length > 0 ? (
                         <div className="space-y-3">
-                          {filterTasks(tasks.inProgress).map((task) => (
+                          {dedupeTasks(filterTasks(tasks.inProgress)).map((task) => (
                             <TaskCard
                               key={task.id}
                               task={task}
@@ -743,16 +903,16 @@ export default function TasksPage() {
                     dragOverColumn === 'backlog' ? 'bg-blue-50 border-2 border-dashed border-blue-300 p-4' : 'p-0 border-2 border-transparent'
                   }`}
                 >
-                  {(filterTasks(tasks.backlog).length > 0 || dragOverColumn === 'backlog') && (
+                  {(dedupeTasks(filterTasks(tasks.backlog)).length > 0 || dragOverColumn === 'backlog') && (
                     <>
                       <div className="flex items-center gap-2.5 mb-4 mt-6">
                         <div className="w-2.5 h-2.5 bg-gray-300 rounded-full shrink-0 shadow-sm"></div>
                         <h3 className="text-base font-bold text-gray-900">Backlog</h3>
-                        <span className="text-xs text-gray-500 font-medium">({filterTasks(tasks.backlog).length})</span>
+                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(tasks.backlog)).length})</span>
                       </div>
-                      {filterTasks(tasks.backlog).length > 0 ? (
+                      {dedupeTasks(filterTasks(tasks.backlog)).length > 0 ? (
                         <div className="space-y-3">
-                          {filterTasks(tasks.backlog).map((task) => (
+                          {dedupeTasks(filterTasks(tasks.backlog)).map((task) => (
                             <TaskCard
                               key={task.id}
                               task={task}
@@ -1015,7 +1175,7 @@ function TaskCard({
         
         {showMenu && (
           <div 
-            className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-2 z-[1000] pointer-events-auto"
+            className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-2 z-1000 pointer-events-auto"
             onClick={(e) => {
               e.stopPropagation();
             }}
@@ -1176,7 +1336,7 @@ function TaskCard({
       {/* Click outside to close menu */}
       {showMenu && (
         <div
-          className="fixed inset-0 z-[999]"
+          className="fixed inset-0 z-999"
           onClick={(e) => {
             setShowMenu(false);
           }}

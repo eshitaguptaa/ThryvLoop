@@ -1,21 +1,26 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
+import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 
 export const FocusContext = createContext(null);
 
 export function FocusProvider({ children }) {
+  const { user } = useUser();
+  const userId = user?.id || null;
+
   // Load saved widget states from localStorage, default to all active
   const loadWidgetState = (key, defaultValue = true) => {
     if (typeof window === 'undefined') return defaultValue;
-    const saved = localStorage.getItem(`focus-widget-${key}`);
-    return saved !== null ? JSON.parse(saved) : defaultValue;
+    const storageKey = `focus-widget-${key}`;
+    const saved = getUserStorageJson(userId, storageKey, storageKey);
+    return saved !== null ? saved : defaultValue;
   };
 
   const saveWidgetState = (key, value) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`focus-widget-${key}`, JSON.stringify(value));
-    }
+    const storageKey = `focus-widget-${key}`;
+    setUserStorageJson(userId, storageKey, value);
   };
 
   const [showTimer, setShowTimer] = useState(() => loadWidgetState('timer', true));
@@ -24,44 +29,58 @@ export function FocusProvider({ children }) {
   const [showTaskBar, setShowTaskBar] = useState(() => loadWidgetState('taskBar', true));
   const [backgroundVideoId, setBackgroundVideoId] = useState(() => {
     if (typeof window === 'undefined') return null;
-    const saved = localStorage.getItem('focus-background-video-id');
+    const saved = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
     return saved || null;
   });
 
   const [volume, setVolume] = useState(() => {
     if (typeof window === 'undefined') return 50;
-    const saved = localStorage.getItem('focus-video-volume');
-    return saved ? parseInt(saved) : 50;
+    const saved = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
+    const parsed = saved ? parseInt(saved) : 50;
+    return parsed > 0 ? parsed : 50;
   });
 
   // Save widget states to localStorage when they change
   useEffect(() => {
     saveWidgetState('timer', showTimer);
-  }, [showTimer]);
+  }, [showTimer, userId]);
 
   useEffect(() => {
     saveWidgetState('music', showMusic);
-  }, [showMusic]);
+  }, [showMusic, userId]);
 
   useEffect(() => {
     saveWidgetState('task', showTask);
-  }, [showTask]);
+  }, [showTask, userId]);
 
   useEffect(() => {
     saveWidgetState('taskBar', showTaskBar);
-  }, [showTaskBar]);
+  }, [showTaskBar, userId]);
 
   useEffect(() => {
     if (backgroundVideoId) {
-      localStorage.setItem('focus-background-video-id', backgroundVideoId);
+      setUserStorageItem(userId, 'focus-background-video-id', backgroundVideoId);
     } else {
-      localStorage.removeItem('focus-background-video-id');
+      removeUserStorageItem(userId, 'focus-background-video-id');
     }
-  }, [backgroundVideoId]);
+  }, [backgroundVideoId, userId]);
 
   useEffect(() => {
-    localStorage.setItem('focus-video-volume', volume.toString());
-  }, [volume]);
+    setUserStorageItem(userId, 'focus-video-volume', volume.toString());
+  }, [volume, userId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setShowTimer(loadWidgetState('timer', true));
+    setShowMusic(loadWidgetState('music', true));
+    setShowTask(loadWidgetState('task', true));
+    setShowTaskBar(loadWidgetState('taskBar', true));
+    const savedVideoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
+    setBackgroundVideoId(savedVideoId || null);
+    const savedVolume = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
+    const parsed = savedVolume ? parseInt(savedVolume) : 50;
+    setVolume(parsed > 0 ? parsed : 50);
+  }, [userId]);
 
   const toggleTimer = () => {
     setShowTimer(prev => !prev);

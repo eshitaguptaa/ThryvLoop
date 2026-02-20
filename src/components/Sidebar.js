@@ -4,8 +4,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import { useClerk, useUser } from '@clerk/nextjs';
 import SpacesDrawer from '@/components/focus/SpacesDrawer';
 import SoundscapeComposer from '@/components/focus/SoundscapeComposer';
+import { getUserStorageJson, removeUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 
 const navigationItems = [
   {
@@ -107,20 +109,24 @@ const navigationItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { signOut } = useClerk();
+  const { user } = useUser();
+  const userId = user?.id || null;
   
   // Load expanded items from localStorage
   const loadExpandedItems = () => {
     if (typeof window === 'undefined') return [];
-    const saved = localStorage.getItem('sidebar-expanded-items');
-    return saved ? JSON.parse(saved) : [];
+    const saved = getUserStorageJson(userId, 'sidebar-expanded-items', 'sidebar-expanded-items');
+    return saved || [];
   };
 
   const [expandedItems, setExpandedItems] = useState(loadExpandedItems);
   // Load initial widget states from localStorage immediately
   const loadWidgetState = (key, defaultValue = true) => {
     if (typeof window === 'undefined') return defaultValue;
-    const saved = localStorage.getItem(`focus-widget-${key}`);
-    return saved !== null ? JSON.parse(saved) : defaultValue;
+    const storageKey = `focus-widget-${key}`;
+    const saved = getUserStorageJson(userId, storageKey, storageKey);
+    return saved !== null ? saved : defaultValue;
   };
 
   const [widgetStates, setWidgetStates] = useState({
@@ -134,9 +140,19 @@ export default function Sidebar() {
   // Save expanded items to localStorage whenever they change
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('sidebar-expanded-items', JSON.stringify(expandedItems));
+      setUserStorageJson(userId, 'sidebar-expanded-items', expandedItems);
     }
-  }, [expandedItems]);
+  }, [expandedItems, userId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setExpandedItems(loadExpandedItems());
+    setWidgetStates({
+      showTimer: loadWidgetState('timer', true),
+      showMusic: loadWidgetState('music', true),
+      showTask: loadWidgetState('task', true),
+    });
+  }, [userId]);
 
   // Listen for open-soundscape-composer event from MusicWidget
   useEffect(() => {
@@ -279,13 +295,19 @@ export default function Sidebar() {
     );
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    router.push('/');
+  const handleLogout = async () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('soundscape-stop-all'));
+      removeUserStorageItem(userId, 'soundscape-active-sounds');
+      removeUserStorageItem(userId, 'soundscape-global-volume');
+      removeUserStorageItem(userId, 'soundscape-is-playing');
+      removeUserStorageItem(userId, 'soundscape-session-active');
+    }
+    await signOut({ redirectUrl: '/' });
   };
 
   return (
-    <div className="fixed left-0 top-0 h-full w-24 bg-white flex flex-col items-center py-5 z-40 border-r border-gray-200 font-[var(--font-poppins)]">
+    <div className="fixed left-0 top-0 h-full w-24 bg-white flex flex-col items-center py-5 z-40 border-r border-gray-200 font-(--font-poppins)">
       {/* Logo/Brand Section */}
       <Link href="/home" className="mb-10 no-underline">
         <div className="w-10 h-10 flex items-center justify-center">

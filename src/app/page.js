@@ -2,22 +2,22 @@
 
 import { useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import Landing from '@/pages/Landing.js';
 
 function LandingWrapper() {
   const router = useRouter();
+  const { isLoaded, isSignedIn } = useAuth();
 
   useEffect(() => {
-    // Check if user is authenticated
-    const authToken = localStorage.getItem('authToken');
     const isDevelopment = process.env.NODE_ENV === 'development';
     
     // In development, don't auto-redirect so you can test the landing page
     // In production, redirect authenticated users to home
-    if (authToken && !isDevelopment) {
+    if (isLoaded && isSignedIn && !isDevelopment) {
       router.push('/home');
     }
-  }, [router]);
+  }, [isLoaded, isSignedIn, router]);
 
   return <Landing />;
 }

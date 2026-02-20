@@ -1,10 +1,14 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
+import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
 
 const MusicContext = createContext();
 
 export function MusicProvider({ children }) {
+  const { user } = useUser();
+  const userId = user?.id || null;
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -63,7 +67,7 @@ export function MusicProvider({ children }) {
     if (typeof window === 'undefined' || !audioRef.current) return;
     
     const audio = audioRef.current;
-    const savedState = localStorage.getItem('music-playing-state');
+    const savedState = getUserStorageItem(userId, 'music-playing-state', 'music-playing-state');
     
     // Wait for audio to be ready before restoring play state
     const restorePlayState = () => {
@@ -85,13 +89,13 @@ export function MusicProvider({ children }) {
         audio.removeEventListener('loadedmetadata', restorePlayState);
       };
     }
-  }, []);
+  }, [userId]);
 
   // Save play state to localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('music-playing-state', isPlaying.toString());
-  }, [isPlaying]);
+    setUserStorageItem(userId, 'music-playing-state', isPlaying.toString());
+  }, [isPlaying, userId]);
 
   const togglePlayPause = () => {
     const audio = audioRef.current;

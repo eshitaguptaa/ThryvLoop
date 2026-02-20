@@ -1,6 +1,6 @@
 import './globals.css';
+import { ClerkProvider } from '@clerk/nextjs';
 import { Poppins } from 'next/font/google';
-import DevAuthHelper from '@/components/DevAuthHelper';
 
 const poppins = Poppins({
   weight: ['400', '500', '600', '700', '800', '900'],
@@ -18,8 +18,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${poppins.className} ${poppins.variable}`}>
-        <DevAuthHelper />
-        {children}
+        <ClerkProvider>
+          {children}
+        </ClerkProvider>
       </body>
     </html>
   );

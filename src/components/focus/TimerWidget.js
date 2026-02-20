@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { useFocus } from '@/contexts/FocusContext';
+import { getUserStorageItem, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 
 export default function TimerWidget() {
   const { setShowTimer } = useFocus();
+  const { user } = useUser();
+  const userId = user?.id || null;
   // Default to 25 minutes
   const INITIAL_TIME = 25 * 60;
   const [time, setTime] = useState(INITIAL_TIME);
@@ -60,25 +64,59 @@ export default function TimerWidget() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedTime = getUserStorageItem(userId, 'focus-timer-time', 'focus-timer-time');
+    const savedRunning = getUserStorageItem(userId, 'focus-timer-running', 'focus-timer-running');
+    const savedUpdatedAt = getUserStorageItem(userId, 'focus-timer-updated-at', 'focus-timer-updated-at');
+
+    if (savedTime) {
+      let nextTime = parseInt(savedTime, 10);
+      if (savedRunning === 'true' && savedUpdatedAt) {
+        const elapsed = Math.floor((Date.now() - parseInt(savedUpdatedAt, 10)) / 1000);
+        nextTime = Math.max(0, nextTime - elapsed);
+      }
+      setTime(Number.isNaN(nextTime) ? INITIAL_TIME : nextTime);
+      setIsRunning(false);
+    } else {
+      setTime(INITIAL_TIME);
+      setIsRunning(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
     if (typeof window === 'undefined' || !position) return;
-    localStorage.setItem('focus-timer-position', JSON.stringify(position));
-  }, [position]);
+    setUserStorageJson(userId, 'focus-timer-position', position);
+  }, [position, userId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (size.width >= 350 && size.height >= 300) {
-      localStorage.setItem('focus-timer-size', JSON.stringify(size));
+      setUserStorageJson(userId, 'focus-timer-size', size);
     }
-  }, [size]);
+  }, [size, userId]);
 
   useEffect(() => {
     return () => {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('focus-timer-position');
-        localStorage.removeItem('focus-timer-size');
+        removeUserStorageItem(userId, 'focus-timer-position');
+        removeUserStorageItem(userId, 'focus-timer-size');
       }
     };
-  }, []);
+  }, [userId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const now = Date.now().toString();
+    if (isRunning) {
+      setUserStorageItem(userId, 'focus-timer-time', time.toString());
+      setUserStorageItem(userId, 'focus-timer-updated-at', now);
+      setUserStorageItem(userId, 'focus-timer-running', 'true');
+    } else {
+      setUserStorageItem(userId, 'focus-timer-time', time.toString());
+      setUserStorageItem(userId, 'focus-timer-updated-at', now);
+      setUserStorageItem(userId, 'focus-timer-running', 'false');
+    }
+  }, [isRunning, time, userId]);
 
   useEffect(() => {
     let interval = null;
@@ -113,8 +151,8 @@ export default function TimerWidget() {
 
   const handleClose = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('focus-timer-position');
-      localStorage.removeItem('focus-timer-size');
+      removeUserStorageItem(userId, 'focus-timer-position');
+      removeUserStorageItem(userId, 'focus-timer-size');
     }
     setShowTimer(false);
   };

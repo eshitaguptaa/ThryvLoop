@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { useFocus } from '@/contexts/FocusContext';
+import { removeUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 
 export default function FocusTaskBar({ task = "Drafting Q3 Report" }) {
   const { setShowTaskBar, setShowTask } = useFocus();
+  const { user } = useUser();
+  const userId = user?.id || null;
   const [position, setPosition] = useState(null);
   const [size, setSize] = useState({ width: 400, height: 56 });
   const [isDragging, setIsDragging] = useState(false);
@@ -68,31 +72,31 @@ export default function FocusTaskBar({ task = "Drafting Q3 Report" }) {
   // Save position and size
   useEffect(() => {
     if (typeof window === 'undefined' || !position) return;
-    localStorage.setItem('focus-taskbar-position', JSON.stringify(position));
-  }, [position]);
+    setUserStorageJson(userId, 'focus-taskbar-position', position);
+  }, [position, userId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (size.width >= 250 && size.height >= 48) {
-      localStorage.setItem('focus-taskbar-size', JSON.stringify(size));
+      setUserStorageJson(userId, 'focus-taskbar-size', size);
     }
-  }, [size]);
+  }, [size, userId]);
 
   // Clear localStorage on unmount (when widget is toggled off)
   useEffect(() => {
     return () => {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('focus-taskbar-position');
-        localStorage.removeItem('focus-taskbar-size');
+        removeUserStorageItem(userId, 'focus-taskbar-position');
+        removeUserStorageItem(userId, 'focus-taskbar-size');
       }
     };
-  }, []);
+  }, [userId]);
 
   const handleClose = () => {
     // Clear saved position and size when closing
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('focus-taskbar-position');
-      localStorage.removeItem('focus-taskbar-size');
+      removeUserStorageItem(userId, 'focus-taskbar-position');
+      removeUserStorageItem(userId, 'focus-taskbar-size');
     }
     setShowTaskBar(false);
     setShowTask(false);

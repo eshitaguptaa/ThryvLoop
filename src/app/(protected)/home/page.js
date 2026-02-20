@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { 
   Bell, 
   Play, 
@@ -14,8 +15,14 @@ import {
   Timer
 } from 'lucide-react';
 import { useMusic } from '@/contexts/MusicContext';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
+  const router = useRouter();
+  const { user } = useUser();
+  const displayName = user?.firstName || user?.username || 'there';
+  const avatarUrl = user?.imageUrl || 'https://i.pravatar.cc/150?u=default';
   const { 
     isPlaying, 
     currentTime, 
@@ -35,6 +42,11 @@ export default function Dashboard() {
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
   const remainingTime = duration - currentTime;
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    router.prefetch('/focus');
+  }, [router]);
+
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-2 pb-4 sm:px-6 sm:pt-3 sm:pb-6 md:px-8 md:pt-4 md:pb-8 lg:px-12 lg:pt-6 lg:pb-10 font-[var(--font-poppins)]">
       <div className="max-w-7xl mx-auto">
@@ -44,7 +56,7 @@ export default function Dashboard() {
           <div className="flex-1">
             <p className="text-indigo-500 text-xs font-semibold uppercase tracking-widest mb-2">Dashboard</p>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-2 leading-tight">
-              Ready to flow, Alex?
+              Ready to flow, {displayName}?
             </h1>
             <p className="text-sm sm:text-base text-gray-500 font-medium">Tuesday, Oct 24</p>
           </div>
@@ -56,13 +68,14 @@ export default function Dashboard() {
             <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full overflow-hidden border-2 border-white shadow-sm">
               {/* Placeholder for user avatar */}
               <img 
-                src="https://i.pravatar.cc/150?u=alex" 
+                src={avatarUrl}
                 alt="Profile" 
                 className="h-full w-full object-cover" 
               />
             </div>
           </div>
         </header>
+
 
         {/* --- Main Grid --- */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 md:gap-8 mb-5 sm:mb-6 md:mb-8">

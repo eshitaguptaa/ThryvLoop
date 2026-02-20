@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect, useContext, useRef } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
+import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 
 export default function SpacesDrawer({ isOpen, onClose }) {
+  const { user } = useUser();
+  const userId = user?.id || null;
   const [activeTab, setActiveTab] = useState('Videos');
   const [selectedCategory, setSelectedCategory] = useState('all');
   
@@ -16,7 +20,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
       return focusContext.volume;
     }
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('focus-video-volume');
+      const saved = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
       return saved ? parseInt(saved) : 50;
     }
     return 50;
@@ -77,7 +81,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
     
     // Always save to localStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('focus-video-volume', newVolume.toString());
+      setUserStorageItem(userId, 'focus-video-volume', newVolume.toString());
       // Always dispatch custom event to ensure video player gets the update
       window.dispatchEvent(new CustomEvent('focus-volume-changed', {
         detail: { volume: newVolume }
@@ -95,7 +99,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
       return focusContext.backgroundVideoId;
     }
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('focus-background-video-id') || null;
+      return getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id') || null;
     }
     return null;
   };
@@ -109,11 +113,11 @@ export default function SpacesDrawer({ isOpen, onClose }) {
     } else {
       // If no context, read from localStorage
       const saved = typeof window !== 'undefined' 
-        ? localStorage.getItem('focus-background-video-id') 
+        ? getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id') 
         : null;
       setBackgroundVideoIdState(saved);
     }
-  }, [focusContext?.backgroundVideoId]);
+  }, [focusContext?.backgroundVideoId, userId]);
   
   // Use context setter if available, otherwise save to localStorage directly
   const setBackgroundVideoId = (videoId) => {
@@ -123,9 +127,9 @@ export default function SpacesDrawer({ isOpen, onClose }) {
       setBackgroundVideoIdState(videoId);
       if (typeof window !== 'undefined') {
         if (videoId) {
-          localStorage.setItem('focus-background-video-id', videoId);
+          setUserStorageItem(userId, 'focus-background-video-id', videoId);
         } else {
-          localStorage.removeItem('focus-background-video-id');
+          removeUserStorageItem(userId, 'focus-background-video-id');
         }
       }
     }
@@ -135,8 +139,8 @@ export default function SpacesDrawer({ isOpen, onClose }) {
   const getFavorites = () => {
     if (typeof window === 'undefined') return [];
     try {
-      const saved = localStorage.getItem('focus-video-favorites');
-      return saved ? JSON.parse(saved) : [];
+      const saved = getUserStorageJson(userId, 'focus-video-favorites', 'focus-video-favorites');
+      return saved || [];
     } catch (e) {
       return [];
     }
@@ -147,7 +151,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
   // Sync favorites from localStorage on mount
   useEffect(() => {
     setFavorites(getFavorites());
-  }, []);
+  }, [userId]);
 
   const toggleFavorite = (videoId) => {
     const newFavorites = favorites.includes(videoId)
@@ -156,7 +160,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
     
     setFavorites(newFavorites);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('focus-video-favorites', JSON.stringify(newFavorites));
+      setUserStorageJson(userId, 'focus-video-favorites', newFavorites);
     }
   };
 

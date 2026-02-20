@@ -43,11 +43,6 @@ export default function LandingPage() {
     window.history.replaceState({}, '', url);
   };
 
-  const handleSuccess = () => {
-    // After successful auth, redirect to home
-    router.push('/home');
-  };
-
   return (
     <>
       <NavbarLanding 
@@ -64,7 +59,6 @@ export default function LandingPage() {
         isOpen={isAuthOpen} 
         onClose={closeAuth} 
         initialMode={initialMode}
-        onSuccess={handleSuccess}
       />
     </>
   );

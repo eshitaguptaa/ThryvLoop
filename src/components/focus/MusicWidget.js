@@ -1,10 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import { useFocus } from '@/contexts/FocusContext';
+import { getUserStorageItem, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 
 export default function MusicWidget() {
   const { setShowMusic } = useFocus();
+  const { user } = useUser();
+  const userId = user?.id || null;
+  const pathname = usePathname();
   const [activeSounds, setActiveSounds] = useState([]);
   const [isPlaying, setIsPlaying] = useState(true);
   const [position, setPosition] = useState(null);
@@ -17,9 +23,20 @@ export default function MusicWidget() {
   // Helper to check if Spaces is actually playing
   const checkSpacesPlaying = () => {
     if (typeof window === 'undefined') return false;
-    const videoId = localStorage.getItem('focus-background-video-id');
-    const volume = localStorage.getItem('focus-video-volume');
+    const videoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
+    const volume = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
     return !!(videoId && volume && parseInt(volume) > 0);
+  };
+
+  const getSessionActive = () => {
+    if (typeof window === 'undefined') return false;
+    const saved = getUserStorageItem(userId, 'soundscape-session-active', 'soundscape-session-active');
+    return saved === 'true';
+  };
+
+  const setSessionActive = (value) => {
+    if (typeof window === 'undefined') return;
+    setUserStorageItem(userId, 'soundscape-session-active', value ? 'true' : 'false');
   };
 
   // Get active sounds from localStorage (synced with SoundscapeComposer)
@@ -28,7 +45,7 @@ export default function MusicWidget() {
       if (typeof window === 'undefined') return;
       
       try {
-        const saved = localStorage.getItem('soundscape-active-sounds');
+        const saved = getUserStorageItem(userId, 'soundscape-active-sounds', 'soundscape-active-sounds');
         let filteredSounds = [];
         if (saved) {
           const sounds = JSON.parse(saved);
@@ -43,7 +60,7 @@ export default function MusicWidget() {
         const spacesPlaying = checkSpacesPlaying();
         const hasSpaces = filteredSounds.some(s => s.id === 'spaces');
         if (spacesPlaying && !hasSpaces) {
-          const spacesVolume = localStorage.getItem('focus-video-volume');
+          const spacesVolume = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
           filteredSounds.push({
             id: 'spaces',
             name: 'Spaces',
@@ -54,22 +71,25 @@ export default function MusicWidget() {
         
         setActiveSounds(filteredSounds);
         
-        const savedVolume = localStorage.getItem('soundscape-global-volume');
+        const savedVolume = getUserStorageItem(userId, 'soundscape-global-volume', 'soundscape-global-volume');
         if (savedVolume) {
           globalVolumeRef.current = parseInt(savedVolume) || 75;
         }
         
         const hasActiveSounds = filteredSounds.length > 0;
-        if (spacesPlaying) {
-          setIsPlaying(true);
-          localStorage.setItem('soundscape-is-playing', 'true');
+        if (pathname === '/focus') {
+          setSessionActive(true);
+        }
+        const sessionActive = getSessionActive();
+        if (!sessionActive) {
+          setIsPlaying(false);
         } else {
-          const savedPlaying = localStorage.getItem('soundscape-is-playing');
+          const savedPlaying = getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing');
           if (savedPlaying !== null) {
             setIsPlaying(savedPlaying === 'true');
-          } else if (hasActiveSounds) {
+          } else if (hasActiveSounds || spacesPlaying) {
             setIsPlaying(true);
-            localStorage.setItem('soundscape-is-playing', 'true');
+            setUserStorageItem(userId, 'soundscape-is-playing', 'true');
           }
         }
       } catch (e) {
@@ -88,11 +108,11 @@ export default function MusicWidget() {
     const handleSpacesVolumeChange = () => {
       loadActiveSounds();
       const spacesPlaying = checkSpacesPlaying();
-      if (spacesPlaying) {
+      if (spacesPlaying && getSessionActive()) {
         if (!isPlaying) {
           setIsPlaying(true);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('soundscape-is-playing', 'true');
+            setUserStorageItem(userId, 'soundscape-is-playing', 'true');
             window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
               detail: { isPlaying: true }
             }));
@@ -101,17 +121,25 @@ export default function MusicWidget() {
       }
     };
     
+    const handleStopAll = () => {
+      setIsPlaying(false);
+      setActiveSounds([]);
+    };
+    
     window.addEventListener('soundscape-play-pause-changed', handlePlayPauseChange);
     window.addEventListener('focus-volume-changed', handleSpacesVolumeChange);
+    window.addEventListener('soundscape-stop-all', handleStopAll);
 
     const interval = setInterval(loadActiveSounds, 500);
 
     return () => {
       window.removeEventListener('soundscape-play-pause-changed', handlePlayPauseChange);
       window.removeEventListener('focus-volume-changed', handleSpacesVolumeChange);
+      window.removeEventListener('soundscape-stop-all', handleStopAll);
       clearInterval(interval);
     };
-  }, []);
+  }, [userId, pathname]);
+
 
   // Cycle through sounds
   useEffect(() => {
@@ -167,12 +195,12 @@ export default function MusicWidget() {
   // Save position
   useEffect(() => {
     if (typeof window === 'undefined' || !position) return;
-    localStorage.setItem('focus-music-position', JSON.stringify(position));
-  }, [position]);
+    setUserStorageJson(userId, 'focus-music-position', position);
+  }, [position, userId]);
 
   const handleClose = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('focus-music-position');
+      removeUserStorageItem(userId, 'focus-music-position');
     }
     setShowMusic(false);
   };
@@ -226,7 +254,7 @@ export default function MusicWidget() {
     const newPlayingState = !isPlaying;
     setIsPlaying(newPlayingState);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('soundscape-is-playing', newPlayingState.toString());
+      setUserStorageItem(userId, 'soundscape-is-playing', newPlayingState.toString());
       window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
         detail: { isPlaying: newPlayingState }
       }));
