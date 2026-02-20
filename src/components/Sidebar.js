@@ -497,18 +497,19 @@ export default function Sidebar() {
         <div className="h-px bg-gray-200"></div>
       </div>
 
-      {/* Soundscape Composer Button */}
+      {/* Settings (Soundscape/Timer) Button */}
       <button
         onClick={() => setShowSoundscapeComposer(true)}
         className="flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 transition-all duration-200 mb-2 group"
-        title="Soundscape Composer"
+        title="Settings"
       >
         <div className="w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-gray-100 transition-all duration-200 mb-1.5">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </div>
-        <span className="text-xs font-medium">Composer</span>
+        <span className="text-xs font-medium">Settings</span>
       </button>
 
       {/* Logout Button */}

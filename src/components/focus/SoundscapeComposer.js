@@ -98,7 +98,40 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   const [customRecipes, setCustomRecipes] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState(null);
+
+  // Settings modal panel: 'composer' (default) | 'focusflow'
+  const [settingsPanel, setSettingsPanel] = useState('composer');
+  // Focus Flow settings (persisted via getItem/setItem after mount)
+  const [timerMode, setTimerMode] = useState('pomodoro');
+  const [sessionMinutes, setSessionMinutes] = useState(25);
+  const [shortBreakMinutes, setShortBreakMinutes] = useState(5);
+  const [longBreakMinutes, setLongBreakMinutes] = useState(15);
+  const [countdownMinutes, setCountdownMinutes] = useState(5);
+  const [autoStartBreaks, setAutoStartBreaks] = useState(true);
+  const [alarmVolume, setAlarmVolume] = useState(60);
+  const [tickSound, setTickSound] = useState(true);
   
+  // Hydrate Focus Flow settings from storage when modal opens or userId is ready
+  useEffect(() => {
+    if (typeof window === 'undefined' || !userId) return;
+    const mode = getItem('focus-settings-timer-mode');
+    if (mode === 'stopwatch' || mode === 'countdown') setTimerMode(mode);
+    const s = getItem('focus-settings-session-minutes');
+    if (s) { const n = parseInt(s, 10); if (!Number.isNaN(n)) setSessionMinutes(Math.max(1, Math.min(120, n))); }
+    const sb = getItem('focus-settings-short-break-minutes');
+    if (sb) { const n = parseInt(sb, 10); if (!Number.isNaN(n)) setShortBreakMinutes(Math.max(1, Math.min(60, n))); }
+    const lb = getItem('focus-settings-long-break-minutes');
+    if (lb) { const n = parseInt(lb, 10); if (!Number.isNaN(n)) setLongBreakMinutes(Math.max(1, Math.min(60, n))); }
+    const cd = getItem('focus-settings-countdown-minutes');
+    if (cd) { const n = parseInt(cd, 10); if (!Number.isNaN(n)) setCountdownMinutes(Math.max(1, Math.min(120, n))); }
+    const asb = getItem('focus-settings-auto-start-breaks');
+    if (asb !== null && asb !== undefined) setAutoStartBreaks(asb === 'true');
+    const av = getItem('focus-settings-alarm-volume');
+    if (av) { const n = parseInt(av, 10); if (!Number.isNaN(n)) setAlarmVolume(Math.max(0, Math.min(100, n))); }
+    const ts = getItem('focus-settings-tick-sound');
+    if (ts !== null && ts !== undefined) setTickSound(ts === 'true');
+  }, [userId, isOpen]);
+
   const audioRefs = useRef({});
   const isUpdatingFromComposerRef = useRef(false);
   const initializedRef = useRef(false);
@@ -1208,6 +1241,21 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       index === self.findIndex(s => s.id === sound.id)
     );
 
+  const focusFlowSessionsToday = isOpen && settingsPanel === 'focusflow' && userId && typeof window !== 'undefined'
+    ? (() => {
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const d = getItem('focus-timer-sessions-date');
+          const n = getItem('focus-timer-sessions-today');
+          if (d !== today || n == null) return 0;
+          const x = parseInt(n, 10);
+          return Number.isNaN(x) ? 0 : Math.max(0, x);
+        } catch {
+          return 0;
+        }
+      })()
+    : 0;
+
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-300 ease-out ${
       isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
@@ -1230,40 +1278,45 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         {/* HEADER */}
         <div className="flex items-center justify-between px-8 py-6 border-b border-white/5">
           <div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">Soundscape Composer</h2>
-            <p className="text-white/40 text-sm mt-0.5">Mixing {playableSounds.length} layers • Focused</p>
+            <h2 className="text-2xl font-bold text-white tracking-tight">Settings</h2>
+            <p className="text-white/40 text-sm mt-0.5">
+              {settingsPanel === 'composer'
+                ? `Mixing ${playableSounds.length} layers • Focused`
+                : 'Focus Flow Timer • Stay Productive'}
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Play/Pause Button */}
-            <button 
-              onClick={() => {
-                const newPlayingState = !isPlaying;
-                setIsPlaying(newPlayingState);
-                if (typeof window !== 'undefined') {
-                  setItem('soundscape-is-playing', newPlayingState.toString());
-                  window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
-                    detail: { isPlaying: newPlayingState }
-                  }));
-                }
-              }}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-[#2d2d36] hover:bg-[#3d3d46] text-white transition-colors"
-              title={isPlaying ? "Pause all sounds" : "Play all sounds"}
-            >
-              {isPlaying ? (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="4" width="4" height="16" />
-                  <rect x="14" y="4" width="4" height="16" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </button>
+            {settingsPanel === 'composer' && (
+              <button 
+                onClick={() => {
+                  const newPlayingState = !isPlaying;
+                  setIsPlaying(newPlayingState);
+                  if (typeof window !== 'undefined') {
+                    setItem('soundscape-is-playing', newPlayingState.toString());
+                    window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
+                      detail: { isPlaying: newPlayingState }
+                    }));
+                  }
+                }}
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-[#2d2d36] hover:bg-[#3d3d46] text-white transition-colors"
+                title={isPlaying ? "Pause all sounds" : "Play all sounds"}
+              >
+                {isPlaying ? (
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </button>
+            )}
             <button 
               data-save-recipe
               onClick={handleSaveRecipe}
-              className="px-5 py-2 bg-[#2d2d36] hover:bg-[#3d3d46] text-purple-400 text-sm font-medium rounded-full transition-colors"
+              className="px-5 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-sm font-medium rounded-full transition-colors"
             >
               Save Recipe
             </button>
@@ -1278,9 +1331,274 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
           </div>
         </div>
 
-        {/* SCROLLABLE CONTENT */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-          
+        {/* BODY: Sidebar + Content */}
+        <div className="flex flex-1 min-h-0">
+          {/* LEFT SIDEBAR */}
+          <div className="w-[180px] shrink-0 border-r border-white/5 bg-[#0a0a0c]/50 flex flex-col py-4 px-3">
+            <div className="text-white/60 text-xs font-medium uppercase tracking-wider mb-2 px-3">Composer</div>
+            <button
+              onClick={() => setSettingsPanel('composer')}
+              className={`mb-1 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-colors ${
+                settingsPanel === 'composer'
+                  ? 'bg-[#8b5cf6] text-white'
+                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              Composer
+            </button>
+            <button
+              onClick={() => setSettingsPanel('focusflow')}
+              className={`px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-colors ${
+                settingsPanel === 'focusflow'
+                  ? 'bg-[#8b5cf6] text-white'
+                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              Focus Flow
+            </button>
+          </div>
+
+          {/* RIGHT CONTENT */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar min-w-0">
+            {settingsPanel === 'focusflow' ? (
+              /* FOCUS FLOW PANEL */
+              <div className="p-8 max-w-2xl mx-auto space-y-6">
+                {/* Hero: Timer display + Apply */}
+                <div className="text-center rounded-2xl bg-gradient-to-b from-[#18181b] to-[#0f0f12] border border-white/5 p-8 shadow-inner">
+                  <div
+                    className="text-6xl font-bold text-white tracking-tighter tabular-nums mb-2"
+                    style={{ textShadow: '0 0 40px rgba(139,92,246,0.25)' }}
+                  >
+                    {timerMode === 'countdown'
+                      ? `${String(countdownMinutes).padStart(2, '0')}:00`
+                      : timerMode === 'pomodoro'
+                        ? `${String(sessionMinutes).padStart(2, '0')}:00`
+                        : '00:00'}
+                  </div>
+                  <p className="text-white/50 text-sm mb-6">Preview</p>
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/60 text-xs mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]" />
+                    {focusFlowSessionsToday} / 8 sessions today
+                  </div>
+                  <button
+                    onClick={() => {
+                      setItem('focus-settings-timer-mode', timerMode);
+                      setItem('focus-settings-session-minutes', sessionMinutes.toString());
+                      setItem('focus-settings-short-break-minutes', shortBreakMinutes.toString());
+                      setItem('focus-settings-long-break-minutes', longBreakMinutes.toString());
+                      setItem('focus-settings-countdown-minutes', countdownMinutes.toString());
+                      setItem('focus-settings-auto-start-breaks', autoStartBreaks ? 'true' : 'false');
+                      setItem('focus-settings-alarm-volume', alarmVolume.toString());
+                      setItem('focus-settings-tick-sound', tickSound ? 'true' : 'false');
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('focus-settings-applied', {
+                          detail: { timerMode, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, autoStartBreaks, alarmVolume, tickSound }
+                        }));
+                      }
+                    }}
+                    className="px-8 py-3.5 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white font-semibold rounded-full transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_28px_rgba(139,92,246,0.4)] hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    Apply Settings
+                  </button>
+                </div>
+
+                {/* Timer Mode */}
+                <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
+                  <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Timer Mode</h3>
+                  <div className="flex gap-2">
+                    {['Pomodoro', 'Stopwatch', 'Countdown'].map((mode) => {
+                      const key = mode.toLowerCase();
+                      const active = timerMode === key;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setTimerMode(key)}
+                          className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                            active
+                              ? 'bg-[#8b5cf6] text-white shadow-[0_0_16px_rgba(139,92,246,0.25)]'
+                              : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5'
+                          }`}
+                        >
+                          {mode}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* Durations (Pomodoro) or Countdown Duration */}
+                {timerMode === 'pomodoro' && (
+                  <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
+                    <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Durations</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      {[
+                        { label: 'Session', suffix: 'min', value: sessionMinutes, setter: setSessionMinutes, max: 120 },
+                        { label: 'Short Break', suffix: 'min', value: shortBreakMinutes, setter: setShortBreakMinutes, max: 60 },
+                        { label: 'Long Break', suffix: 'min', value: longBreakMinutes, setter: setLongBreakMinutes, max: 60 },
+                      ].map(({ label, suffix, value, setter, max }) => (
+                        <div key={label}>
+                          <label className="block text-white/60 text-xs font-medium mb-2">{label}</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={max}
+                            value={value}
+                            onChange={(e) => {
+                              const n = parseInt(e.target.value, 10);
+                              if (!Number.isNaN(n)) setter(Math.max(1, Math.min(max, n)));
+                            }}
+                            className="w-full px-4 py-3 bg-[#0f0f12] border border-white/10 rounded-xl text-white text-center text-lg font-semibold tabular-nums focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6]/30 transition-colors"
+                          />
+                          <span className="block text-white/40 text-xs mt-1">{suffix}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {timerMode === 'countdown' && (
+                  <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
+                    <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Countdown Duration</h3>
+                    <div>
+                      <label className="block text-white/60 text-xs font-medium mb-2">Duration (minutes)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={countdownMinutes}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value, 10);
+                          if (!Number.isNaN(n)) setCountdownMinutes(Math.max(1, Math.min(120, n)));
+                        }}
+                        className="w-full max-w-[140px] px-4 py-3 bg-[#0f0f12] border border-white/10 rounded-xl text-white text-center text-lg font-semibold tabular-nums focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6]/30 transition-colors"
+                      />
+                    </div>
+                  </section>
+                )}
+
+                {/* Presets */}
+                <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
+                  <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Presets</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { name: 'Deep Work', duration: '25m', icon: 'bulb', mins: 25, type: 'session' },
+                      { name: 'Long Session', duration: '50m', icon: 'clock', mins: 50, type: 'session' },
+                      { name: 'Short Break', duration: '5m', icon: 'play', mins: 5, type: 'short' },
+                      { name: 'Long Break', duration: '15m', icon: 'break', mins: 15, type: 'long' },
+                    ].map(({ name, duration, icon, mins, type }) => (
+                      <button
+                        key={name}
+                        onClick={() => {
+                          if (type === 'session') setSessionMinutes(mins);
+                          else if (type === 'short') setShortBreakMinutes(mins);
+                          else setLongBreakMinutes(mins);
+                          setTimerMode('pomodoro');
+                        }}
+                        className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-[#0f0f12] border border-white/5 hover:border-[#8b5cf6]/40 hover:bg-[#18181b] transition-all text-center"
+                      >
+                        {icon === 'bulb' && <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center"><svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></div>}
+                        {icon === 'clock' && <div className="w-9 h-9 rounded-lg bg-[#8b5cf6]/20 flex items-center justify-center"><svg className="w-5 h-5 text-[#a78bfa]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                        {icon === 'play' && <div className="w-9 h-9 rounded-lg bg-emerald-500/20 flex items-center justify-center"><svg className="w-5 h-5 text-emerald-400 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>}
+                        {icon === 'break' && <div className="w-9 h-9 rounded-lg bg-rose-500/20 flex items-center justify-center"><svg className="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg></div>}
+                        <span className="font-medium text-white group-hover:text-[#a78bfa] transition-colors">{name}</span>
+                        <span className="text-white/45 text-xs">{duration}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Settings */}
+                <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
+                  <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Settings</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-2 border-b border-white/5">
+                      <span className="text-white/90 text-sm">Auto-start Breaks</span>
+                      <button
+                        role="switch"
+                        aria-checked={autoStartBreaks}
+                        onClick={() => setAutoStartBreaks((v) => !v)}
+                        className={`relative w-11 h-6 rounded-full transition-colors ${autoStartBreaks ? 'bg-[#8b5cf6]' : 'bg-[#2d2d36]'}`}
+                      >
+                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${autoStartBreaks ? 'right-0.5' : 'left-0.5'}`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 py-2 border-b border-white/5">
+                      <span className="text-white/90 text-sm">Alarm Volume</span>
+                      <div className="flex items-center gap-3 flex-1 max-w-[180px]">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={alarmVolume}
+                          onChange={(e) => setAlarmVolume(parseInt(e.target.value, 10) || 0)}
+                          className="flex-1 h-2 rounded-full appearance-none cursor-pointer slider-purple"
+                          style={{ background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${alarmVolume}%, rgba(255,255,255,0.08) ${alarmVolume}%, rgba(255,255,255,0.08) 100%)` }}
+                        />
+                        <span className="text-white/80 text-sm font-medium tabular-nums w-9">{alarmVolume}%</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-white/90 text-sm">Tick Sound</span>
+                      <button
+                        role="switch"
+                        aria-checked={tickSound}
+                        onClick={() => {
+                          const next = !tickSound;
+                          setTickSound(next);
+                          setItem('focus-settings-tick-sound', next ? 'true' : 'false');
+                          if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('focus-settings-tick-sound-changed', { detail: { tickSound: next } }));
+                          }
+                        }}
+                        className={`relative w-11 h-6 rounded-full transition-colors ${tickSound ? 'bg-[#8b5cf6]' : 'bg-[#2d2d36]'}`}
+                      >
+                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${tickSound ? 'right-0.5' : 'left-0.5'}`} />
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Pomodoro Recipes */}
+                <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
+                  <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Pomodoro Recipes</h3>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSessionMinutes(50);
+                        setShortBreakMinutes(10);
+                        setTimerMode('pomodoro');
+                      }}
+                      className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[#0f0f12] border border-white/5 hover:border-[#8b5cf6]/40 hover:bg-[#1a1a1f] transition-all"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-[#8b5cf6]/20 flex items-center justify-center">
+                        <svg className="w-5 h-5 text-[#a78bfa]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </div>
+                      <div className="text-left">
+                        <div className="font-medium text-white">Animedoro</div>
+                        <div className="text-xs text-white/50">50 min work · 10 min break</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSessionMinutes(52);
+                        setShortBreakMinutes(17);
+                        setTimerMode('pomodoro');
+                      }}
+                      className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[#0f0f12] border border-white/5 hover:border-[#8b5cf6]/40 hover:bg-[#1a1a1f] transition-all"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-[#8b5cf6]/20 flex items-center justify-center">
+                        <svg className="w-5 h-5 text-[#a78bfa]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </div>
+                      <div className="text-left">
+                        <div className="font-medium text-white">52/17</div>
+                        <div className="text-xs text-white/50">52 min work · 17 min break</div>
+                      </div>
+                    </button>
+                  </div>
+                </section>
+              </div>
+            ) : (
+              /* COMPOSER PANEL */
+              <div className="p-8 space-y-10">
           {/* SECTION 1: ACTIVE MIXER */}
           <section>
             <div className="flex items-center justify-between mb-5">
@@ -1544,15 +1862,27 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
               })}
             </div>
           </section>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* FOOTER */}
         <div className="px-8 py-4 bg-[#0a0a0c] border-t border-white/5 flex justify-between items-center text-xs text-white/30">
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-            <span>Audio Engine: Ready</span>
-            <span className="opacity-50">|</span>
-            <span>Sample Rate: 48kHz</span>
+            {settingsPanel === 'focusflow' ? (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]"></div>
+                <span>Timer: Paused</span>
+              </>
+            ) : (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                <span>Audio Engine: Ready</span>
+                <span className="opacity-50">|</span>
+                <span>Sample Rate: 48kHz</span>
+              </>
+            )}
           </div>
           <div>© 2024 ThryvLoop Productivity Inc.</div>
         </div>
