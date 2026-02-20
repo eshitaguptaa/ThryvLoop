@@ -88,3 +88,51 @@ export function removeUserStorageItem(userId, key) {
     // ignore
   }
 }
+
+const FOCUS_TIMER_STATE_KEY = 'focus_timer_state';
+
+/**
+ * Focus timer state shape for Supabase (user_preferences).
+ * Used so the user can continue from where they left off after logging back in.
+ */
+export async function getFocusTimerStateFromSupabase(userId) {
+  if (typeof window === 'undefined' || !userId) return null;
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('value')
+      .eq('user_id', userId)
+      .eq('key', FOCUS_TIMER_STATE_KEY)
+      .maybeSingle();
+    if (error || !data?.value) return null;
+    return data.value;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist focus timer state to Supabase (user_preferences).
+ */
+export async function setFocusTimerStateToSupabase(userId, state) {
+  if (typeof window === 'undefined' || !userId) return;
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    await supabase
+      .from('user_preferences')
+      .upsert(
+        {
+          user_id: userId,
+          key: FOCUS_TIMER_STATE_KEY,
+          value: state,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,key' }
+      );
+  } catch {
+    // ignore
+  }
+}
