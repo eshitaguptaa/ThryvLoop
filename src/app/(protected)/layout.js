@@ -6,9 +6,13 @@ import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { FocusProvider } from '@/contexts/FocusContext';
 import { MusicProvider } from '@/contexts/MusicContext';
+import { CelebrationProvider } from '@/contexts/CelebrationContext';
+import CelebrationModal from '@/components/CelebrationModal';
+import CelebrationToast from '@/components/CelebrationToast';
 import SupabaseAuthBridge from '@/components/SupabaseAuthBridge';
 import UserPreferencesHydrator from '@/components/UserPreferencesHydrator';
 import SpacesBackgroundVideo from '@/components/focus/SpacesBackgroundVideo';
+import { TimerProvider } from '@/contexts/TimerContext';
 
 export default function ProtectedLayout({ children }) {
   const pathname = usePathname();
@@ -48,17 +52,23 @@ export default function ProtectedLayout({ children }) {
       <SignedIn>
         <SupabaseAuthBridge />
         <UserPreferencesHydrator />
-        <FocusProvider>
-          <SpacesBackgroundVideo />
-          <div className={`relative z-10 flex min-h-screen ${pathname === '/focus' ? 'bg-transparent' : 'bg-linear-to-br from-slate-900 via-purple-900 to-slate-900'}`}>
-            <MusicProvider>
-              {!isFullscreen && <Sidebar />}
-              <main className={`flex-1 ${!isFullscreen ? 'ml-24' : ''}`}>
-                {children}
-              </main>
-            </MusicProvider>
-          </div>
-        </FocusProvider>
+        <CelebrationProvider>
+          <CelebrationModal />
+          <CelebrationToast />
+          <FocusProvider>
+            <TimerProvider>
+              <SpacesBackgroundVideo />
+              <div className={`relative z-10 flex min-h-screen ${pathname === '/focus' ? 'bg-transparent' : 'bg-linear-to-br from-slate-900 via-purple-900 to-slate-900'}`}>
+                <MusicProvider>
+                  {!isFullscreen && <Sidebar />}
+                  <main className={`flex-1 ${!isFullscreen ? 'ml-24' : ''}`}>
+                    {children}
+                  </main>
+                </MusicProvider>
+              </div>
+            </TimerProvider>
+          </FocusProvider>
+        </CelebrationProvider>
       </SignedIn>
     </>
   );

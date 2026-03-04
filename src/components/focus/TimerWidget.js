@@ -1,22 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useFocus } from '@/contexts/FocusContext';
-import {
-  getUserStorageItem,
-  removeUserStorageItem,
-  setUserStorageItem,
-  setUserStorageJson,
-  getFocusTimerStateFromSupabase,
-  setFocusTimerStateToSupabase,
-} from '@/utils/userStorage';
-
-const DEFAULT_SESSION = 25;
-const DEFAULT_SHORT_BREAK = 5;
-const DEFAULT_LONG_BREAK = 15;
-const DEFAULT_COUNTDOWN = 5;
-const POMODOROS_BEFORE_LONG_BREAK = 4;
+import { useTimer } from '@/contexts/TimerContext';
+import { removeUserStorageItem } from '@/utils/userStorage';
 
 // Theme colors by mode and phase (dot hex, progress gradient, glow, play button, border)
 const WIDGET_THEMES = {
@@ -62,474 +50,41 @@ function getWidgetTheme(timerMode, phase) {
   return WIDGET_THEMES.countdown;
 }
 
-function getStoredInt(userId, key, fallback) {
-  if (typeof window === 'undefined') return fallback;
-  const v = getUserStorageItem(userId, key, key);
-  if (v == null || v === '') return fallback;
-  const n = parseInt(v, 10);
-  return Number.isNaN(n) ? fallback : Math.max(0, n);
-}
-
-function getStoredBool(userId, key, fallback) {
-  if (typeof window === 'undefined') return fallback;
-  const v = getUserStorageItem(userId, key, key);
-  if (v == null || v === '') return fallback;
-  return v === 'true';
-}
-
 export default function TimerWidget() {
   const { setShowTimer } = useFocus();
   const { user } = useUser();
   const userId = user?.id || null;
+  const {
+    time,
+    isRunning,
+    phase,
+    timerMode,
+    sessionMinutes,
+    shortBreakMinutes,
+    longBreakMinutes,
+    countdownMinutes,
+    sessionsCompletedToday,
+    position,
+    setPosition,
+    size,
+    setSize,
+    getDurationSeconds,
+    handlePlayPause,
+    handleReset,
+    handlePomodoroForward,
+  } = useTimer();
 
-  // Focus Flow settings (from Settings modal)
-  const [timerMode, setTimerMode] = useState('pomodoro');
-  const [phase, setPhase] = useState('session');
-  const [sessionMinutes, setSessionMinutes] = useState(DEFAULT_SESSION);
-  const [shortBreakMinutes, setShortBreakMinutes] = useState(DEFAULT_SHORT_BREAK);
-  const [longBreakMinutes, setLongBreakMinutes] = useState(DEFAULT_LONG_BREAK);
-  const [countdownMinutes, setCountdownMinutes] = useState(DEFAULT_COUNTDOWN);
-  const [autoStartBreaks, setAutoStartBreaks] = useState(true);
-  const [alarmVolume, setAlarmVolume] = useState(60);
-  const [tickSound, setTickSound] = useState(true);
-
-  const [time, setTime] = useState(25 * 60);
-  const [isRunning, setIsRunning] = useState(false);
-  const [sessionsCompletedToday, setSessionsCompletedToday] = useState(0);
-  const [sessionsDate, setSessionsDate] = useState(() => (typeof window !== 'undefined' ? new Date().toISOString().slice(0, 10) : ''));
-  const settingsAppliedRef = useRef(false);
-  const [supabaseHydrated, setSupabaseHydrated] = useState(false);
-
-  // Widget state
-  const [position, setPosition] = useState(null);
-  const [size, setSize] = useState({ width: 450, height: 450 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeHandle, setResizeHandle] = useState(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0, left: 0, top: 0 });
   const widgetRef = useRef(null);
-  const audioContextRef = useRef(null);
-
-  const getDurationSeconds = useCallback(() => {
-    if (timerMode === 'countdown') return countdownMinutes * 60;
-    if (timerMode === 'stopwatch') return 0;
-    if (phase === 'session') return sessionMinutes * 60;
-    if (phase === 'shortBreak') return shortBreakMinutes * 60;
-    return longBreakMinutes * 60;
-  }, [timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes]);
-
-  const loadSettingsFromStorage = useCallback(() => {
-    if (typeof window === 'undefined' || !userId) return;
-    const mode = getUserStorageItem(userId, 'focus-settings-timer-mode', 'focus-settings-timer-mode');
-    if (mode === 'stopwatch' || mode === 'countdown') setTimerMode(mode);
-    else setTimerMode('pomodoro');
-    setSessionMinutes(getStoredInt(userId, 'focus-settings-session-minutes', DEFAULT_SESSION));
-    setShortBreakMinutes(getStoredInt(userId, 'focus-settings-short-break-minutes', DEFAULT_SHORT_BREAK));
-    setLongBreakMinutes(getStoredInt(userId, 'focus-settings-long-break-minutes', DEFAULT_LONG_BREAK));
-    setCountdownMinutes(getStoredInt(userId, 'focus-settings-countdown-minutes', DEFAULT_COUNTDOWN));
-    setAutoStartBreaks(getStoredBool(userId, 'focus-settings-auto-start-breaks', true));
-    setAlarmVolume(Math.max(0, Math.min(100, getStoredInt(userId, 'focus-settings-alarm-volume', 60))));
-    setTickSound(getStoredBool(userId, 'focus-settings-tick-sound', true));
-  }, [userId]);
-
-  const getInitialTimeForCurrentState = useCallback(() => {
-    if (timerMode === 'stopwatch') return 0;
-    return getDurationSeconds();
-  }, [timerMode, getDurationSeconds]);
-
-  // Load state: try Supabase first (continue where they left off), else localStorage
-  useEffect(() => {
-    if (typeof window === 'undefined' || !userId) return;
-    let cancelled = false;
-    const load = async () => {
-      const remote = await getFocusTimerStateFromSupabase(userId);
-      if (cancelled) return;
-      const today = new Date().toISOString().slice(0, 10);
-      if (remote && typeof remote === 'object') {
-        const timer = remote.timer || {};
-        const sessions = remote.sessions || {};
-        const settings = remote.settings || {};
-        const mode = timer.mode ?? 'pomodoro';
-        const ph = timer.phase ?? 'session';
-        setTimerMode(mode);
-        setPhase(ph);
-        setSessionMinutes(settings.sessionMinutes ?? DEFAULT_SESSION);
-        setShortBreakMinutes(settings.shortBreakMinutes ?? DEFAULT_SHORT_BREAK);
-        setLongBreakMinutes(settings.longBreakMinutes ?? DEFAULT_LONG_BREAK);
-        setCountdownMinutes(settings.countdownMinutes ?? DEFAULT_COUNTDOWN);
-        setAutoStartBreaks(settings.autoStartBreaks !== false);
-        setAlarmVolume(Math.max(0, Math.min(100, settings.alarmVolume ?? 60)));
-        setTickSound(settings.tickSound !== false);
-        setSessionsCompletedToday(Math.max(0, sessions.today ?? 0));
-        setSessionsDate(sessions.date ?? today);
-        let timeVal = typeof timer.time === 'number' ? timer.time : 25 * 60;
-        if (timer.isRunning && timer.updatedAt) {
-          const elapsed = Math.floor((Date.now() - new Date(timer.updatedAt).getTime()) / 1000);
-          if (mode === 'stopwatch') timeVal = timeVal + elapsed;
-          else timeVal = Math.max(0, timeVal - elapsed);
-        }
-        setTime(timeVal);
-        setIsRunning(false);
-        if (remote.position && typeof remote.position.x === 'number' && typeof remote.position.y === 'number') {
-          setPosition(remote.position);
-        }
-        if (remote.size && typeof remote.size.width === 'number' && typeof remote.size.height === 'number') {
-          setSize(remote.size);
-        }
-        setUserStorageItem(userId, 'focus-timer-time', String(timeVal));
-        setUserStorageItem(userId, 'focus-timer-updated-at', Date.now().toString());
-        setUserStorageItem(userId, 'focus-timer-running', 'false');
-        setUserStorageItem(userId, 'focus-timer-mode', mode);
-        setUserStorageItem(userId, 'focus-timer-phase', ph);
-        setUserStorageItem(userId, 'focus-timer-sessions-today', String(sessions.today ?? 0));
-        setUserStorageItem(userId, 'focus-timer-sessions-date', sessions.date ?? today);
-        setUserStorageItem(userId, 'focus-settings-session-minutes', String(settings.sessionMinutes ?? DEFAULT_SESSION));
-        setUserStorageItem(userId, 'focus-settings-short-break-minutes', String(settings.shortBreakMinutes ?? DEFAULT_SHORT_BREAK));
-        setUserStorageItem(userId, 'focus-settings-long-break-minutes', String(settings.longBreakMinutes ?? DEFAULT_LONG_BREAK));
-        setUserStorageItem(userId, 'focus-settings-countdown-minutes', String(settings.countdownMinutes ?? DEFAULT_COUNTDOWN));
-        setUserStorageItem(userId, 'focus-settings-auto-start-breaks', settings.autoStartBreaks !== false ? 'true' : 'false');
-        setUserStorageItem(userId, 'focus-settings-alarm-volume', String(settings.alarmVolume ?? 60));
-        setUserStorageItem(userId, 'focus-settings-tick-sound', settings.tickSound !== false ? 'true' : 'false');
-        setUserStorageItem(userId, 'focus-settings-timer-mode', mode);
-        if (remote.position) setUserStorageJson(userId, 'focus-timer-position', remote.position);
-        if (remote.size) setUserStorageJson(userId, 'focus-timer-size', remote.size);
-        setSupabaseHydrated(true);
-      } else {
-        loadSettingsFromStorage();
-        const savedDate = getUserStorageItem(userId, 'focus-timer-sessions-date', 'focus-timer-sessions-date');
-        const savedSessions = getUserStorageItem(userId, 'focus-timer-sessions-today', 'focus-timer-sessions-today');
-        if (savedDate === today && savedSessions != null) {
-          const n = parseInt(savedSessions, 10);
-          setSessionsCompletedToday(Number.isNaN(n) ? 0 : Math.max(0, n));
-        } else {
-          setSessionsCompletedToday(0);
-          setSessionsDate(today);
-          setUserStorageItem(userId, 'focus-timer-sessions-date', today);
-          setUserStorageItem(userId, 'focus-timer-sessions-today', '0');
-        }
-        const savedMode = getUserStorageItem(userId, 'focus-timer-mode', 'focus-timer-mode');
-        const savedPhase = getUserStorageItem(userId, 'focus-timer-phase', 'focus-timer-phase');
-        if (savedMode === 'stopwatch' || savedMode === 'countdown') setTimerMode(savedMode);
-        if (savedPhase === 'shortBreak' || savedPhase === 'longBreak') setPhase(savedPhase);
-        const savedTime = getUserStorageItem(userId, 'focus-timer-time', 'focus-timer-time');
-        const savedRunning = getUserStorageItem(userId, 'focus-timer-running', 'focus-timer-running');
-        const savedUpdatedAt = getUserStorageItem(userId, 'focus-timer-updated-at', 'focus-timer-updated-at');
-        const nextTime = savedTime ? parseInt(savedTime, 10) : null;
-        if (nextTime != null && !Number.isNaN(nextTime) && nextTime >= 0) {
-          let adjusted = nextTime;
-          if (savedRunning === 'true' && savedUpdatedAt) {
-            const elapsed = Math.floor((Date.now() - parseInt(savedUpdatedAt, 10)) / 1000);
-            if (savedMode === 'stopwatch') adjusted = nextTime + elapsed;
-            else adjusted = Math.max(0, nextTime - elapsed);
-          }
-          setTime(adjusted);
-        } else {
-          const sm = getStoredInt(userId, 'focus-settings-session-minutes', DEFAULT_SESSION);
-          const sbm = getStoredInt(userId, 'focus-settings-short-break-minutes', DEFAULT_SHORT_BREAK);
-          const lbm = getStoredInt(userId, 'focus-settings-long-break-minutes', DEFAULT_LONG_BREAK);
-          const cm = getStoredInt(userId, 'focus-settings-countdown-minutes', DEFAULT_COUNTDOWN);
-          if (savedMode === 'stopwatch') setTime(0);
-          else if (savedMode === 'countdown') setTime(cm * 60);
-          else if (savedPhase === 'shortBreak') setTime(sbm * 60);
-          else if (savedPhase === 'longBreak') setTime(lbm * 60);
-          else setTime(sm * 60);
-        }
-        setIsRunning(false);
-        setSupabaseHydrated(true);
-      }
-      settingsAppliedRef.current = true;
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [userId, loadSettingsFromStorage]);
-
-  // Listen for tick sound toggle (takes effect immediately without Apply)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handler = (e) => {
-      const v = e?.detail?.tickSound;
-      if (typeof v === 'boolean') setTickSound(v);
-    };
-    window.addEventListener('focus-settings-tick-sound-changed', handler);
-    return () => window.removeEventListener('focus-settings-tick-sound-changed', handler);
-  }, []);
-
-  // Listen for Apply Settings from modal — apply detail and reset timer
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handler = (e) => {
-      const d = e?.detail;
-      if (d) {
-        if (d.timerMode === 'stopwatch' || d.timerMode === 'countdown') setTimerMode(d.timerMode);
-        else setTimerMode('pomodoro');
-        setPhase('session');
-        setSessionMinutes(d.sessionMinutes ?? DEFAULT_SESSION);
-        setShortBreakMinutes(d.shortBreakMinutes ?? DEFAULT_SHORT_BREAK);
-        setLongBreakMinutes(d.longBreakMinutes ?? DEFAULT_LONG_BREAK);
-        setCountdownMinutes(d.countdownMinutes ?? DEFAULT_COUNTDOWN);
-        setAutoStartBreaks(d.autoStartBreaks !== false);
-        setAlarmVolume(Math.max(0, Math.min(100, d.alarmVolume ?? 60)));
-        setTickSound(d.tickSound !== false);
-        if (d.timerMode === 'stopwatch') setTime(0);
-        else if (d.timerMode === 'countdown') setTime((d.countdownMinutes ?? DEFAULT_COUNTDOWN) * 60);
-        else setTime((d.sessionMinutes ?? DEFAULT_SESSION) * 60);
-      } else {
-        loadSettingsFromStorage();
-        setTime(getInitialTimeForCurrentState());
-      }
-      setIsRunning(false);
-    };
-    window.addEventListener('focus-settings-applied', handler);
-    return () => window.removeEventListener('focus-settings-applied', handler);
-  }, [loadSettingsFromStorage, getInitialTimeForCurrentState]);
-
-  // Position/size
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const updatePositionAndSize = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const baseWidth = 450;
-      const baseHeight = 450;
-      const minWidth = Math.min(350, vw * 0.8);
-      const maxWidth = Math.min(550, vw * 0.9);
-      const minHeight = Math.min(350, vh * 0.4);
-      const maxHeight = Math.min(550, vh * 0.6);
-      const widthScale = Math.min(1, vw / 1440);
-      const heightScale = Math.min(1, vh / 900);
-      const scale = Math.min(widthScale, heightScale, 1.2);
-      const responsiveWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * scale));
-      const responsiveHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight * scale));
-      const centerX = vw / 2;
-      const centerY = vh / 2 - Math.max(30, vh * 0.05);
-      setPosition({ x: centerX, y: centerY });
-      setSize({ width: responsiveWidth, height: responsiveHeight });
-    };
-    updatePositionAndSize();
-    const handleFullscreenChange = () => setTimeout(updatePositionAndSize, 100);
-    window.addEventListener('focus-fullscreen-change', handleFullscreenChange);
-    window.addEventListener('resize', updatePositionAndSize);
-    return () => {
-      window.removeEventListener('focus-fullscreen-change', handleFullscreenChange);
-      window.removeEventListener('resize', updatePositionAndSize);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !position) return;
-    setUserStorageJson(userId, 'focus-timer-position', position);
-  }, [position, userId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (size.width >= 350 && size.height >= 300) {
-      setUserStorageJson(userId, 'focus-timer-size', size);
-    }
-  }, [size, userId]);
-
-  useEffect(() => {
-    return () => {
-      if (typeof window !== 'undefined') {
-        removeUserStorageItem(userId, 'focus-timer-position');
-        removeUserStorageItem(userId, 'focus-timer-size');
-      }
-    };
-  }, [userId]);
-
-  // Persist timer state
-  useEffect(() => {
-    if (typeof window === 'undefined' || !userId) return;
-    const now = Date.now().toString();
-    setUserStorageItem(userId, 'focus-timer-time', time.toString());
-    setUserStorageItem(userId, 'focus-timer-updated-at', now);
-    setUserStorageItem(userId, 'focus-timer-running', isRunning ? 'true' : 'false');
-    setUserStorageItem(userId, 'focus-timer-mode', timerMode);
-    setUserStorageItem(userId, 'focus-timer-phase', phase);
-  }, [isRunning, time, userId, timerMode, phase]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !userId) return;
-    setUserStorageItem(userId, 'focus-timer-sessions-today', sessionsCompletedToday.toString());
-    setUserStorageItem(userId, 'focus-timer-sessions-date', sessionsDate || new Date().toISOString().slice(0, 10));
-  }, [sessionsCompletedToday, sessionsDate, userId]);
-
-  // Persist full state to Supabase (debounced) so user can continue after login
-  const supabaseSaveTimeoutRef = useRef(null);
-  useEffect(() => {
-    if (typeof window === 'undefined' || !userId || !supabaseHydrated || !settingsAppliedRef.current) return;
-    if (supabaseSaveTimeoutRef.current) clearTimeout(supabaseSaveTimeoutRef.current);
-    supabaseSaveTimeoutRef.current = setTimeout(() => {
-      supabaseSaveTimeoutRef.current = null;
-      const state = {
-        timer: {
-          time,
-          isRunning,
-          updatedAt: new Date().toISOString(),
-          mode: timerMode,
-          phase,
-        },
-        sessions: { today: sessionsCompletedToday, date: sessionsDate || new Date().toISOString().slice(0, 10) },
-        settings: {
-          timerMode,
-          sessionMinutes,
-          shortBreakMinutes,
-          longBreakMinutes,
-          countdownMinutes,
-          autoStartBreaks,
-          alarmVolume,
-          tickSound,
-        },
-        position: position && typeof position.x === 'number' ? position : undefined,
-        size: size && size.width >= 350 && size.height >= 300 ? size : undefined,
-      };
-      setFocusTimerStateToSupabase(userId, state);
-    }, 2500);
-    return () => {
-      if (supabaseSaveTimeoutRef.current) clearTimeout(supabaseSaveTimeoutRef.current);
-    };
-  }, [
-    userId,
-    time,
-    isRunning,
-    timerMode,
-    phase,
-    sessionMinutes,
-    shortBreakMinutes,
-    longBreakMinutes,
-    countdownMinutes,
-    autoStartBreaks,
-    alarmVolume,
-    tickSound,
-    sessionsCompletedToday,
-    sessionsDate,
-    position,
-    size,
-    supabaseHydrated,
-  ]);
-
-  // Alarm beep (Web Audio)
-  const playAlarm = useCallback(() => {
-    if (typeof window === 'undefined' || alarmVolume === 0) return;
-    try {
-      const ctx = audioContextRef.current || new (window.AudioContext || window.webkitAudioContext)();
-      audioContextRef.current = ctx;
-      const gain = (alarmVolume / 100) * 0.3;
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.connect(g);
-      g.connect(ctx.destination);
-      osc.frequency.value = 880;
-      osc.type = 'sine';
-      g.gain.setValueAtTime(0, ctx.currentTime);
-      g.gain.linearRampToValueAtTime(gain, ctx.currentTime + 0.05);
-      g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.5);
-    } catch (_) {}
-  }, [alarmVolume]);
-
-  // Tick (optional soft click)
-  const playTick = useCallback(() => {
-    if (typeof window === 'undefined' || !tickSound || alarmVolume === 0) return;
-    try {
-      const ctx = audioContextRef.current || new (window.AudioContext || window.webkitAudioContext)();
-      audioContextRef.current = ctx;
-      const gain = (alarmVolume / 100) * 0.03;
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.connect(g);
-      g.connect(ctx.destination);
-      osc.frequency.value = 1000;
-      osc.type = 'sine';
-      g.gain.setValueAtTime(gain, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.02);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.02);
-    } catch (_) {}
-  }, [tickSound, alarmVolume]);
-
-  // Tick logic: count down (or up for stopwatch), handle phase end
-  useEffect(() => {
-    if (!isRunning) return;
-    const interval = setInterval(() => {
-      setTime((prev) => {
-        if (timerMode === 'stopwatch') {
-          if (tickSound) playTick();
-          return prev + 1;
-        }
-        if (prev <= 1) {
-          clearInterval(interval);
-          if (timerMode === 'countdown') {
-            playAlarm();
-            setIsRunning(false);
-            return 0;
-          }
-          if (timerMode === 'pomodoro') {
-            if (phase === 'session') {
-              const nextSessions = sessionsCompletedToday + 1;
-              setSessionsCompletedToday(nextSessions);
-              setSessionsDate(new Date().toISOString().slice(0, 10));
-              const doLongBreak = nextSessions > 0 && nextSessions % POMODOROS_BEFORE_LONG_BREAK === 0;
-              setPhase(doLongBreak ? 'longBreak' : 'shortBreak');
-              const breakMins = doLongBreak ? longBreakMinutes : shortBreakMinutes;
-              const nextTime = breakMins * 60;
-              if (autoStartBreaks) {
-                setTimeout(() => setIsRunning(true), 100);
-                return nextTime;
-              }
-              setIsRunning(false);
-              return nextTime;
-            }
-            if (phase === 'shortBreak' || phase === 'longBreak') {
-              playAlarm();
-              setPhase('session');
-              const nextTime = sessionMinutes * 60;
-              if (autoStartBreaks) {
-                setTimeout(() => setIsRunning(true), 100);
-                return nextTime;
-              }
-              setIsRunning(false);
-              return nextTime;
-            }
-          }
-          return 0;
-        }
-        if (tickSound && timerMode !== 'stopwatch') playTick();
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isRunning, timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, autoStartBreaks, sessionsCompletedToday, playAlarm, playTick, tickSound, longBreakMinutes]);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handlePlayPause = () => setIsRunning(!isRunning);
-
-  const handleReset = () => {
-    setTime(getInitialTimeForCurrentState());
-    setIsRunning(false);
-  };
-
-  const handleSwitchPomodoroPhase = (newPhase) => {
-    if (timerMode !== 'pomodoro' || newPhase === phase) return;
-    setPhase(newPhase);
-    if (newPhase === 'session') setTime(sessionMinutes * 60);
-    else if (newPhase === 'shortBreak') setTime(shortBreakMinutes * 60);
-    else setTime(longBreakMinutes * 60);
-    setIsRunning(false);
-  };
-
-  const handlePomodoroForward = () => {
-    if (timerMode !== 'pomodoro') return;
-    const order = ['session', 'shortBreak', 'longBreak'];
-    const idx = order.indexOf(phase);
-    const nextPhase = order[(idx + 1) % order.length];
-    handleSwitchPomodoroPhase(nextPhase);
   };
 
   const handleOpenSettings = () => {

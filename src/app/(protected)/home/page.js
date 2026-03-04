@@ -1,51 +1,265 @@
 'use client';
 
-import { useEffect } from 'react';
-import { 
-  Bell, 
-  Play, 
-  Pause, 
-  SkipForward, 
-  SkipBack, 
-  Calendar, 
-  Video, 
-  MoreHorizontal,
+import { useEffect, useState, useCallback, useRef } from 'react';
+import Link from 'next/link';
+import {
+  Bell,
+  Play,
+  Pause,
+  Calendar,
   Music,
   ArrowUpRight,
-  Timer
+  Timer,
+  ListTodo,
+  ListChecks,
+  Focus,
 } from 'lucide-react';
-import { useMusic } from '@/contexts/MusicContext';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
+import { getSupabaseClient, setSupabaseAuthToken, getUserStorageItem, getUserStorageJson, setUserStorageItem } from '@/utils/userStorage';
+
+const FOCUS_GOAL_MINUTES = 120; // 2 hours default daily goal
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const SOUNDSCAPE_SOUND_NAMES = {
+  rain: 'Heavy Rain',
+  fire: 'Fire Crackle',
+  forest: 'Forest',
+  waterfall: 'Waterfall',
+  binaural: 'Binaural (40Hz)',
+  lofi: 'Chill Lo-Fi',
+  synthwave: 'Synthwave',
+  spaces: 'Spaces',
+};
+
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setUTCHours(0, 0, 0, 0);
+  return x.toISOString();
+}
+function endOfDay(d) {
+  const x = new Date(d);
+  x.setUTCHours(23, 59, 59, 999);
+  return x.toISOString();
+}
 
 export default function Dashboard() {
   const router = useRouter();
   const { user } = useUser();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const userId = user?.id || null;
   const displayName = user?.firstName || user?.username || 'there';
   const avatarUrl = user?.imageUrl || 'https://i.pravatar.cc/150?u=default';
-  const { 
-    isPlaying, 
-    currentTime, 
-    duration, 
-    togglePlayPause, 
-    skipBackward, 
-    skipForward 
-  } = useMusic();
 
-  const formatTime = (seconds) => {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const [todayFocusSeconds, setTodayFocusSeconds] = useState(0);
+  const [yesterdayFocusSeconds, setYesterdayFocusSeconds] = useState(0);
+  const [weeklyFocusMinutes, setWeeklyFocusMinutes] = useState([]);
+  const [upcomingTasks, setUpcomingTasks] = useState([]);
+  const [homeLoading, setHomeLoading] = useState(true);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationsRef = useRef(null);
 
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const remainingTime = duration - currentTime;
+  const [soundscapeIsPlaying, setSoundscapeIsPlaying] = useState(false);
+  const [soundscapeActiveSounds, setSoundscapeActiveSounds] = useState([]);
+  const [spacesActive, setSpacesActive] = useState(false);
+
+  const getSoundscapeState = useCallback(() => {
+    if (typeof window === 'undefined' || !userId) return;
+    const playing = getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing');
+    setSoundscapeIsPlaying(playing === null ? false : playing === 'true');
+    const raw = getUserStorageJson(userId, 'soundscape-active-sounds', 'soundscape-active-sounds');
+    const list = Array.isArray(raw) ? raw : [];
+    const videoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
+    const videoVol = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
+    const spacesOn = !!(videoId && videoVol && parseInt(videoVol, 10) > 0);
+    setSpacesActive(spacesOn);
+    const withSpaces = list.filter((s) => s.id !== 'spaces');
+    if (spacesOn && !list.some((s) => s.id === 'spaces')) {
+      withSpaces.push({ id: 'spaces', name: 'Spaces', volume: parseInt(videoVol, 10) || 50 });
+    }
+    setSoundscapeActiveSounds(
+      withSpaces.map((s) => ({ id: s.id, name: SOUNDSCAPE_SOUND_NAMES[s.id] || s.name || s.id }))
+    );
+  }, [userId]);
+
+  useEffect(() => {
+    getSoundscapeState();
+    const interval = setInterval(getSoundscapeState, 2000);
+    const onPlayPause = (e) => {
+      if (e.detail?.isPlaying !== undefined) setSoundscapeIsPlaying(e.detail.isPlaying);
+    };
+    const onVolume = () => getSoundscapeState();
+    const onStop = () => {
+      setSoundscapeIsPlaying(false);
+      setSoundscapeActiveSounds([]);
+      setSpacesActive(false);
+    };
+    window.addEventListener('soundscape-play-pause-changed', onPlayPause);
+    window.addEventListener('focus-volume-changed', onVolume);
+    window.addEventListener('soundscape-stop-all', onStop);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('soundscape-play-pause-changed', onPlayPause);
+      window.removeEventListener('focus-volume-changed', onVolume);
+      window.removeEventListener('soundscape-stop-all', onStop);
+    };
+  }, [userId, getSoundscapeState]);
+
+  const toggleSoundscapePlayPause = useCallback(() => {
+    if (typeof window === 'undefined' || !userId) return;
+    const next = !soundscapeIsPlaying;
+    setUserStorageItem(userId, 'soundscape-is-playing', next ? 'true' : 'false');
+    setSoundscapeIsPlaying(next);
+    window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: next } }));
+  }, [userId, soundscapeIsPlaying]);
+
+  const openSoundscapeComposer = useCallback(() => {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('open-soundscape-composer'));
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+
+  const loadHomeData = useCallback(async () => {
+    if (!userId) return;
+    setHomeLoading(true);
+    try {
+      const token = await getToken({ template: 'supabase' });
+      if (!token) {
+        setHomeLoading(false);
+        return;
+      }
+      setSupabaseAuthToken(token);
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        setHomeLoading(false);
+        return;
+      }
+      const now = new Date();
+      const todayStart = startOfDay(now);
+      const todayEnd = endOfDay(now);
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStart = startOfDay(yesterday);
+      const yesterdayEnd = endOfDay(yesterday);
+      const weekAgo = new Date(now);
+      weekAgo.setDate(weekAgo.getDate() - 6);
+      const weekStart = startOfDay(weekAgo);
+
+      const [todayRes, yesterdayRes, weekRes, tasksRes] = await Promise.all([
+        supabase
+          .from('focus_sessions')
+          .select('duration_seconds')
+          .eq('user_id', userId)
+          .gte('completed_at', todayStart)
+          .lte('completed_at', todayEnd),
+        supabase
+          .from('focus_sessions')
+          .select('duration_seconds')
+          .eq('user_id', userId)
+          .gte('completed_at', yesterdayStart)
+          .lte('completed_at', yesterdayEnd),
+        supabase
+          .from('focus_sessions')
+          .select('completed_at, duration_seconds')
+          .eq('user_id', userId)
+          .gte('completed_at', weekStart)
+          .order('completed_at', { ascending: true }),
+        supabase
+          .from('tasks')
+          .select('id, title, due_date, column_key')
+          .eq('user_id', userId)
+          .or('column_key.eq.todaysFocus,column_key.eq.inProgress')
+          .is('completed_at', null)
+          .order('due_date', { ascending: true })
+          .limit(5),
+      ]);
+
+      const sum = (arr) => (arr || []).reduce((a, r) => a + (r.duration_seconds || 0), 0);
+      setTodayFocusSeconds(sum(todayRes.data));
+      setYesterdayFocusSeconds(sum(yesterdayRes.data));
+
+      const weekData = weekRes.data || [];
+      const byDay = {};
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekAgo);
+        d.setDate(d.getDate() + i);
+        const key = d.toISOString().slice(0, 10);
+        byDay[key] = 0;
+      }
+      weekData.forEach((row) => {
+        const key = new Date(row.completed_at).toISOString().slice(0, 10);
+        if (byDay[key] !== undefined) byDay[key] += row.duration_seconds || 0;
+      });
+      const dayOrder = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekAgo);
+        d.setDate(d.getDate() + i);
+        dayOrder.push(d);
+      }
+      setWeeklyFocusMinutes(
+        dayOrder.map((d) => ({
+          key: d.toISOString().slice(0, 10),
+          label: DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1],
+          minutes: Math.round((byDay[d.toISOString().slice(0, 10)] || 0) / 60),
+        }))
+      );
+
+      const tasks = (tasksRes.data || []).map((t) => ({
+        id: t.id,
+        title: t.title,
+        due_date: t.due_date,
+        column_key: t.column_key,
+      }));
+      setUpcomingTasks(tasks);
+    } catch (e) {
+      console.error('Home data load error:', e);
+    } finally {
+      setHomeLoading(false);
+    }
+  }, [userId, getToken]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !userId) {
+      setHomeLoading(false);
+      return;
+    }
+    loadHomeData();
+  }, [isLoaded, isSignedIn, userId, loadHomeData]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     router.prefetch('/focus');
   }, [router]);
+
+  const todayFormatted = typeof window !== 'undefined'
+    ? new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    : '';
+  const goalSeconds = FOCUS_GOAL_MINUTES * 60;
+  const focusPercent = goalSeconds > 0 ? Math.min(100, Math.round((todayFocusSeconds / goalSeconds) * 100)) : 0;
+  const vsYesterday =
+    yesterdayFocusSeconds > 0
+      ? Math.round(((todayFocusSeconds - yesterdayFocusSeconds) / yesterdayFocusSeconds) * 100)
+      : (todayFocusSeconds > 0 ? 100 : 0);
+  const weekMax = Math.max(1, ...weeklyFocusMinutes.map((d) => d.minutes));
+  const productivityPeakDay =
+    weeklyFocusMinutes.length > 0
+      ? weeklyFocusMinutes.reduce((best, d) => (d.minutes > best.minutes ? d : best), weeklyFocusMinutes[0])
+      : null;
+  const weekAvg =
+    weeklyFocusMinutes.length > 0
+      ? Math.round(
+          weeklyFocusMinutes.reduce((a, d) => a + d.minutes, 0) / weeklyFocusMinutes.length
+        )
+      : 0;
 
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-2 pb-4 sm:px-6 sm:pt-3 sm:pb-6 md:px-8 md:pt-4 md:pb-8 lg:px-12 lg:pt-6 lg:pb-10 font-[var(--font-poppins)]">
@@ -58,13 +272,47 @@ export default function Dashboard() {
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-2 leading-tight">
               Ready to flow, {displayName}?
             </h1>
-            <p className="text-sm sm:text-base text-gray-500 font-medium">Tuesday, Oct 24</p>
+            <p className="text-sm sm:text-base text-gray-500 font-medium">{todayFormatted || '—'}</p>
           </div>
           
-          <div className="flex items-center gap-3 sm:gap-4">
-            <button className="p-2.5 sm:p-3 bg-white border border-gray-100 rounded-full shadow-sm hover:shadow-md transition-all text-gray-600">
+          <div className="flex items-center gap-3 sm:gap-4 relative" ref={notificationsRef}>
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen((o) => !o)}
+              className={`p-2.5 sm:p-3 bg-white border rounded-full shadow-sm hover:shadow-md transition-all ${notificationsOpen ? 'border-indigo-200 text-indigo-600 ring-2 ring-indigo-100' : 'border-gray-100 text-gray-600'}`}
+              aria-label="Notifications and quick actions"
+            >
               <Bell size={18} className="sm:w-5 sm:h-5" />
             </button>
+            {notificationsOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Notifications</p>
+                </div>
+                <div className="px-4 py-4 text-center text-gray-500 text-sm">
+                  You&apos;re all caught up.
+                </div>
+                <div className="border-t border-gray-100 px-2 pt-2">
+                  <p className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quick actions</p>
+                  <Link
+                    href="/tasks"
+                    onClick={() => setNotificationsOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 transition-colors"
+                  >
+                    <ListChecks size={18} className="text-indigo-500 shrink-0" />
+                    <span className="text-sm font-medium">View tasks</span>
+                  </Link>
+                  <Link
+                    href="/focus"
+                    onClick={() => setNotificationsOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 transition-colors"
+                  >
+                    <Focus size={18} className="text-indigo-500 shrink-0" />
+                    <span className="text-sm font-medium">Start focus session</span>
+                  </Link>
+                </div>
+              </div>
+            )}
             <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full overflow-hidden border-2 border-white shadow-sm">
               {/* Placeholder for user avatar */}
               <img 
@@ -104,7 +352,10 @@ export default function Dashboard() {
               </p>
               
               {/* Enhanced CTA Button */}
-              <button className="bg-gradient-to-r from-[#545BE8] to-indigo-600 text-white px-7 sm:px-9 py-3 sm:py-3.5 md:py-4 rounded-xl sm:rounded-2xl flex items-center gap-3 font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-xl shadow-indigo-300/50 hover:shadow-2xl hover:shadow-indigo-400/50 w-full sm:w-fit text-sm sm:text-base hover:scale-105 active:scale-100 group/btn">
+              <button
+                onClick={() => router.push('/focus')}
+                className="bg-gradient-to-r from-[#545BE8] to-indigo-600 text-white px-7 sm:px-9 py-3 sm:py-3.5 md:py-4 rounded-xl sm:rounded-2xl flex items-center gap-3 font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-xl shadow-indigo-300/50 hover:shadow-2xl hover:shadow-indigo-400/50 w-full sm:w-fit text-sm sm:text-base hover:scale-105 active:scale-100 group/btn"
+              >
                 <div className="bg-white/25 p-1.5 rounded-full group-hover/btn:bg-white/30 transition-colors">
                   <Play size={14} className="sm:w-4 sm:h-4 fill-white ml-0.5" />
                 </div>
@@ -153,35 +404,38 @@ export default function Dashboard() {
                     </div>
                     <span className="text-gray-500 font-semibold text-[10px] sm:text-xs tracking-wider uppercase">Time Focused</span>
                   </div>
-                  <div className="bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-700 text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 shadow-sm border border-emerald-200/50">
-                    <ArrowUpRight size={11} className="sm:w-3.5 sm:h-3.5" /> 
-                    <span className="font-bold">+12%</span>
-                    <span className="font-medium text-emerald-600/70 ml-0.5 hidden sm:inline shrink-0 text-[8px]">vs yesterday</span>
+                  <div className={`${vsYesterday >= 0 ? 'bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-700 border-emerald-200/50' : 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200/50'} text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 shadow-sm border`}>
+                    <ArrowUpRight size={11} className={`sm:w-3.5 sm:h-3.5 ${vsYesterday < 0 ? 'rotate-180' : ''}`} />
+                    <span className="font-bold">{vsYesterday >= 0 ? '+' : ''}{vsYesterday}%</span>
+                    <span className="font-medium ml-0.5 hidden sm:inline shrink-0 text-[8px] opacity-80">vs yesterday</span>
                   </div>
                 </div>
                 
                 <div className="mb-3 sm:mb-4 md:mb-5">
-                  {/* Enhanced time display */}
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none">2</span>
-                    <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">h</span>
-                    <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none ml-2">15</span>
-                    <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">m</span>
-                  </div>
+                  {homeLoading ? (
+                    <div className="h-16 sm:h-20 flex items-center text-gray-400 text-sm">Loading…</div>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none">{Math.floor(todayFocusSeconds / 3600)}</span>
+                        <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">h</span>
+                        <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none ml-2">{Math.floor((todayFocusSeconds % 3600) / 60)}</span>
+                        <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">m</span>
+                      </div>
+                    </>
+                  )}
                 </div>
                 
-                {/* Enhanced progress section */}
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Progress</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs sm:text-sm font-bold text-gray-900">65%</span>
+                      <span className="text-xs sm:text-sm font-bold text-gray-900">{focusPercent}%</span>
                       <span className="text-[10px] sm:text-xs text-gray-400 font-medium">of goal</span>
                     </div>
                   </div>
                   <div className="h-2.5 sm:h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner relative">
-                    <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 rounded-full relative overflow-hidden shadow-sm" style={{ width: '65%' }}>
-                    </div>
+                    <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 rounded-full relative overflow-hidden shadow-sm transition-all duration-500" style={{ width: `${focusPercent}%` }} />
                   </div>
                 </div>
               </div>
@@ -213,89 +467,70 @@ export default function Dashboard() {
                    <Music size={11} className="sm:w-3.5 sm:h-3.5" /> SOUNDSCAPE
                  </div>
                  <div className={`flex items-center gap-1.5 sm:gap-2 backdrop-blur-sm px-2.5 sm:px-3 py-1.5 rounded-full text-[9px] sm:text-[10px] font-semibold shrink-0 shadow-lg border transition-colors ${
-                   isPlaying 
+                   soundscapeIsPlaying 
                      ? 'bg-red-500/30 text-red-200 border-red-500/20' 
                      : 'bg-gray-500/30 text-gray-300 border-gray-500/20'
                  }`}>
                    <div className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors ${
-                     isPlaying 
+                     soundscapeIsPlaying 
                        ? 'bg-red-400 animate-pulse shadow-red-400/50' 
                        : 'bg-gray-400'
-                   }`} /> {isPlaying ? 'LIVE' : 'PAUSED'}
+                   }`} /> {soundscapeIsPlaying ? 'LIVE' : 'PAUSED'}
                  </div>
                </div>
                
                <div className="relative z-10 mt-3 sm:mt-4 md:mt-5">
-                 {/* Animated Visualizer Bars */}
                  <div className="flex items-end gap-1 sm:gap-1.5 mb-3 sm:mb-4 md:mb-5 h-6 sm:h-7 md:h-8 justify-center">
-                    {[
-                      { base: 20, peak: 80, delay: 0, duration: 0.8 },
-                      { base: 40, peak: 100, delay: 0.1, duration: 0.6 },
-                      { base: 15, peak: 70, delay: 0.2, duration: 0.9 },
-                      { base: 50, peak: 95, delay: 0.15, duration: 0.7 },
-                      { base: 30, peak: 85, delay: 0.05, duration: 0.75 },
-                      { base: 60, peak: 100, delay: 0.2, duration: 0.65 },
-                      { base: 25, peak: 75, delay: 0.1, duration: 0.85 },
-                      { base: 45, peak: 90, delay: 0.25, duration: 0.7 },
-                      { base: 35, peak: 80, delay: 0.15, duration: 0.8 }
-                    ].map((bar, i) => (
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                       <div 
                         key={i} 
                         className={`w-1.5 sm:w-2 bg-gradient-to-t from-indigo-400 via-purple-400 to-pink-400 rounded-full shadow-lg shadow-indigo-500/30 transition-opacity ${
-                          isPlaying ? 'opacity-100' : 'opacity-50'
+                          soundscapeIsPlaying ? 'opacity-100' : 'opacity-50'
                         }`}
                         style={{
-                          animationName: isPlaying ? 'dance' : 'none',
-                          animationDuration: isPlaying ? `${bar.duration}s` : '0s',
-                          animationTimingFunction: isPlaying ? 'ease-in-out' : 'ease',
-                          animationIterationCount: isPlaying ? 'infinite' : '1',
-                          animationDelay: `${bar.delay}s`,
-                          height: isPlaying ? `${bar.peak}%` : `${bar.base}%`,
+                          animationName: soundscapeIsPlaying ? 'dance' : 'none',
+                          animationDuration: soundscapeIsPlaying ? `${0.7 + (i % 3) * 0.1}s` : '0s',
+                          animationTimingFunction: 'ease-in-out',
+                          animationIterationCount: soundscapeIsPlaying ? 'infinite' : '1',
+                          animationDelay: `${i * 0.05}s`,
+                          height: soundscapeIsPlaying ? `${60 + (i % 5) * 10}%` : '40%',
                           minHeight: '4px'
                         }}
                       />
                     ))}
                  </div>
 
-                 <h3 className="text-base sm:text-lg md:text-xl font-semibold mb-0.5">Rainy Tokyo</h3>
-                 <p className="text-[10px] sm:text-xs text-gray-300 mb-3 sm:mb-4 md:mb-5 font-medium uppercase tracking-wide">Night Cafe Jazz · Ambience</p>
+                 <h3 className="text-base sm:text-lg md:text-xl font-semibold mb-0.5">
+                   {soundscapeActiveSounds.length > 0
+                     ? soundscapeActiveSounds.map((s) => s.name).join(', ')
+                     : 'No sounds in mix'}
+                 </h3>
+                 <p className="text-[10px] sm:text-xs text-gray-300 mb-3 sm:mb-4 md:mb-5 font-medium uppercase tracking-wide">
+                   {spacesActive ? 'Spaces · On' : 'Spaces · Off'}
+                   {soundscapeActiveSounds.length > 0 ? ' · Mix' : ' · Open Soundscape to add sounds'}
+                 </p>
                  
-                 <div className="flex items-center justify-between gap-2">
-                   <span className="text-[9px] sm:text-[10px] text-gray-400 font-mono">{formatTime(currentTime)}</span>
+                 <div className="flex items-center justify-between gap-2 flex-wrap">
+                   <button
+                     type="button"
+                     onClick={openSoundscapeComposer}
+                     className="text-[10px] sm:text-xs text-indigo-300 hover:text-white font-medium uppercase tracking-wide"
+                   >
+                     Open Soundscape
+                   </button>
                    <div className="flex items-center gap-3 sm:gap-4">
                      <button 
-                       onClick={skipBackward}
-                       className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-                       title="Skip backward 10 seconds"
-                     >
-                       <SkipBack size={14} className="sm:w-4 sm:h-4" />
-                     </button>
-                     <button 
-                       onClick={togglePlayPause}
+                       onClick={toggleSoundscapePlayPause}
                        className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full flex items-center justify-center text-indigo-900 hover:scale-110 transition-transform shadow-lg hover:shadow-xl"
+                       title={soundscapeIsPlaying ? 'Pause' : 'Play'}
                      >
-                        {isPlaying ? (
-                          <Pause size={14} className="sm:w-[18px] sm:h-[18px]" fill="currentColor" />
-                        ) : (
-                          <Play size={14} className="sm:w-[18px] sm:h-[18px]" fill="currentColor" />
-                        )}
-                     </button>
-                     <button 
-                       onClick={skipForward}
-                       className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-                       title="Skip forward 10 seconds"
-                     >
-                       <SkipForward size={14} className="sm:w-4 sm:h-4" />
+                       {soundscapeIsPlaying ? (
+                         <Pause size={18} className="sm:w-5 sm:h-5" fill="currentColor" />
+                       ) : (
+                         <Play size={18} className="sm:w-5 sm:h-5 ml-0.5" fill="currentColor" />
+                       )}
                      </button>
                    </div>
-                   <span className="text-[9px] sm:text-[10px] text-gray-400 font-mono">-{formatTime(remainingTime)}</span>
-                 </div>
-                 {/* Enhanced Progress Line */}
-                 <div className="mt-2 sm:mt-3 h-0.5 sm:h-1 bg-white/10 rounded-full overflow-hidden shadow-inner">
-                    <div 
-                      className="h-full bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 rounded-full shadow-sm transition-all duration-300" 
-                      style={{ width: `${progressPercentage}%` }} 
-                    />
                  </div>
                </div>
             </div>
@@ -329,69 +564,58 @@ export default function Dashboard() {
                 </div>
               </div>
               
-              {/* Enhanced SVG Chart */}
+              {/* Enhanced SVG Chart - real weekly data */}
               <div className="relative h-40 sm:h-44 md:h-52 w-full mb-3 sm:mb-4">
-                <svg viewBox="0 0 400 150" className="w-full h-full">
-                  <defs>
-                    <linearGradient id="productivityGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#615FFF" stopOpacity="0.25"/>
-                      <stop offset="50%" stopColor="#818cf8" stopOpacity="0.15"/>
-                      <stop offset="100%" stopColor="#615FFF" stopOpacity="0"/>
-                    </linearGradient>
-                    <linearGradient id="productivityLine" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#615FFF"/>
-                      <stop offset="50%" stopColor="#818cf8"/>
-                      <stop offset="100%" stopColor="#615FFF"/>
-                    </linearGradient>
-                  </defs>
-                  {/* Grid lines */}
-                  <g opacity="0.1">
-                    <line x1="0" y1="30" x2="400" y2="30" stroke="#615FFF" strokeWidth="1"/>
-                    <line x1="0" y1="60" x2="400" y2="60" stroke="#615FFF" strokeWidth="1"/>
-                    <line x1="0" y1="90" x2="400" y2="90" stroke="#615FFF" strokeWidth="1"/>
-                    <line x1="0" y1="120" x2="400" y2="120" stroke="#615FFF" strokeWidth="1"/>
-                  </g>
-                  {/* Area fill */}
-                  <path 
-                    d="M0,120 C40,110 80,115 120,80 C160,45 200,90 240,110 C280,130 320,50 360,40 L400,30 V150 H0 Z" 
-                    fill="url(#productivityGradient)" 
-                  />
-                  {/* Main line */}
-                  <path 
-                    d="M0,120 C40,110 80,115 120,80 C160,45 200,90 240,110 C280,130 320,50 360,40 L400,30" 
-                    fill="none" 
-                    stroke="url(#productivityLine)" 
-                    strokeWidth="3.5" 
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  {/* Data points */}
-                  {[
-                    { x: 0, y: 120 },
-                    { x: 57, y: 110 },
-                    { x: 114, y: 80 },
-                    { x: 171, y: 45 },
-                    { x: 228, y: 90 },
-                    { x: 285, y: 110 },
-                    { x: 342, y: 50 },
-                    { x: 400, y: 30 }
-                  ].map((point, i) => (
-                    <g key={i}>
-                      <circle cx={point.x} cy={point.y} r="5" fill="white" stroke="#615FFF" strokeWidth="2.5"/>
-                      <circle cx={point.x} cy={point.y} r="2.5" fill="#615FFF"/>
-                    </g>
-                  ))}
-                </svg>
+                {homeLoading ? (
+                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">Loading…</div>
+                ) : (
+                  <svg viewBox="0 0 400 150" className="w-full h-full">
+                    <defs>
+                      <linearGradient id="productivityGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#615FFF" stopOpacity="0.25"/>
+                        <stop offset="50%" stopColor="#818cf8" stopOpacity="0.15"/>
+                        <stop offset="100%" stopColor="#615FFF" stopOpacity="0"/>
+                      </linearGradient>
+                      <linearGradient id="productivityLine" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#615FFF"/>
+                        <stop offset="50%" stopColor="#818cf8"/>
+                        <stop offset="100%" stopColor="#615FFF"/>
+                      </linearGradient>
+                    </defs>
+                    {weeklyFocusMinutes.length > 0 ? (() => {
+                      const pts = weeklyFocusMinutes.map((d, i) => ({
+                        x: 50 + (i / Math.max(1, weeklyFocusMinutes.length - 1)) * 350,
+                        y: 120 - (d.minutes / weekMax) * 90,
+                      }));
+                      const pathD = pts.length >= 2
+                        ? `M${pts[0].x},${pts[0].y} ${pts.slice(1).map((p) => `L${p.x},${p.y}`).join(' ')} L${pts[pts.length - 1].x},120 L${pts[0].x},120 Z`
+                        : '';
+                      const lineD = pts.length >= 2 ? `M${pts.map((p) => `${p.x},${p.y}`).join(' L')}` : '';
+                      return (
+                        <>
+                          <path d={pathD} fill="url(#productivityGradient)" />
+                          <path d={lineD} fill="none" stroke="url(#productivityLine)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                          {pts.map((point, i) => (
+                            <g key={i}>
+                              <circle cx={point.x} cy={point.y} r="5" fill="white" stroke="#615FFF" strokeWidth="2.5"/>
+                              <circle cx={point.x} cy={point.y} r="2.5" fill="#615FFF"/>
+                            </g>
+                          ))}
+                        </>
+                      );
+                    })() : (
+                      <text x="200" y="75" textAnchor="middle" className="text-gray-400" fill="currentColor" style={{ fontSize: 14 }}>No focus data this week</text>
+                    )}
+                  </svg>
+                )}
               </div>
               
-              {/* Enhanced day labels */}
               <div className="flex justify-between mt-2 sm:mt-3 text-[9px] sm:text-[10px] text-gray-500 font-semibold uppercase tracking-wider px-1 sm:px-2">
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => (
-                  <span key={day} className={i === 6 ? 'text-[#615FFF]' : ''}>{day}</span>
-                ))}
+                {weeklyFocusMinutes.length > 0
+                  ? weeklyFocusMinutes.map((d) => <span key={d.key}>{d.label}</span>)
+                  : DAY_LABELS.map((day) => <span key={day}>{day}</span>)}
               </div>
               
-              {/* Summary Stats */}
               <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-gray-200/60 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1">
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center border border-indigo-100/50 shadow-sm">
@@ -401,13 +625,13 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <p className="text-[10px] sm:text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Peak Day</p>
-                    <p className="text-sm sm:text-base font-semibold text-gray-900">Thursday</p>
+                    <p className="text-sm sm:text-base font-semibold text-gray-900">{productivityPeakDay?.label ?? '—'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-1 justify-end">
                   <div className="text-right">
-                    <p className="text-[10px] sm:text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Avg Efficiency</p>
-                    <p className="text-base sm:text-lg font-bold text-[#615FFF]">72%</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Avg (min/day)</p>
+                    <p className="text-base sm:text-lg font-bold text-[#615FFF]">{weekAvg}m</p>
                   </div>
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center border border-indigo-100/50 shadow-sm">
                     <svg className="w-5 h-5 text-[#615FFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -439,64 +663,53 @@ export default function Dashboard() {
              </div>
 
              <div className="space-y-3 sm:space-y-4 md:space-y-5">
-                {/* Active Alert Item */}
-                <div className="group/item relative bg-gradient-to-br from-[#F4F5FF] via-indigo-50/80 to-purple-50/50 p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-indigo-200/50 overflow-hidden transition-all hover:shadow-xl hover:border-indigo-300 hover:scale-[1.01]">
-                  {/* Animated left border */}
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-[#545BE8] via-indigo-500 to-purple-500 rounded-l-2xl sm:rounded-l-3xl"></div>
-                  
-                  {/* Pulse indicator */}
-                  <div className="absolute top-3 right-3 w-2 h-2 bg-[#545BE8] rounded-full animate-pulse shadow-lg shadow-indigo-400/50"></div>
-                  
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="bg-gradient-to-br from-indigo-100 to-purple-100 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl text-[#545BE8] shadow-md border border-indigo-200/50 shrink-0 group-hover/item:scale-110 transition-transform">
-                      <Video size={18} className="sm:w-5 sm:h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-1.5 gap-2">
-                        <h4 className="text-xs sm:text-sm font-semibold text-gray-900 truncate">Team Sync Started</h4>
-                        <span className="bg-gradient-to-r from-[#EBEBFF] to-indigo-100 text-[#545BE8] text-[8px] sm:text-[9px] font-bold px-2 sm:px-2.5 py-1 rounded-full uppercase shrink-0 shadow-sm border border-indigo-200/50">Now</span>
-                      </div>
-                      <p className="text-[10px] sm:text-[11px] text-gray-600 font-medium mb-3 sm:mb-4">Microsoft Teams · General Channel</p>
-                      
-                      <div className="flex gap-2 sm:gap-3 flex-wrap">
-                        <button className="bg-gradient-to-r from-[#545BE8] to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white text-[10px] sm:text-[11px] font-medium px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl transition-all shadow-md hover:shadow-lg hover:scale-105 active:scale-100">
-                          Join Meeting
-                        </button>
-                        <button className="text-gray-500 hover:text-gray-700 text-[10px] sm:text-[11px] font-medium px-3 py-2 sm:py-2.5 hover:bg-gray-100 rounded-lg transition-all">
-                          Dismiss
-                        </button>
-                      </div>
-                    </div>
+                {homeLoading ? (
+                  <div className="py-6 text-center text-gray-400 text-sm">Loading…</div>
+                ) : upcomingTasks.length === 0 ? (
+                  <div className="py-6 text-center text-gray-500 text-sm">
+                    <p className="mb-2">No upcoming tasks</p>
+                    <Link href="/tasks" className="text-indigo-600 font-medium hover:underline inline-flex items-center gap-1">
+                      <ListTodo size={14} /> Go to Tasks
+                    </Link>
                   </div>
-                </div>
-
-                {/* Standard Schedule Item */}
-                <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl group cursor-pointer hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-purple-50/30 transition-all duration-200 border border-transparent hover:border-indigo-100/50">
-                  <div className="flex flex-col items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100/50 group-hover:from-indigo-50 group-hover:to-purple-50 transition-all duration-200 shadow-sm shrink-0 border border-gray-200/50 group-hover:border-indigo-200/50">
-                     <span className="text-[8px] sm:text-[9px] font-semibold text-gray-500 uppercase">Oct</span>
-                     <span className="text-base sm:text-lg font-semibold text-gray-800 group-hover:text-indigo-700">24</span>
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 group-hover:text-[#545BE8] transition-colors truncate">Quarterly Review</h4>
-                    <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium mt-0.5">Outlook · 10m ago</p>
-                  </div>
-                  
-                  <div className="w-2.5 h-2.5 bg-gradient-to-br from-indigo-400 to-purple-400 rounded-full shrink-0 shadow-sm"></div>
-                </div>
-                
-                {/* Another Standard Item Placeholder */}
-                 <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl group cursor-pointer opacity-60 hover:opacity-100 hover:bg-gray-50/50 transition-all duration-200 border border-transparent hover:border-gray-200/50">
-                  <div className="flex flex-col items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100/50 shadow-sm shrink-0 border border-gray-200/50">
-                     <span className="text-[8px] sm:text-[9px] font-semibold text-gray-400 uppercase">Oct</span>
-                     <span className="text-base sm:text-lg font-semibold text-gray-700">24</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-xs sm:text-sm font-semibold text-gray-700 truncate">Project Loop Specs</h4>
-                    <p className="text-[10px] sm:text-[11px] text-gray-400 font-medium mt-0.5">Later today</p>
-                  </div>
-                </div>
-
+                ) : (
+                  upcomingTasks.map((task) => {
+                    const due = task.due_date ? new Date(task.due_date) : null;
+                    const isToday = due && due.toDateString() === new Date().toDateString();
+                    const monthStr = due ? due.toLocaleDateString('en-US', { month: 'short' }) : '—';
+                    const dayStr = due ? due.getDate() : '—';
+                    const timeLabel = due
+                      ? isToday
+                        ? due.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                        : due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                      : 'No date';
+                    return (
+                      <Link
+                        key={task.id}
+                        href="/tasks"
+                        className="flex items-center gap-3 sm:gap-4 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl group cursor-pointer hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-purple-50/30 transition-all duration-200 border border-transparent hover:border-indigo-100/50"
+                      >
+                        <div className="flex flex-col items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100/50 group-hover:from-indigo-50 group-hover:to-purple-50 transition-all duration-200 shadow-sm shrink-0 border border-gray-200/50 group-hover:border-indigo-200/50">
+                          <span className="text-[8px] sm:text-[9px] font-semibold text-gray-500 uppercase">{monthStr}</span>
+                          <span className="text-base sm:text-lg font-semibold text-gray-800 group-hover:text-indigo-700">{dayStr}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-xs sm:text-sm font-semibold text-gray-900 group-hover:text-[#545BE8] transition-colors truncate">{task.title}</h4>
+                          <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium mt-0.5">{timeLabel}</p>
+                        </div>
+                        <div className="w-2.5 h-2.5 bg-gradient-to-br from-indigo-400 to-purple-400 rounded-full shrink-0 shadow-sm" />
+                      </Link>
+                    );
+                  })
+                )}
+                {!homeLoading && upcomingTasks.length > 0 && (
+                  <Link
+                    href="/tasks"
+                    className="block text-center text-indigo-600 text-sm font-medium hover:underline py-2"
+                  >
+                    View all tasks →
+                  </Link>
+                )}
              </div>
             </div>
           </div>

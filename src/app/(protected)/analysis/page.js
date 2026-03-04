@@ -1,549 +1,643 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { useAuth, useUser } from '@clerk/nextjs';
+import {
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell,
+} from 'recharts';
 import { 
   Download, 
-  Plus, 
-  MoreHorizontal, 
   Zap,
   MoveRight,
-  TrendingUp
+  TrendingUp,
+  Target,
+  CheckCircle2,
+  ListTodo,
+  Clock,
+  Database,
+  Activity,
+  Flame,
+  BarChart3,
+  CircleDot,
 } from 'lucide-react';
+import { Outfit } from 'next/font/google';
+import { getSupabaseClient, setSupabaseAuthToken, getFocusTimerStateFromSupabase } from '@/utils/userStorage';
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-outfit',
+});
 
 export default function AnalyticsDashboard() {
+  const { user } = useUser();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const userId = user?.id || null;
+
+  const [tasks, setTasks] = useState([]);
+  const [focusState, setFocusState] = useState(null);
+  const [focusSessions, setFocusSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [seedLoading, setSeedLoading] = useState(false);
+  const [seedMessage, setSeedMessage] = useState('');
+
+  const loadData = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const token = await getToken({ template: 'supabase' });
+      if (!token) {
+        setError('Unable to authenticate.');
+        return;
+      }
+      setSupabaseAuthToken(token);
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        setError('Database not configured.');
+        return;
+      }
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      const sinceIso = since.toISOString();
+      const [tasksRes, focusRes, sessionsRes] = await Promise.all([
+        supabase.from('tasks').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+        getFocusTimerStateFromSupabase(userId),
+        supabase.from('focus_sessions').select('*').eq('user_id', userId).gte('completed_at', sinceIso).order('completed_at', { ascending: true }),
+      ]);
+      if (tasksRes.error) throw new Error(tasksRes.error.message || 'Failed to load tasks');
+      if (sessionsRes.error) {
+        setFocusSessions([]);
+      } else {
+        setFocusSessions(sessionsRes.data || []);
+      }
+      setTasks(tasksRes.data || []);
+      setFocusState(focusRes || null);
+    } catch (e) {
+      setError(e?.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken, userId]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !userId) {
+      setLoading(false);
+      return;
+    }
+    loadData();
+  }, [isLoaded, isSignedIn, userId, loadData]);
+
+  const handleLoadSampleData = async () => {
+    setSeedLoading(true);
+    setSeedMessage('');
+    try {
+      const res = await fetch('/api/seed-insights', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSeedMessage(data.error || 'Failed to load sample data.');
+        return;
+      }
+      setSeedMessage(`Added ${data.focus_sessions_added ?? 0} sessions and ${data.tasks_added ?? 0} tasks.`);
+      await loadData();
+      setSeedMessage('Sample data loaded.');
+    } catch (e) {
+      setSeedMessage(e?.message || 'Request failed.');
+    } finally {
+      setSeedLoading(false);
+    }
+  };
+
   const today = new Date();
-  const dateString = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const todayStr = today.toISOString().slice(0, 10);
+  const dateString = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+
+  const tasksByColumn = {
+    todaysFocus: tasks.filter((t) => t.column_key === 'todaysFocus'),
+    inProgress: tasks.filter((t) => t.column_key === 'inProgress'),
+    backlog: tasks.filter((t) => t.column_key === 'backlog'),
+    done: tasks.filter((t) => t.column_key === 'done'),
+  };
+  const todaysFocusCount = tasksByColumn.todaysFocus.length;
+  const inProgressCount = tasksByColumn.inProgress.length;
+  const backlogCount = tasksByColumn.backlog.length;
+  const doneCount = tasksByColumn.done.length;
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter((t) => t.completed_at);
+  const highPriorityCount = tasks.filter((t) => t.priority?.level === 'High Priority').length;
+  const now = Date.now();
+  const overdueCount = tasks.filter((t) => t.column_key !== 'done' && t.due_date && new Date(t.due_date).getTime() < now).length;
+
+  const categoryCounts = tasks.reduce((acc, t) => {
+    const cat = t.category || 'Other';
+    acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {});
+
+  const sessionsTodayFromDb = focusSessions.filter((s) => s.completed_at && s.completed_at.slice(0, 10) === todayStr).length;
+  const sessionsDate = focusState?.sessions?.date || todayStr;
+  const isToday = sessionsDate === todayStr;
+  const displaySessions = isToday ? (focusState?.sessions?.today ?? sessionsTodayFromDb) : sessionsTodayFromDb;
+  const sessionMinutes = focusState?.settings?.sessionMinutes ?? 25;
+  const focusMinutesToday = displaySessions * sessionMinutes;
+  const preferredMode = focusState?.timer?.mode || focusState?.settings?.timerMode || 'pomodoro';
+  const modeLabel = preferredMode === 'pomodoro' ? 'Pomodoro' : preferredMode === 'stopwatch' ? 'Stopwatch' : 'Countdown';
+  const focusEfficiency = totalTasks > 0 ? Math.min(100, Math.round((displaySessions / 8) * 100 + (todaysFocusCount / totalTasks) * 30)) : Math.min(100, Math.round((displaySessions / 8) * 100));
+
+  const DAYS_TREND = 14;
+  const trendDays = Array.from({ length: DAYS_TREND }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (DAYS_TREND - 1 - i));
+    return d.toISOString().slice(0, 10);
+  });
+  const sessionsByDay = {};
+  const focusMinutesByDay = {};
+  trendDays.forEach((d) => {
+    sessionsByDay[d] = 0;
+    focusMinutesByDay[d] = 0;
+  });
+  focusSessions.forEach((s) => {
+    if (!s.completed_at) return;
+    const d = s.completed_at.slice(0, 10);
+    if (trendDays.includes(d)) {
+      sessionsByDay[d] = (sessionsByDay[d] || 0) + 1;
+      focusMinutesByDay[d] = (focusMinutesByDay[d] || 0) + (s.duration_seconds || 0) / 60;
+    }
+  });
+  const chartData = trendDays.map((d) => ({
+    date: d,
+    label: new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    sessions: sessionsByDay[d] ?? 0,
+    focusMinutes: Math.round(focusMinutesByDay[d] ?? 0),
+  }));
+
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const weekStartStr = startOfWeek.toISOString().slice(0, 10);
+  const sessionsThisWeek = focusSessions.filter((s) => s.completed_at && s.completed_at.slice(0, 10) >= weekStartStr).length;
+  const focusMinutesThisWeek = focusSessions
+    .filter((s) => s.completed_at && s.completed_at.slice(0, 10) >= weekStartStr)
+    .reduce((sum, s) => sum + (s.duration_seconds || 0) / 60, 0);
+  const tasksCompletedThisWeek = completedTasks.filter((t) => t.completed_at && t.completed_at.slice(0, 10) >= weekStartStr).length;
+
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const peakByDayHour = {};
+  dayLabels.forEach((_, i) => { peakByDayHour[i] = Array.from({ length: 24 }, () => 0); });
+  focusSessions.forEach((s) => {
+    if (!s.completed_at) return;
+    const d = new Date(s.completed_at);
+    peakByDayHour[d.getDay()][d.getHours()]++;
+  });
+  const maxPeakCell = Math.max(1, ...dayLabels.flatMap((_, i) => peakByDayHour[i]));
+
+  let streak = 0;
+  for (let i = 0; i < DAYS_TREND; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    if ((sessionsByDay[ds] ?? 0) > 0) streak++;
+    else break;
+  }
+
+  const taskDistributionData = [
+    { name: "Today's Focus", value: todaysFocusCount, color: '#5043F3' },
+    { name: 'In Progress', value: inProgressCount, color: '#f59e0b' },
+    { name: 'Backlog', value: backlogCount, color: '#64748b' },
+    { name: 'Done', value: doneCount, color: '#10b981' },
+  ].filter((d) => d.value > 0);
+
+  const THRYV_PURPLE = '#5043F3';
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen bg-[#F1F5F9] ${outfit.className} text-gray-900 flex items-center justify-center`}>
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-12 h-12 border-2 border-indigo-200 border-t-[#5043F3] rounded-full animate-spin" />
+          <p className="text-slate-600 font-medium tracking-wide">Loading analytics</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    // Background made slightly deeper to help white cards stand out
-    <div className="min-h-screen bg-[#F1F5F9] font-sans text-slate-900 p-4 sm:p-6 md:p-8 lg:p-12">
-      
-      <main className="max-w-7xl mx-auto w-full">
-        
+    <div className={`min-h-screen bg-[#F1F5F9] ${outfit.className} text-gray-900 antialiased`}>
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
+        {error && (
+          <div className="mb-6 py-3 px-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium">
+            {error}
+          </div>
+        )}
+        {seedMessage && (
+          <div className="mb-6 py-3 px-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium">
+            {seedMessage}
+          </div>
+        )}
+
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 sm:mb-6 md:mb-8 gap-4 sm:gap-6">
-          <div className="flex-1">
-            <p className="text-indigo-500 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2">Analytics Dashboard</p>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-gray-900 mb-2 leading-tight">
+        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-10">
+          <div>
+            <p className="text-xs font-semibold text-indigo-500 uppercase tracking-[0.2em] mb-2">Insights</p>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-gray-900">
               Analytics
             </h1>
-            <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">{dateString}</p>
+            <p className="mt-2 text-slate-500 font-medium">{dateString}</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-            <button className="px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-white border border-slate-200 rounded-xl sm:rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 text-slate-700 font-bold text-xs sm:text-sm shadow-sm hover:shadow-md">
-              <Download size={16} className="sm:w-5 sm:h-5" />
-              <span className="whitespace-nowrap">Export Report</span>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleLoadSampleData}
+              disabled={seedLoading || loading}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#5043F3] hover:bg-[#4337D9] disabled:opacity-50 disabled:pointer-events-none text-white font-semibold text-sm transition-colors shadow-lg shadow-indigo-200/50"
+            >
+              {seedLoading ? (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Database className="w-4 h-4" />
+              )}
+              Load sample data
             </button>
-            <button className="px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-[#111827] hover:bg-black text-white rounded-xl sm:rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-xs sm:text-sm shadow-lg shadow-slate-900/20 hover:shadow-xl hover:scale-105 active:scale-95">
-              <Plus size={16} className="sm:w-5 sm:h-5" />
-              <span className="whitespace-nowrap">New Dashboard</span>
+            <button className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-sm transition-colors shadow-sm">
+              <Download className="w-4 h-4" />
+              Export
             </button>
           </div>
         </header>
 
-        {/* Top Grid Section */}
-        <div className="grid grid-cols-12 gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8">
-          
-          {/* Left Large Column (Team Overview) */}
-          <div className="col-span-12 lg:col-span-8">
-            <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.08)] border border-slate-100 h-full hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.12)] transition-shadow duration-300">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 sm:mb-6 md:mb-8 gap-3">
-                <div>
-                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
-                     <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Team Overview</h2>
-                     <span className="px-2.5 sm:px-3 py-1 bg-[#DCFCE7] text-[#15803D] text-[10px] sm:text-[11px] font-extrabold tracking-wider rounded-full uppercase w-fit">Live Data</span>
-                   </div>
+        {/* KPI strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 mb-10">
+          {[
+            { label: 'Sessions today', value: displaySessions, sub: `${focusMinutesToday} min`, icon: Activity, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
+            { label: 'Focus this week', value: Math.round(focusMinutesThisWeek), sub: 'minutes', icon: TrendingUp, color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.08)' },
+            { label: 'Tasks done (week)', value: tasksCompletedThisWeek, sub: 'completed', icon: CheckCircle2, color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
+            { label: 'Streak', value: streak, sub: 'days', icon: Flame, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
+            { label: 'Efficiency', value: `${focusEfficiency}%`, sub: modeLabel, icon: Target, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
+            { label: 'Total tasks', value: totalTasks, sub: `${doneCount} done`, icon: BarChart3, color: '#64748b', bg: 'rgba(100, 116, 139, 0.08)' },
+          ].map((kpi) => (
+            <div
+              key={kpi.label}
+              className="group relative rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:border-slate-300/80 hover:-translate-y-0.5"
+              style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)' }}
+            >
+              <div className="absolute top-0 left-0 w-1 h-full opacity-90" style={{ backgroundColor: kpi.color }} />
+              <div className="relative p-5">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">{kpi.label}</span>
+                  <div
+                    className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110"
+                    style={{ backgroundColor: kpi.bg }}
+                  >
+                    <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} strokeWidth={2.5} />
+                  </div>
                 </div>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums tracking-tight" style={{ letterSpacing: '-0.02em' }}>
+                  {kpi.value}
+                </p>
+                <p className="text-xs font-medium text-slate-500 mt-1">{kpi.sub}</p>
               </div>
-
-              {/* Inner Chart Card */}
-              <div className="bg-[#F8FAFC] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 relative border border-slate-50">
-                 <div className="flex flex-col md:flex-row justify-between items-start mb-4 sm:mb-6 md:mb-8 gap-4 sm:gap-6 md:gap-8">
-                    <div className="flex-1">
-                        <h3 className="text-xs sm:text-sm font-bold text-slate-600 mb-3 sm:mb-4 md:mb-5 uppercase tracking-wide">Team Focus Efficiency</h3>
-                        <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-8 md:gap-12">
-                           <div>
-                              <div className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-slate-900 mb-1 sm:mb-2 tracking-tighter">89%</div>
-                              <div className="text-xs sm:text-sm font-bold text-[#16A34A] flex items-center gap-1 bg-green-50 px-2 py-1 rounded-lg w-fit">
-                                 <TrendingUp size={14} className="sm:w-4 sm:h-4" strokeWidth={3} /> <span className="whitespace-nowrap">+4.2% this week</span>
-                              </div>
-                           </div>
-                           <div className="pb-1">
-                              <div className="text-xl sm:text-2xl font-bold text-slate-400 mb-1">12%</div>
-                              <div className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wide">Risk Level</div>
-                           </div>
-                        </div>
-                    </div>
+            </div>
+          ))}
+        </div>
                     
-                    {/* Legend */}
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 bg-white px-3 sm:px-4 py-2 rounded-xl shadow-sm border border-slate-100 w-full sm:w-auto">
-                       <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-wider">
-                          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#5043F3] ring-2 sm:ring-4 ring-[#5043F3]/20"></span> Efficiency
-                       </div>
-                       <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-wider">
-                          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#EF4444] ring-2 sm:ring-4 ring-[#EF4444]/20"></span> Burnout
-                       </div>
-                    </div>
-                 </div>
+        {/* Main chart: Focus time (area) + Sessions (line) */}
+        <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 mb-8" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+          <div className="p-6 lg:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 mb-5 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight">Focus & sessions</h2>
+              <p className="text-sm text-slate-500 mt-1">Last 14 days · focus time (min) & session count</p>
+            </div>
+            <div className="flex gap-3">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5043F3]/10 text-[#5043F3] text-xs font-semibold border border-[#5043F3]/20">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#5043F3]" /> Focus (min)
+              </span>
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#06b6d4]/10 text-[#06b6d4] text-xs font-semibold border border-[#06b6d4]/20">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#06b6d4]" /> Sessions
+              </span>
+            </div>
+          </div>
+          <div className="h-[320px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="focusGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={THRYV_PURPLE} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={THRYV_PURPLE} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 40px -12px rgba(0,0,0,0.15)' }}
+                  labelStyle={{ color: '#475569' }}
+                  formatter={(value, name) => [name === 'focusMinutes' ? `${value} min` : value, name === 'focusMinutes' ? 'Focus' : 'Sessions']}
+                  labelFormatter={(label) => label}
+                />
+                <Area yAxisId="left" type="monotone" dataKey="focusMinutes" name="focusMinutes" stroke={THRYV_PURPLE} strokeWidth={2} fill="url(#focusGradient)" />
+                <Line yAxisId="right" type="monotone" dataKey="sessions" name="sessions" stroke="#06b6d4" strokeWidth={2} dot={{ fill: '#06b6d4', r: 3 }} activeDot={{ r: 5 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          </div>
+        </div>
 
-                 {/* SVG Chart Area */}
-                 <div className="h-40 sm:h-48 md:h-56 w-full mt-3 sm:mt-4">
-                   <svg viewBox="0 0 800 200" className="w-full h-full overflow-visible">
-                     <defs>
-                       <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                         <stop offset="0%" stopColor="#5043F3" stopOpacity="0.15"/>
-                         <stop offset="100%" stopColor="#5043F3" stopOpacity="0"/>
-                       </linearGradient>
-                       <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                          <feGaussianBlur stdDeviation="4" result="coloredBlur" />
-                          <feMerge>
-                             <feMergeNode in="coloredBlur" />
-                             <feMergeNode in="SourceGraphic" />
-                          </feMerge>
-                       </filter>
-                     </defs>
-                     
-                     {/* Dashed Red Line (Burnout) - More variable */}
-                     <path 
-                       d="M0,145 C80,135 120,150 160,140 C200,130 240,125 300,135 C360,145 400,130 480,140 C560,150 600,135 680,125 C720,120 760,130 800,115" 
-                       fill="none" 
-                       stroke="#EF4444" 
-                       strokeWidth="2.5" 
-                       strokeDasharray="8 8"
-                       strokeLinecap="round"
-                       opacity="0.6"
-                     />
-
-                     {/* Solid Purple Line (Efficiency) - More variable */}
-                     <path 
-                       d="M0,130 C60,100 100,125 150,85 C200,45 250,75 300,60 C350,45 400,90 450,70 C500,50 550,95 600,80 C650,65 700,100 750,85 C780,75 800,65 800,55" 
-                       fill="none" 
-                       stroke="#5043F3" 
-                       strokeWidth="5" 
-                       strokeLinecap="round"
-                       filter="url(#glow)"
-                     />
-                      {/* Fill under purple line */}
-                      <path 
-                       d="M0,130 C60,100 100,125 150,85 C200,45 250,75 300,60 C350,45 400,90 450,70 C500,50 550,95 600,80 C650,65 700,100 750,85 C780,75 800,65 800,55 L800,220 L0,220 Z" 
-                       fill="url(#chartGradient)" 
-                     />
-                     
-                     {/* Data points on efficiency line */}
-                     <circle cx="150" cy="85" r="4" fill="#5043F3" className="drop-shadow-sm"/>
-                     <circle cx="300" cy="60" r="4" fill="#5043F3" className="drop-shadow-sm"/>
-                     <circle cx="450" cy="70" r="4" fill="#5043F3" className="drop-shadow-sm"/>
-                     <circle cx="600" cy="80" r="4" fill="#5043F3" className="drop-shadow-sm"/>
-                     <circle cx="750" cy="85" r="4" fill="#5043F3" className="drop-shadow-sm"/>
-                     
-                     {/* X Axis Labels */}
-                     <g className="text-[11px] font-bold fill-slate-400 tracking-wider" transform="translate(0, 230)">
-                       <text x="20">MON</text>
-                       <text x="150">TUE</text>
-                       <text x="280">WED</text>
-                       <text x="410">THU</text>
-                       <text x="540">FRI</text>
-                       <text x="670">SAT</text>
-                       <text x="780">SUN</text>
-                     </g>
-                   </svg>
-                 </div>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+          {/* Sessions trend – line chart */}
+          <div className="lg:col-span-2 rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+            <div className="p-6">
+            <div className="pb-4 mb-4 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-1">Sessions per day</h2>
+              <p className="text-sm text-slate-500">Daily session count · last 14 days</p>
+            </div>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 40px -12px rgba(0,0,0,0.15)' }}
+                    formatter={(value) => [value, 'Sessions']}
+                  />
+                  <Line type="monotone" dataKey="sessions" stroke={THRYV_PURPLE} strokeWidth={2} dot={{ fill: THRYV_PURPLE, r: 4 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
             </div>
           </div>
 
-          {/* Right Column Stack */}
-          <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 sm:gap-6 lg:gap-8">
-            
-            {/* Peak Hours */}
-            <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.08)] border border-slate-100 hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.12)] transition-shadow duration-300">
-               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 gap-3">
-                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Peak Hours</h3>
-                  <span className="text-[10px] sm:text-xs font-bold text-[#5043F3] bg-[#EEF2FF] px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg tracking-wide w-fit">WEEKLY AVG</span>
-               </div>
+          {/* Task distribution – bar chart */}
+          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+            <div className="p-6">
+            <div className="pb-4 mb-4 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-1">Task distribution</h2>
+              <p className="text-sm text-slate-500">By column</p>
+            </div>
+            {taskDistributionData.length > 0 ? (
+              <div className="h-[240px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={taskDistributionData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={95} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 40px -12px rgba(0,0,0,0.15)' }}
+                      formatter={(value) => [value, 'Tasks']}
+                    />
+                    <Bar dataKey="value" name="Tasks" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                      {taskDistributionData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[240px] flex items-center justify-center text-slate-500 text-sm">No tasks yet</div>
+            )}
+            </div>
+          </div>
+        </div>
                
-               {/* Heatmap */}
-               <div className="grid grid-cols-8 gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] text-slate-400 font-bold">
-                  {/* Header Row */}
-                  <div></div>
-                  <div className="text-center">M</div><div className="text-center">T</div><div className="text-center">W</div>
-                  <div className="text-center">T</div><div className="text-center">F</div><div className="text-center">S</div><div className="text-center">S</div>
-
-                  {/* 9AM */}
-                  <div className="flex items-center whitespace-nowrap">9 AM</div>
-                  <Cell c={1} /><Cell c={2} /><Cell c={3} /><Cell c={2} /><Cell c={1} /><Cell c={0} /><Cell c={0} />
-
-                   {/* 12PM */}
-                  <div className="flex items-center whitespace-nowrap">12 PM</div>
-                  <Cell c={3} /><Cell c={4} /><Cell c={5} /><Cell c={5} /><Cell c={4} /><Cell c={2} /><Cell c={1} />
-
-                   {/* 3PM */}
-                  <div className="flex items-center whitespace-nowrap">3 PM</div>
-                  <Cell c={3} /><Cell c={4} /><Cell c={5} /><Cell c={4} /><Cell c={3} /><Cell c={2} /><Cell c={1} />
-
-                   {/* 6PM */}
-                  <div className="flex items-center whitespace-nowrap">6 PM</div>
-                  <Cell c={1} /><Cell c={2} /><Cell c={2} /><Cell c={2} /><Cell c={1} /><Cell c={0} /><Cell c={0} />
-               </div>
+        {/* Peak hours heatmap */}
+        <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 mb-10" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+          <div className="p-6 lg:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 mb-5 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight">Peak hours</h2>
+              <p className="text-sm text-slate-500 mt-1">When you focus · last 30 days</p>
             </div>
-
-            {/* Team Velocity */}
-            <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.08)] border border-slate-100 flex-1 hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.12)] transition-shadow duration-300">
-               <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-4 sm:mb-6 md:mb-8 tracking-tight">Team Velocity</h3>
-               <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                  <VelocityBar label="Engineering" points={124} width="85%" />
-                  <VelocityBar label="Design" points={86} width="60%" color="bg-[#A78BFA]" />
-                  <VelocityBar label="Marketing" points={92} width="70%" color="bg-[#F472B6]" />
-               </div>
+            <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#5043F3]/10 text-[#5043F3] border border-[#5043F3]/20">Sun–Sat · 0h–23h</span>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[320px] space-y-2">
+              {dayLabels.map((label, dayIndex) => (
+                <div key={dayIndex} className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-slate-500 w-9 shrink-0">{label}</span>
+                  <div className="flex gap-0.5 flex-1">
+                    {Array.from({ length: 24 }, (_, hour) => {
+                      const count = peakByDayHour[dayIndex]?.[hour] ?? 0;
+                      const intensity = maxPeakCell > 0 ? count / maxPeakCell : 0;
+                      return (
+                        <div
+                          key={hour}
+                          title={`${label} ${hour}:00 – ${count} session(s)`}
+                          className="h-5 flex-1 min-w-[8px] rounded-sm transition-all hover:ring-2 hover:ring-indigo-300"
+                          style={{
+                            backgroundColor: intensity === 0 ? '#f1f5f9' : `rgba(80, 67, 243, ${0.2 + 0.7 * intensity})`,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
+          </div>
           </div>
         </div>
 
-        {/* Bottom Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6 pl-2">
-           <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight text-gray-900 leading-tight">My Personal Insights</h2>
-           <span className="px-2.5 sm:px-3 py-1 bg-[#FAF5FF] text-[#9333EA] text-[9px] sm:text-[10px] font-extrabold tracking-wider rounded-full uppercase border border-[#E9D5FF] w-fit">Private</span>
-        </div>
-
-        {/* Bottom Grid */}
-        <div className="grid grid-cols-12 gap-4 sm:gap-6 lg:gap-8">
-           
-           {/* Daily Rhythm (Wide) */}
-           <div className="col-span-12 lg:col-span-6 bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.08)] border border-slate-100 hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.12)] transition-shadow duration-300">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 md:mb-8 gap-3">
-                 <h3 className="text-base sm:text-lg font-bold text-slate-700 tracking-tight">My Daily Rhythm</h3>
-                 <div className="flex gap-4 sm:gap-6 text-[10px] sm:text-xs font-bold text-slate-600">
-                    <div className="flex items-center gap-1.5 sm:gap-2"><div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#5043F3]"></div>Deep Work</div>
-                    <div className="flex items-center gap-1.5 sm:gap-2"><div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#FACC15]"></div>Meeting</div>
-                 </div>
+        {/* Bottom row: Balance, Focus & tasks summary, AI */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Balance score */}
+          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+            <div className="p-6 flex flex-col flex-1">
+              <div className="pb-4 mb-4 border-b border-slate-100">
+                <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-1">Balance score</h2>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Focus vs tasks</p>
               </div>
-              
-              <div className="relative pt-6 sm:pt-8 pb-3 sm:pb-4 mb-4 sm:mb-6">
-                 {/* Timeline Bar */}
-                 <div className="h-12 sm:h-14 w-full rounded-xl sm:rounded-2xl overflow-hidden flex text-[9px] sm:text-[10px] md:text-[11px] font-extrabold text-white tracking-wider relative shadow-inner">
-                    <div className="w-[28%] bg-[#5043F3] flex items-center justify-center">FOCUS</div>
-                    <div className="w-[15%] bg-[#FACC15] text-slate-900 flex items-center justify-center">SYNC</div>
-                    <div className="w-[10%] bg-slate-50"></div> {/* Gap */}
-                    <div className="w-[25%] bg-[#5043F3] flex items-center justify-center">DEV</div>
-                    <div className="w-[22%] bg-[#FACC15] text-slate-900 flex items-center justify-center">REVIEW</div>
-                 </div>
-
-                 {/* Time Labels */}
-                 <div className="flex justify-between text-[10px] sm:text-xs text-slate-400 font-bold mt-3 sm:mt-4 px-1">
-                    <span>9:00</span>
-                    <span>11:00</span>
-                    <span>13:00</span>
-                    <span className="text-[#EF4444]">15:00</span>
-                    <span>17:00</span>
-                 </div>
-
-                 {/* Now Indicator */}
-                 <div className="absolute top-0 bottom-6 sm:bottom-8 left-[60%] w-[2px] bg-[#EF4444] z-10 flex flex-col items-center pointer-events-none">
-                    <div className="bg-[#EF4444] text-white text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md mb-1 shadow-md">Now</div>
-                    <div className="w-2.5 sm:w-3 h-2.5 sm:h-3 rounded-full bg-[#EF4444] border-2 border-white shadow-sm translate-y-[44px] sm:translate-y-[52px]"></div>
-                 </div>
-              </div>
-
-              {/* Insights/Stats Section */}
-              <div className="border-t border-slate-200 pt-4 sm:pt-6 mt-4 sm:mt-6">
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    {/* Peak Productivity Window */}
-                    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-indigo-100/60 relative overflow-hidden group hover:shadow-md transition-all">
-                       <div className="absolute top-0 right-0 w-12 sm:w-16 h-12 sm:h-16 bg-indigo-200/20 rounded-bl-full blur-xl"></div>
-                       <div className="relative z-10">
-                          <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                             <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-[#5043F3]"></div>
-                             <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Peak Window</div>
-                          </div>
-                          <div className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-0.5 sm:mb-1">10:30 AM</div>
-                          <div className="text-[10px] sm:text-xs font-semibold text-indigo-600">Most Productive</div>
-                       </div>
-                    </div>
-                    
-                    {/* Meeting Efficiency */}
-                    <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-amber-100/60 relative overflow-hidden group hover:shadow-md transition-all">
-                       <div className="absolute top-0 right-0 w-12 sm:w-16 h-12 sm:h-16 bg-amber-200/20 rounded-bl-full blur-xl"></div>
-                       <div className="relative z-10">
-                          <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                             <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-[#FACC15]"></div>
-                             <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Meeting Ratio</div>
-                          </div>
-                          <div className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-0.5 sm:mb-1">34%</div>
-                          <div className="text-[10px] sm:text-xs font-semibold text-amber-600">Optimal Range</div>
-                       </div>
-                    </div>
-                    
-                    {/* Focus Blocks */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-blue-100/60 relative overflow-hidden group hover:shadow-md transition-all">
-                       <div className="absolute top-0 right-0 w-12 sm:w-16 h-12 sm:h-16 bg-blue-200/20 rounded-bl-full blur-xl"></div>
-                       <div className="relative z-10">
-                          <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                             <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-blue-600"></div>
-                             <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Focus Blocks</div>
-                          </div>
-                          <div className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-0.5 sm:mb-1">2</div>
-                          <div className="text-[10px] sm:text-xs font-semibold text-blue-600">Deep Work Sessions</div>
-                       </div>
-                    </div>
-                    
-                    {/* Context Switching */}
-                    <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200/60 relative overflow-hidden group hover:shadow-md transition-all">
-                       <div className="absolute top-0 right-0 w-12 sm:w-16 h-12 sm:h-16 bg-slate-200/20 rounded-bl-full blur-xl"></div>
-                       <div className="relative z-10">
-                          <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                             <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-slate-400"></div>
-                             <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Switches</div>
-                          </div>
-                          <div className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-0.5 sm:mb-1">3</div>
-                          <div className="text-[10px] sm:text-xs font-semibold text-slate-600">Low Interruption</div>
-                       </div>
-                    </div>
-                 </div>
-              </div>
-           </div>
-
-           {/* Balance Score (Square) */}
-           <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gradient-to-br from-green-50 via-emerald-50/50 to-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-5 md:p-6 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.08)] border border-green-100/50 hover:shadow-[0_25px_60px_-12px_rgba(16,185,129,0.15)] transition-all duration-300 relative overflow-hidden group">
-              {/* Decorative background elements */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-green-200/20 rounded-bl-full blur-2xl"></div>
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-200/15 rounded-tr-full blur-xl"></div>
-              
-              <div className="relative z-10">
-                 {/* Header */}
-                 <div className="mb-3 sm:mb-4">
-                    <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight mb-1">Balance Score</h3>
-                    <p className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">Work-Life Harmony</p>
-                 </div>
-                 
-                 {/* Ring Chart */}
-                 <div className="relative w-full aspect-square max-w-[160px] sm:max-w-[180px] md:max-w-[200px] mx-auto mb-3 sm:mb-4">
-                    <svg viewBox="0 0 200 200" className="w-full h-full transform -rotate-90">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                <div className="shrink-0 flex justify-center sm:justify-start">
+                  <div className="relative w-32 h-32 sm:w-36 sm:h-36">
+                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                       <defs>
-                        <linearGradient id="balanceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#10B981" />
-                          <stop offset="50%" stopColor="#22C55E" />
-                          <stop offset="100%" stopColor="#34D399" />
+                        <linearGradient id="balanceGradAnalytics" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#5043F3" />
+                          <stop offset="100%" stopColor="#06b6d4" />
                         </linearGradient>
-                        <filter id="balanceGlow">
-                          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                          <feMerge>
-                            <feMergeNode in="coloredBlur"/>
-                            <feMergeNode in="SourceGraphic"/>
-                          </feMerge>
-                        </filter>
                       </defs>
-                      {/* Background circle (full ring) */}
+                      <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" strokeWidth="8" />
                       <circle
-                        cx="100"
-                        cy="100"
-                        r="85"
+                        cx="50"
+                        cy="50"
+                        r="42"
                         fill="none"
-                        stroke="#E5E7EB"
-                        strokeWidth="12"
+                        stroke="url(#balanceGradAnalytics)"
+                        strokeWidth="8"
                         strokeLinecap="round"
-                      />
-                      {/* Progress arc - 92% of full circle (360 degrees) */}
-                      <circle
-                        cx="100"
-                        cy="100"
-                        r="85"
-                        fill="none"
-                        stroke="url(#balanceGradient)"
-                        strokeWidth="12"
-                        strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 85 * 0.92} ${2 * Math.PI * 85}`}
-                        filter="url(#balanceGlow)"
-                        className="drop-shadow-lg"
+                        strokeDasharray={`${2 * Math.PI * 42 * (focusEfficiency / 100)} ${2 * Math.PI * 42}`}
                       />
                     </svg>
-                    
-                    {/* Center Content */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                       <div className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tighter mb-1">92</div>
-                       <div className="text-[10px] sm:text-xs font-extrabold text-[#10B981] uppercase tracking-wider bg-green-100 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full border border-green-200/50">Excellent</div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums">{focusEfficiency}</span>
+                      <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">of 100</span>
                     </div>
-                 </div>
-                 
-                 {/* Stats Grid */}
-                 <div className="space-y-2 sm:space-y-3 mt-3 sm:mt-4">
-                    {/* Overtime Indicator */}
-                    <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 sm:p-3.5 border-2 border-green-200/50 shadow-sm hover:shadow-md transition-all group">
-                       <div className="flex items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                             <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 sm:mb-1.5">Overtime This Week</div>
-                             <div className="text-lg sm:text-xl font-extrabold text-slate-900">2.5h</div>
-                          </div>
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center border-2 border-green-200/50 shrink-0">
-                             <div className="text-[10px] sm:text-xs font-extrabold text-green-600">-18%</div>
-                          </div>
-                       </div>
-                       <div className="mt-1.5 sm:mt-2 text-[9px] sm:text-[10px] font-semibold text-green-600">Below company avg</div>
-                    </div>
-                    
-                    {/* Stress Level */}
-                    <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 sm:p-3.5 border-2 border-green-200/50 shadow-sm hover:shadow-md transition-all group">
-                       <div className="flex items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                             <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 sm:mb-1.5">Stress Indicator</div>
-                             <div className="text-lg sm:text-xl font-extrabold text-slate-900">Low</div>
-                          </div>
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center border-2 border-green-200/50 shrink-0">
-                             <svg className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                             </svg>
-                          </div>
-                       </div>
-                       <div className="mt-1.5 sm:mt-2 text-[9px] sm:text-[10px] font-semibold text-green-600">Healthy balance maintained</div>
-                    </div>
-                 </div>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0 space-y-0">
+                  <div className="flex items-center justify-between py-3 px-0 border-b border-slate-100">
+                    <span className="text-sm text-slate-500">High priority</span>
+                    <span className="text-sm font-semibold text-gray-900 tabular-nums">{highPriorityCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 px-0 border-b border-slate-100">
+                    <span className="text-sm text-slate-500">Overdue</span>
+                    <span className="text-sm font-semibold text-gray-900 tabular-nums">{overdueCount}</span>
+                  </div>
+                  <div className="pt-3">
+                    <span
+                      className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        focusEfficiency >= 70
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                          : focusEfficiency >= 40
+                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                      }`}
+                    >
+                      {focusEfficiency >= 70 ? 'On track' : focusEfficiency >= 40 ? 'Good' : 'Getting started'}
+                    </span>
+                  </div>
+                </div>
               </div>
-           </div>
-
-           {/* AI Insight (Square) */}
-           <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gradient-to-br from-[#F5F3FF] via-[#EEF2FF] to-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-5 md:p-6 border-2 border-[#C7D2FE] shadow-[0_20px_50px_-12px_rgba(79,70,229,0.25)] hover:shadow-[0_25px_60px_-12px_rgba(79,70,229,0.35)] transition-all duration-300 relative overflow-hidden group">
-              {/* Decorative dot top right */}
-              <div className="absolute top-3 sm:top-4 right-3 sm:right-4 w-1.5 sm:w-2 h-1.5 sm:h-2 bg-purple-300 rounded-full opacity-60"></div>
-              
-              <div className="relative z-10 flex flex-col h-full">
-                 {/* Header */}
-                 <div className="mb-3 sm:mb-4 md:mb-5">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                       <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 bg-[#5043F3] rounded-lg sm:rounded-xl flex items-center justify-center text-white shadow-md">
-                          <Zap size={16} className="sm:w-5 sm:h-5" fill="white" strokeWidth={2.5} />
-                       </div>
-                       <div>
-                          <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Thryv AI Insight</h3>
-                          <p className="text-[9px] sm:text-[10px] font-semibold text-[#5043F3] uppercase tracking-widest mt-0.5">PERSONALIZED ANALYSIS</p>
-                       </div>
-                    </div>
-                 </div>
-                 
-                 {/* Central Graphic with Concentric Dashed Circles */}
-                 <div className="relative w-full flex items-center justify-center mb-3 sm:mb-4 md:mb-5" style={{ minHeight: '140px' }}>
-                    <div className="relative w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40">
-                       {/* Outer dashed circle */}
-                       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 160 160">
-                          <circle
-                             cx="80"
-                             cy="80"
-                             r="70"
-                             fill="none"
-                             stroke="#C7D2FE"
-                             strokeWidth="2"
-                             strokeDasharray="4 4"
-                             opacity="0.6"
-                          />
-                          {/* Dots on outer circle */}
-                          {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => {
-                             const rad = (angle * Math.PI) / 180;
-                             const x = 80 + 70 * Math.cos(rad);
-                             const y = 80 + 70 * Math.sin(rad);
-                             return (
-                                <circle key={i} cx={x} cy={y} r="2" fill="#A5B4FC" opacity="0.7" />
-                             );
-                          })}
-                       </svg>
-                       
-                       {/* Middle dashed circle */}
-                       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 160 160">
-                          <circle
-                             cx="80"
-                             cy="80"
-                             r="50"
-                             fill="none"
-                             stroke="#C7D2FE"
-                             strokeWidth="2"
-                             strokeDasharray="3 3"
-                             opacity="0.5"
-                          />
-                          {/* Dots on middle circle */}
-                          {[0, 60, 120, 180, 240, 300].map((angle, i) => {
-                             const rad = (angle * Math.PI) / 180;
-                             const x = 80 + 50 * Math.cos(rad);
-                             const y = 80 + 50 * Math.sin(rad);
-                             return (
-                                <circle key={i} cx={x} cy={y} r="1.5" fill="#A5B4FC" opacity="0.6" />
-                             );
-                          })}
-                       </svg>
-                       
-                       {/* Inner dashed circle */}
-                       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 160 160">
-                          <circle
-                             cx="80"
-                             cy="80"
-                             r="30"
-                             fill="none"
-                             stroke="#C7D2FE"
-                             strokeWidth="2"
-                             strokeDasharray="2 2"
-                             opacity="0.4"
-                          />
-                       </svg>
-                       
-                       {/* Center icon */}
-                       <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 bg-[#5043F3] rounded-lg sm:rounded-xl flex items-center justify-center text-white shadow-lg">
-                             <Zap size={18} className="sm:w-5 sm:h-5 md:w-[22px] md:h-[22px]" fill="white" strokeWidth={2.5} />
-                          </div>
-                       </div>
-                    </div>
-                 </div>
-                 
-                 {/* Insight Text Card */}
-                 <div className="flex-1 flex flex-col">
-                    <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-5 shadow-sm border border-gray-100 mb-3 sm:mb-4">
-                       <p className="text-xs sm:text-sm font-normal text-slate-800 leading-relaxed mb-2">
-                          You tend to hit deep focus states faster after <span className="font-semibold text-[#5043F3] bg-purple-100 px-1.5 sm:px-2 py-0.5 rounded">10:30</span> <span className="font-semibold text-[#5043F3] bg-purple-100 px-1.5 sm:px-2 py-0.5 rounded">AM</span>.
-                       </p>
-                       <p className="text-xs sm:text-sm font-normal text-slate-800 leading-relaxed">
-                          Consider moving your daily stand-up to <span className="font-semibold text-[#5043F3] bg-purple-100 px-1.5 sm:px-2 py-0.5 rounded">9:30 AM</span> to free up this block.
-                       </p>
-                    </div>
-                    
-                    {/* Action Button */}
-                    <button className="w-full px-4 sm:px-5 py-2.5 sm:py-3 bg-[#5043F3] hover:bg-[#4337D9] text-white rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all uppercase tracking-wider shadow-md hover:shadow-lg">
-                       <span>VIEW FULL ANALYSIS</span>
-                       <MoveRight size={12} className="sm:w-3.5 sm:h-3.5" strokeWidth={2.5} />
-                    </button>
-                 </div>
+              {/* Fill space: next milestone + tip */}
+              <div className="mt-6 pt-5 border-t border-slate-100 flex-1 flex flex-col justify-end gap-4">
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Next milestone</p>
+                  {focusEfficiency >= 70 ? (
+                    <p className="text-sm text-slate-600">You&apos;re on track. Keep your rhythm with regular focus sessions.</p>
+                  ) : focusEfficiency >= 40 ? (
+                    <>
+                      <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+                        <span>70% · On track</span>
+                        <span>{70 - focusEfficiency}% to go</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-indigo-500" style={{ width: `${((focusEfficiency - 40) / 30) * 100}%` }} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+                        <span>40% · Good</span>
+                        <span>{40 - focusEfficiency}% to go</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-indigo-500" style={{ width: `${(focusEfficiency / 40) * 100}%` }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {displaySessions < 2 ? 'Complete more focus sessions and move tasks to Done to improve your balance score.' : highPriorityCount > 0 ? 'Tackle high-priority tasks in focus mode to see your score rise.' : 'Balance reflects focus time and task progress together.'}
+                </p>
               </div>
-           </div>
+            </div>
+          </div>
 
-      </div>
+          {/* Focus & tasks summary */}
+          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+            <div className="p-6">
+            <div className="pb-4 mb-4 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight">Focus & tasks</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { label: 'Focus blocks today', value: displaySessions, icon: CircleDot, c: 'text-indigo-600', bg: 'bg-indigo-100' },
+                { label: "Today's focus tasks", value: todaysFocusCount, icon: Target, c: 'text-amber-600', bg: 'bg-amber-100' },
+                { label: 'In progress', value: inProgressCount, icon: Activity, c: 'text-cyan-600', bg: 'bg-cyan-100' },
+                { label: 'Categories', value: Object.keys(categoryCounts).length, icon: ListTodo, c: 'text-slate-600', bg: 'bg-slate-100' },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-slate-200/80 p-4 transition-all duration-200 hover:shadow-md hover:border-slate-300/60" style={{ boxShadow: '0 2px 12px -4px rgba(0,0,0,0.06)' }}>
+                  <div className="flex items-start gap-3">
+                    <div className={`shrink-0 w-9 h-9 rounded-lg ${item.bg} flex items-center justify-center ${item.c}`}>
+                      <item.icon className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{item.label}</p>
+                      <p className="text-xl font-bold text-gray-900 tabular-nums mt-0.5">{item.value}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {Object.keys(categoryCounts).length > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">By category</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(categoryCounts).map(([cat, count]) => (
+                    <span key={cat} className="px-2.5 py-1 rounded-lg bg-[#5043F3]/10 text-[#5043F3] text-xs font-semibold border border-[#5043F3]/20">
+                      {cat}: {count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            </div>
+          </div>
+
+          {/* AI Insight */}
+          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+            <div className="p-6 flex flex-col flex-1">
+            <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-100">
+              <div className="w-10 h-10 rounded-xl bg-[#5043F3] flex items-center justify-center shadow-lg shadow-indigo-200/50">
+                <Zap className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 tracking-tight">Thryv AI</h2>
+                <p className="text-[10px] font-semibold text-[#5043F3] uppercase tracking-wider">Personalized</p>
+              </div>
+            </div>
+            <div className="flex-1 rounded-xl bg-indigo-50/50 border border-indigo-100 p-4 mb-4">
+              {displaySessions >= 4 && todaysFocusCount <= 2 ? (
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  Strong focus today — <span className="text-indigo-600 font-medium">{displaySessions} sessions</span>. Consider moving a task to Today&apos;s Focus.
+                </p>
+              ) : displaySessions < 2 && todaysFocusCount > 0 ? (
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  You have <span className="text-indigo-600 font-medium">{todaysFocusCount} tasks</span> planned. Start a Pomodoro to build momentum.
+                </p>
+              ) : tasksCompletedThisWeek > 0 && streak >= 2 ? (
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  <span className="text-emerald-600 font-medium">{tasksCompletedThisWeek} tasks</span> done this week and a <span className="text-amber-600 font-medium">{streak}-day</span> streak. Keep it up.
+                </p>
+              ) : highPriorityCount > 0 ? (
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  <span className="text-amber-600 font-medium">{highPriorityCount} high-priority</span> tasks — tackle them in focus mode.
+                </p>
+              ) : totalTasks === 0 && focusSessions.length === 0 ? (
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  Add tasks and run focus sessions to see personalized insights here.
+                </p>
+              ) : (
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  Sessions and task progress are synced. Complete more to unlock detailed trends.
+                </p>
+              )}
+            </div>
+            <Link
+              href="/tasks"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#5043F3] hover:bg-[#4337D9] text-white font-semibold text-sm transition-colors shadow-lg shadow-indigo-200/50"
+            >
+              View tasks
+              <MoveRight className="w-4 h-4" />
+            </Link>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );
-}
-
-/* --- Helper Components --- */
-
-function Cell({ c }) {
-  // c = 0 (empty) to 5 (darkest)
-  const colors = [
-     'bg-slate-100', // 0
-     'bg-[#E0E7FF]', // 1
-     'bg-[#C7D2FE]', // 2
-     'bg-[#818CF8]', // 3
-     'bg-[#6366F1]', // 4
-     'bg-[#4338CA]', // 5
-  ];
-  return <div className={`w-full h-8 rounded-lg ${colors[c]} transition-all duration-300 hover:scale-110`}></div>;
-}
-
-function VelocityBar({ label, points, width, color = 'bg-[#5043F3]' }) {
-   return (
-      <div className="group cursor-default">
-         <div className="flex justify-between mb-1.5 sm:mb-2 text-[10px] sm:text-xs font-bold text-slate-600 tracking-wide">
-            <span>{label}</span>
-            <span className="text-slate-900">{points} pts</span>
-         </div>
-         <div className="h-2.5 sm:h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-            <div className={`h-full ${color} rounded-full relative group-hover:brightness-110 transition-all duration-500 ease-out`} style={{ width }}>
-               {/* Shine effect */}
-               <div className="absolute top-0 bottom-0 right-0 w-full bg-gradient-to-l from-white/20 to-transparent"></div>
-            </div>
-         </div>
-      </div>
-   )
 }

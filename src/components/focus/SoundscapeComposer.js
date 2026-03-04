@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useContext } from 'react';
+import { createPortal } from 'react-dom';
 import { usePathname } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
@@ -1256,8 +1257,8 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       })()
     : 0;
 
-  return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-300 ease-out ${
+  const modalContent = (
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-300 ease-out ${
       isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
     }`}>
       {/* Backdrop */}
@@ -2069,4 +2070,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       `}</style>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modalContent, document.body);
 }

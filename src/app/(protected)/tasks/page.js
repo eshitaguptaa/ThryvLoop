@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { X, Plus, Calendar, Clock, User, Edit2, Trash2, ArrowRight, ArrowLeft } from 'lucide-react';
 import { getSupabaseClient, getUserStorageItem, setSupabaseAuthToken, setUserStorageItem } from '@/utils/userStorage';
+import { useCelebration } from '@/contexts/CelebrationContext';
 
 // Category colors mapping
 const categoryColors = {
@@ -28,44 +30,16 @@ const emptyTasks = {
   todaysFocus: [],
   inProgress: [],
   backlog: [],
+  done: [],
 };
-
-const defaultTaskSeed = () => ([
-  {
-    title: 'Finalize Q3 Budget Deck',
-    category: 'Finance',
-    column_key: 'todaysFocus',
-    assigned_users: [
-      { name: 'Alex', avatar: 'https://i.pravatar.cc/150?u=alex' },
-      { name: 'Sarah', avatar: 'https://i.pravatar.cc/150?u=sarah' },
-    ],
-    due_date: new Date().toISOString(),
-    priority: { level: 'High Priority', color: 'bg-red-500' },
-  },
-  {
-    title: 'API Integration w/ Vendor',
-    category: 'Dev',
-    column_key: 'inProgress',
-    assigned_users: [
-      { name: 'Mike', avatar: 'https://i.pravatar.cc/150?u=mike' },
-    ],
-    due_date: new Date(Date.now() + 86400000).toISOString(),
-    priority: { level: 'High Priority', color: 'bg-red-500' },
-  },
-  {
-    title: 'Research Competitor UI',
-    category: 'Finance',
-    column_key: 'backlog',
-    assigned_users: [],
-    priority: null,
-  },
-]);
 
 export default function TasksPage() {
   const { user } = useUser();
+  const pathname = usePathname();
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const userId = user?.id || null;
   const [tasks, setTasks] = useState(emptyTasks);
+  const prevPathnameRef = useRef(pathname);
   const [searchQuery, setSearchQuery] = useState('');
   const [quickCapture, setQuickCapture] = useState('');
   const [viewMode, setViewMode] = useState('grid');
@@ -79,9 +53,16 @@ export default function TasksPage() {
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [taskError, setTaskError] = useState('');
-  const seedGuardRef = useRef(false);
+  
+  const addTaskInProgressRef = useRef(false);
+  const moveInProgressRef = useRef(new Set());
+  const fetchInProgressRef = useRef(false);
+  const fetchIdRef = useRef(0);
+  const fetchCancelledRef = useRef(false);
 
   const getSupabase = () => getSupabaseClient();
+
+  const taskIdMatches = (a, b) => String(a) === String(b);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -141,18 +122,28 @@ export default function TasksPage() {
       dueDate: row.due_date || null,
       priority: row.priority || null,
       createdAt: row.created_at || new Date().toISOString(),
+      updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
       column: row.column_key || 'backlog',
+      completedAt: row.completed_at || null,
     };
   };
 
   const groupTasksByColumn = (rows) => {
-    const grouped = { ...emptyTasks };
-    const seen = new Set();
-    rows.forEach((row) => {
-      const task = mapRowToTask(row);
-      if (seen.has(task.id)) return;
-      seen.add(task.id);
-      const column = grouped[task.column] ? task.column : 'backlog';
+    const grouped = { todaysFocus: [], inProgress: [], backlog: [], done: [] };
+    const tasks = rows.map((row) => mapRowToTask(row));
+    const byId = new Map();
+    tasks.forEach((task) => {
+      const id = String(task?.id ?? '').trim();
+      if (!id) return;
+      const existing = byId.get(id);
+      const taskUpdated = task.updatedAt || task.createdAt || '';
+      const existingUpdated = existing?.updatedAt || existing?.createdAt || '';
+      if (!existing || taskUpdated > existingUpdated) {
+        byId.set(id, task);
+      }
+    });
+    byId.forEach((task) => {
+      const column = grouped[task.column] != null ? task.column : 'backlog';
       grouped[column].push(task);
     });
     return grouped;
@@ -166,55 +157,20 @@ export default function TasksPage() {
       } else if (!userId) {
         setTaskError('User not loaded. Please sign in again.');
       }
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Supabase not ready or user missing; tasks will not sync.');
-      }
       return false;
     }
     return true;
   };
 
-  const seedDefaultTasks = async () => {
-    const supabase = getSupabase();
-    if (!ensureSupabase()) return [];
-    const seedMarker = {
-      user_id: userId,
-      key: 'tasks_seeded',
-      value: true,
-      updated_at: new Date().toISOString(),
-    };
-    const { error: seedFlagError } = await supabase
-      .from('user_preferences')
-      .insert(seedMarker);
-    if (seedFlagError) {
-      if (seedFlagError.code === '23505') return [];
-      throw seedFlagError;
-    }
-    const seedRows = defaultTaskSeed().map((task) => ({
-      ...task,
-      user_id: userId,
-    }));
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert(seedRows)
-      .select('*');
-    if (error) {
-      await supabase
-        .from('user_preferences')
-        .delete()
-        .eq('user_id', userId)
-        .eq('key', 'tasks_seeded');
-      throw error;
-    }
-    return data || [];
-  };
-
   const fetchTasks = async () => {
+    if (fetchInProgressRef.current) return;
     const supabase = getSupabase();
     if (!ensureSupabase()) {
       setIsLoadingTasks(false);
       return;
     }
+    fetchInProgressRef.current = true;
+    const thisFetchId = ++fetchIdRef.current;
     setIsLoadingTasks(true);
     setTaskError('');
     try {
@@ -224,28 +180,28 @@ export default function TasksPage() {
         .eq('user_id', userId)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      if (!data || data.length === 0) {
-        if (seedGuardRef.current) {
-          setTasks(emptyTasks);
-          return;
-        }
-        seedGuardRef.current = true;
-        const seeded = await seedDefaultTasks();
-        setTasks(groupTasksByColumn(seeded));
-      } else {
-        setTasks(groupTasksByColumn(data));
-      }
+      if (fetchIdRef.current !== thisFetchId || fetchCancelledRef.current) return;
+      
+      const next = !data || data.length === 0
+        ? { todaysFocus: [], inProgress: [], backlog: [], done: [] }
+        : groupTasksByColumn(data);
+      setTasks(next);
     } catch (error) {
+      if (fetchIdRef.current !== thisFetchId || fetchCancelledRef.current) return;
       const message = error?.message || error?.details || error?.hint || 'Unable to load tasks from Supabase.';
       console.error('Error loading tasks:', error, message);
       setTaskError(message);
     } finally {
-      setIsLoadingTasks(false);
+      if (fetchIdRef.current === thisFetchId && !fetchCancelledRef.current) {
+        setIsLoadingTasks(false);
+      }
+      fetchInProgressRef.current = false;
     }
   };
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !userId) return;
+    fetchCancelledRef.current = false;
     const ensureTokenAndFetch = async () => {
       const token = await getToken({ template: 'supabase' });
       if (!token) {
@@ -257,12 +213,45 @@ export default function TasksPage() {
       await fetchTasks();
     };
     ensureTokenAndFetch();
+    return () => {
+      fetchCancelledRef.current = true;
+    };
   }, [getToken, isLoaded, isSignedIn, userId]);
 
-  // Add task
+  useEffect(() => {
+    const wasOnTasks = prevPathnameRef.current === '/tasks';
+    const isOnTasks = pathname === '/tasks';
+    prevPathnameRef.current = pathname;
+    if (isOnTasks && !wasOnTasks && userId && isLoaded && isSignedIn) {
+      fetchCancelledRef.current = false;
+      const refetch = async () => {
+        const token = await getToken({ template: 'supabase' });
+        if (token) {
+          setSupabaseAuthToken(token);
+          await fetchTasks();
+        }
+      };
+      refetch();
+      return () => {
+        fetchCancelledRef.current = true;
+      };
+    }
+  }, [pathname, userId, isLoaded, isSignedIn, getToken]);
+
+  const ensureFreshToken = async () => {
+    const token = await getToken({ template: 'supabase' });
+    if (token) setSupabaseAuthToken(token);
+  };
+
   const addTask = async (taskData) => {
+    if (addTaskInProgressRef.current) return;
+    addTaskInProgressRef.current = true;
+    await ensureFreshToken();
     const supabase = getSupabase();
-    if (!ensureSupabase()) return;
+    if (!ensureSupabase()) {
+      addTaskInProgressRef.current = false;
+      return;
+    }
     setTaskError('');
     const row = {
       user_id: userId,
@@ -274,11 +263,7 @@ export default function TasksPage() {
       priority: taskData.priority || null,
     };
     try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert(row)
-        .select('*')
-        .single();
+      const { data, error } = await supabase.from('tasks').insert(row).select('*').single();
       if (error) throw error;
       const task = mapRowToTask(data);
       setTasks((prev) => {
@@ -287,70 +272,85 @@ export default function TasksPage() {
           next[column] = next[column].filter((item) => item.id !== task.id);
         });
         const column = next[task.column] ? task.column : 'backlog';
-        next[column] = [...next[column], task];
+        if (!next[column].some(t => taskIdMatches(t.id, task.id))) {
+            next[column] = [...next[column], task];
+        }
         return next;
       });
     } catch (error) {
       console.error('Error adding task:', error);
       setTaskError('Unable to add task.');
+    } finally {
+      addTaskInProgressRef.current = false;
     }
   };
 
-  // Update task
   const updateTask = async (taskId, updates) => {
+    await ensureFreshToken();
     const supabase = getSupabase();
-    if (!ensureSupabase()) return;
+    if (!ensureSupabase()) {
+      setTaskError('Could not connect. Please refresh the page.');
+      return false;
+    }
     setTaskError('');
     const payload = { updated_at: new Date().toISOString() };
     if (updates.title !== undefined) payload.title = updates.title;
     if (updates.category !== undefined) payload.category = updates.category;
-    if (updates.column !== undefined) payload.column_key = updates.column;
+    if (updates.column !== undefined) {
+      payload.column_key = updates.column;
+      payload.completed_at = updates.column === 'done' ? new Date().toISOString() : null;
+    }
     if (updates.assignedUsers !== undefined) payload.assigned_users = updates.assignedUsers;
     if (updates.dueDate !== undefined) payload.due_date = updates.dueDate ?? null;
     if (updates.priority !== undefined) payload.priority = updates.priority ?? null;
+    
     try {
+      const idForDb = typeof taskId === 'string' ? taskId : String(taskId);
       const { data, error } = await supabase
         .from('tasks')
         .update(payload)
-        .eq('id', taskId)
+        .eq('id', idForDb)
         .eq('user_id', userId)
-        .select('*')
-        .single();
+        .select('*');
       if (error) throw error;
-      const updatedTask = mapRowToTask(data);
+      const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
+      if (!row) {
+        throw new Error('Update matched no rows. Your session may have expired.');
+      }
+      const updatedTask = mapRowToTask(row);
       setTasks((prev) => {
         const next = { ...prev };
-        const fromColumn = Object.keys(next).find((column) =>
-          next[column].some((task) => task.id === taskId)
-        );
-        if (!fromColumn) return prev;
-        next[fromColumn] = next[fromColumn].filter((task) => task.id !== taskId);
+        Object.keys(next).forEach((col) => {
+          next[col] = next[col].filter((t) => !taskIdMatches(t.id, taskId));
+        });
         const toColumn = next[updatedTask.column] ? updatedTask.column : 'backlog';
-        next[toColumn] = [...next[toColumn], updatedTask];
+        if (!next[toColumn].some(t => taskIdMatches(t.id, updatedTask.id))) {
+            next[toColumn] = [...(next[toColumn] || []), updatedTask];
+        }
         return next;
       });
+      return true;
     } catch (error) {
+      const msg = error?.message ?? 'Unable to update task. Try refreshing the page.';
       console.error('Error updating task:', error);
-      setTaskError('Unable to update task.');
+      setTaskError(msg);
+      return false;
     }
   };
 
-  // Delete task
   const deleteTask = async (taskId) => {
+    await ensureFreshToken();
     const supabase = getSupabase();
     if (!ensureSupabase()) return;
     setTaskError('');
+    const idForDb = typeof taskId === 'string' ? taskId : String(taskId);
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId)
-        .eq('user_id', userId);
+      const { error } = await supabase.from('tasks').delete().eq('id', idForDb).eq('user_id', userId);
       if (error) throw error;
       setTasks((prev) => {
         const next = { ...prev };
-        Object.keys(next).forEach((column) => {
-          next[column] = next[column].filter((task) => task.id !== taskId);
+        Object.keys(next).forEach((col) => {
+          next[col] = next[col].filter((t) => !taskIdMatches(t.id, taskId));
         });
         return next;
       });
@@ -360,18 +360,124 @@ export default function TasksPage() {
     }
   };
 
-  // Move task between columns
+  const clearAllTasks = async () => {
+    if (!confirm('Delete all tasks? This cannot be undone.')) return;
+    await ensureFreshToken();
+    const supabase = getSupabase();
+    if (!ensureSupabase()) return;
+    try {
+      const { error } = await supabase.from('tasks').delete().eq('user_id', userId);
+      if (error) throw error;
+      setTasks(emptyTasks);
+      setTaskError('');
+      setShowFilterMenu(false);
+    } catch (error) {
+      console.error('Error clearing tasks:', error);
+      setTaskError('Unable to clear tasks.');
+    }
+  };
+
   const moveTask = async (taskId, fromColumn, toColumn) => {
     if (fromColumn === toColumn) return;
-    await updateTask(taskId, { column: toColumn });
+    const idKey = `${taskId}::${fromColumn}::${toColumn}`;
+    if (moveInProgressRef.current.has(idKey)) return;
+    moveInProgressRef.current.add(idKey);
+    
+    let taskToMove = null;
+    for (const col of Object.keys(tasks)) {
+      const found = tasks[col].find((t) => taskIdMatches(t.id, taskId));
+      if (found) {
+        taskToMove = found;
+        break;
+      }
+    }
+    if (!taskToMove) {
+      moveInProgressRef.current.delete(idKey);
+      return;
+    }
+    
+    const movedTask = { ...taskToMove, column: toColumn };
+    
+    // Optimistic Update
+    setTasks((prev) => {
+      const next = {
+        todaysFocus: prev.todaysFocus.filter((t) => !taskIdMatches(t.id, taskId)),
+        inProgress: prev.inProgress.filter((t) => !taskIdMatches(t.id, taskId)),
+        backlog: prev.backlog.filter((t) => !taskIdMatches(t.id, taskId)),
+        done: prev.done.filter((t) => !taskIdMatches(t.id, taskId)),
+      };
+      if (!next[toColumn].some(t => taskIdMatches(t.id, taskId))) {
+          next[toColumn] = [...next[toColumn], movedTask];
+      }
+      return next;
+    });
+    
+    try {
+      const ok = await updateTask(taskId, { column: toColumn });
+      if (!ok && taskToMove) {
+        // Revert Update
+        setTasks((prev) => {
+          const next = {
+            todaysFocus: prev.todaysFocus.filter((t) => !taskIdMatches(t.id, taskId)),
+            inProgress: prev.inProgress.filter((t) => !taskIdMatches(t.id, taskId)),
+            backlog: prev.backlog.filter((t) => !taskIdMatches(t.id, taskId)),
+            done: prev.done.filter((t) => !taskIdMatches(t.id, taskId)),
+          };
+          next[fromColumn] = [...next[fromColumn], taskToMove];
+          return next;
+        });
+        setTaskError('Could not save move. Please try again.');
+      }
+    } finally {
+      moveInProgressRef.current.delete(idKey);
+    }
   };
 
-  // Complete task (move to completed or delete)
-  const completeTask = (taskId) => {
-    void deleteTask(taskId);
+  const { showCelebration } = useCelebration();
+
+  const completeTask = (task) => {
+    const taskObj = typeof task === 'object' && task != null ? task : null;
+    const taskId = taskObj?.id != null ? taskObj.id : (typeof task === 'string' || typeof task === 'number' ? task : null);
+    const taskTitle = taskObj?.title ?? null;
+    if (taskId == null || typeof taskId === 'object') return;
+
+    setTasks((prev) => {
+      const next = {
+        todaysFocus: [...prev.todaysFocus],
+        inProgress: [...prev.inProgress],
+        backlog: [...prev.backlog],
+        done: [...prev.done],
+      };
+      let taskToMove = null;
+      for (const col of Object.keys(next)) {
+        const found = next[col].find((t) => taskIdMatches(t.id, taskId));
+        if (found) {
+          taskToMove = found;
+          break;
+        }
+      }
+      if (!taskToMove) return prev;
+      
+      const movedTask = {
+        ...taskToMove,
+        column: 'done',
+        completedAt: new Date().toISOString(),
+      };
+      Object.keys(next).forEach((col) => {
+        next[col] = next[col].filter((t) => !taskIdMatches(t.id, taskId));
+      });
+      if (!next.done.some(t => taskIdMatches(t.id, taskId))) {
+          next.done = [...next.done, movedTask];
+      }
+      return next;
+    });
+    showCelebration({ type: 'task', taskTitle: taskTitle ?? 'Task' });
+    updateTask(taskId, { column: 'done' }).catch((err) => {
+      console.error('Complete task failed:', err);
+      setTaskError('Could not save to server.');
+    });
   };
 
-  // Handle quick capture
   const handleQuickCapture = (e) => {
     if (e.key === 'Enter' && quickCapture.trim()) {
       void addTask({
@@ -382,64 +488,68 @@ export default function TasksPage() {
     }
   };
 
-  // Filter tasks
   const filterTasks = (taskList) => {
     let filtered = taskList;
-
-    // Search filter
     if (searchQuery.trim()) {
       filtered = filtered.filter(task =>
         task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         task.category.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-
-    // Category filter
     if (filterCategory !== 'all') {
       filtered = filtered.filter(task => task.category === filterCategory);
     }
-
-    // Priority filter
     if (filterPriority !== 'all') {
       filtered = filtered.filter(task => {
         if (filterPriority === 'none') return !task.priority;
         return task.priority?.level === filterPriority;
       });
     }
-
     return filtered;
   };
 
   const dedupeTasks = (taskList) => {
     const seen = new Set();
     return taskList.filter((task) => {
-      if (seen.has(task.id)) return false;
-      seen.add(task.id);
+      const id = String(task?.id ?? '').trim();
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
       return true;
     });
   };
 
-  // Get all unique categories
+  const normalizeTasksForDisplay = (tasksObj) => {
+    const seen = new Set();
+    const colOrder = ['todaysFocus', 'inProgress', 'backlog', 'done'];
+    const out = { todaysFocus: [], inProgress: [], backlog: [], done: [] };
+    colOrder.forEach((col) => {
+      const list = tasksObj[col] || [];
+      out[col] = list.filter((t) => {
+        const id = String(t?.id ?? '').trim();
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+    });
+    return out;
+  };
+
+  const normalizedTasks = normalizeTasksForDisplay(tasks);
   const categories = Array.from(new Set(
-    Object.values(tasks).flat().map(t => t.category)
+    Object.values(normalizedTasks).flat().map(t => t.category)
   ));
 
-  // Use the same deduplicated + filtered lists that are actually displayed in the columns
-  const displayTodaysFocus = dedupeTasks(filterTasks(tasks.todaysFocus));
-  const displayInProgress = dedupeTasks(filterTasks(tasks.inProgress));
-  const displayBacklog = dedupeTasks(filterTasks(tasks.backlog));
+  const displayTodaysFocus = dedupeTasks(filterTasks(normalizedTasks.todaysFocus));
+  const displayInProgress = dedupeTasks(filterTasks(normalizedTasks.inProgress));
+  const displayBacklog = dedupeTasks(filterTasks(normalizedTasks.backlog));
   const highPriorityCount = [...displayTodaysFocus, ...displayInProgress, ...displayBacklog]
     .filter(t => t.priority?.level === 'High Priority').length;
 
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-6 md:px-8 md:pt-10 md:pb-8 lg:px-12 lg:pt-12 lg:pb-10 font-(--font-poppins)">
       <div className="max-w-7xl mx-auto">
-        
-        {/* Header Section */}
         <header className="mb-8">
-          {/* Top Row */}
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between mb-6 gap-4">
-            {/* Left Side */}
             <div className="flex-1">
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-2">
                 My Tasks
@@ -448,7 +558,6 @@ export default function TasksPage() {
                 You have <span className="text-red-500 font-bold">{highPriorityCount} high-priority</span> tasks pending.
               </p>
               
-              {/* Quick Capture */}
               <div className="relative max-w-md">
                 <input
                   type="text"
@@ -472,9 +581,7 @@ export default function TasksPage() {
               </div>
             </div>
             
-            {/* Right Side */}
             <div className="flex flex-col gap-4 w-full lg:w-auto">
-              {/* View and New Task */}
               <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <span className="text-xs sm:text-sm text-gray-600 font-medium hidden sm:inline">View</span>
@@ -516,7 +623,6 @@ export default function TasksPage() {
                 </button>
               </div>
               
-              {/* Search and Filter */}
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="relative flex-1 min-w-0">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -588,6 +694,14 @@ export default function TasksPage() {
                             Clear Filters
                           </button>
                         )}
+                        <div className="border-t border-gray-200 pt-4 mt-4">
+                          <button
+                            onClick={clearAllTasks}
+                            className="w-full px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            Clear all tasks (start fresh)
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -603,18 +717,16 @@ export default function TasksPage() {
           </div>
         )}
 
-        {/* Task Columns - Grid View */}
         {isLoadingTasks ? (
           <div className="text-center py-12 text-gray-500 text-sm">Loading tasks...</div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             
-            {/* Today's Focus Column */}
             <TaskColumn
               title="Today's Focus"
               color="purple"
               columnKey="todaysFocus"
-              tasks={dedupeTasks(filterTasks(tasks.todaysFocus))}
+              tasks={dedupeTasks(filterTasks(normalizedTasks.todaysFocus))}
               onMoveTask={(taskId, toColumn) => moveTask(taskId, 'todaysFocus', toColumn)}
               onCompleteTask={completeTask}
               onEditTask={(task) => {
@@ -646,12 +758,11 @@ export default function TasksPage() {
               viewMode={viewMode}
             />
 
-            {/* In Progress Column */}
             <TaskColumn
               title="In Progress"
               color="orange"
               columnKey="inProgress"
-              tasks={dedupeTasks(filterTasks(tasks.inProgress))}
+              tasks={dedupeTasks(filterTasks(normalizedTasks.inProgress))}
               onMoveTask={(taskId, toColumn) => moveTask(taskId, 'inProgress', toColumn)}
               onCompleteTask={completeTask}
               onEditTask={(task) => {
@@ -683,12 +794,11 @@ export default function TasksPage() {
               viewMode={viewMode}
             />
 
-            {/* Backlog Column */}
             <TaskColumn
               title="Backlog"
               color="gray"
               columnKey="backlog"
-              tasks={dedupeTasks(filterTasks(tasks.backlog))}
+              tasks={dedupeTasks(filterTasks(normalizedTasks.backlog))}
               onMoveTask={(taskId, toColumn) => moveTask(taskId, 'backlog', toColumn)}
               onCompleteTask={completeTask}
               onEditTask={(task) => {
@@ -720,14 +830,48 @@ export default function TasksPage() {
               viewMode={viewMode}
             />
 
+            <TaskColumn
+              title="Done"
+              color="green"
+              columnKey="done"
+              tasks={dedupeTasks(filterTasks(normalizedTasks.done))}
+              onMoveTask={(taskId, toColumn) => moveTask(taskId, 'done', toColumn)}
+              onCompleteTask={completeTask}
+              onEditTask={(task) => {
+                setEditingTask({ ...task, column: 'done' });
+                setIsModalOpen(true);
+              }}
+              onDeleteTask={deleteTask}
+              draggedTask={draggedTask}
+              draggedFromColumn={draggedFromColumn}
+              dragOverColumn={dragOverColumn}
+              onDragStart={(task, fromColumn) => {
+                setDraggedTask(task);
+                setDraggedFromColumn(fromColumn);
+              }}
+              onDragEnd={() => {
+                setDraggedTask(null);
+                setDraggedFromColumn(null);
+                setDragOverColumn(null);
+              }}
+              onDragOver={(column) => setDragOverColumn(column)}
+              onDrop={(toColumn) => {
+                if (draggedTask && draggedFromColumn && toColumn !== draggedFromColumn) {
+                  moveTask(draggedTask.id, draggedFromColumn, toColumn);
+                }
+                setDraggedTask(null);
+                setDraggedFromColumn(null);
+                setDragOverColumn(null);
+              }}
+              viewMode={viewMode}
+            />
+
           </div>
         ) : (
-          /* List View */
           <div className="space-y-6">
-            {/* All Tasks in List Format */}
             <div className="bg-white rounded-xl p-6 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] border-2 border-gray-100/60">
               <div className="space-y-4">
-                {/* Today's Focus Tasks */}
+                {/* Today's Focus List */}
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -755,16 +899,16 @@ export default function TasksPage() {
                     dragOverColumn === 'todaysFocus' ? 'bg-blue-50 border-2 border-dashed border-blue-300 p-4' : 'p-0 border-2 border-transparent'
                   }`}
                 >
-                  {(dedupeTasks(filterTasks(tasks.todaysFocus)).length > 0 || dragOverColumn === 'todaysFocus') && (
+                  {(dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length > 0 || dragOverColumn === 'todaysFocus') && (
                     <>
                       <div className="flex items-center gap-2.5 mb-4">
                         <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0 shadow-sm"></div>
                         <h3 className="text-base font-bold text-gray-900">Today's Focus</h3>
-                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(tasks.todaysFocus)).length})</span>
+                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length})</span>
                       </div>
-                      {dedupeTasks(filterTasks(tasks.todaysFocus)).length > 0 ? (
+                      {dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length > 0 ? (
                         <div className="space-y-3">
-                          {dedupeTasks(filterTasks(tasks.todaysFocus)).map((task) => (
+                          {dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).map((task) => (
                             <TaskCard
                               key={task.id}
                               task={task}
@@ -801,7 +945,7 @@ export default function TasksPage() {
                   )}
                 </div>
 
-                {/* In Progress Tasks */}
+                {/* In Progress List */}
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -829,16 +973,16 @@ export default function TasksPage() {
                     dragOverColumn === 'inProgress' ? 'bg-blue-50 border-2 border-dashed border-blue-300 p-4' : 'p-0 border-2 border-transparent'
                   }`}
                 >
-                  {(dedupeTasks(filterTasks(tasks.inProgress)).length > 0 || dragOverColumn === 'inProgress') && (
+                  {(dedupeTasks(filterTasks(normalizedTasks.inProgress)).length > 0 || dragOverColumn === 'inProgress') && (
                     <>
                       <div className="flex items-center gap-2.5 mb-4 mt-6">
                         <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shrink-0 shadow-sm"></div>
                         <h3 className="text-base font-bold text-gray-900">In Progress</h3>
-                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(tasks.inProgress)).length})</span>
+                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.inProgress)).length})</span>
                       </div>
-                      {dedupeTasks(filterTasks(tasks.inProgress)).length > 0 ? (
+                      {dedupeTasks(filterTasks(normalizedTasks.inProgress)).length > 0 ? (
                         <div className="space-y-3">
-                          {dedupeTasks(filterTasks(tasks.inProgress)).map((task) => (
+                          {dedupeTasks(filterTasks(normalizedTasks.inProgress)).map((task) => (
                             <TaskCard
                               key={task.id}
                               task={task}
@@ -875,7 +1019,7 @@ export default function TasksPage() {
                   )}
                 </div>
 
-                {/* Backlog Tasks */}
+                {/* Backlog List */}
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -903,16 +1047,16 @@ export default function TasksPage() {
                     dragOverColumn === 'backlog' ? 'bg-blue-50 border-2 border-dashed border-blue-300 p-4' : 'p-0 border-2 border-transparent'
                   }`}
                 >
-                  {(dedupeTasks(filterTasks(tasks.backlog)).length > 0 || dragOverColumn === 'backlog') && (
+                  {(dedupeTasks(filterTasks(normalizedTasks.backlog)).length > 0 || dragOverColumn === 'backlog') && (
                     <>
                       <div className="flex items-center gap-2.5 mb-4 mt-6">
                         <div className="w-2.5 h-2.5 bg-gray-300 rounded-full shrink-0 shadow-sm"></div>
                         <h3 className="text-base font-bold text-gray-900">Backlog</h3>
-                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(tasks.backlog)).length})</span>
+                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.backlog)).length})</span>
                       </div>
-                      {dedupeTasks(filterTasks(tasks.backlog)).length > 0 ? (
+                      {dedupeTasks(filterTasks(normalizedTasks.backlog)).length > 0 ? (
                         <div className="space-y-3">
-                          {dedupeTasks(filterTasks(tasks.backlog)).map((task) => (
+                          {dedupeTasks(filterTasks(normalizedTasks.backlog)).map((task) => (
                             <TaskCard
                               key={task.id}
                               task={task}
@@ -949,10 +1093,85 @@ export default function TasksPage() {
                   )}
                 </div>
 
+                {/* Done List */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragOverColumn('done');
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (draggedTask && draggedFromColumn && 'done' !== draggedFromColumn) {
+                      moveTask(draggedTask.id, draggedFromColumn, 'done');
+                    }
+                    setDraggedTask(null);
+                    setDraggedFromColumn(null);
+                    setDragOverColumn(null);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget)) {
+                      if (dragOverColumn === 'done') {
+                        setDragOverColumn(null);
+                      }
+                    }
+                  }}
+                  className={`rounded-lg transition-all ${
+                    dragOverColumn === 'done' ? 'bg-blue-50 border-2 border-dashed border-blue-300 p-4' : 'p-0 border-2 border-transparent'
+                  }`}
+                >
+                  {(dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 || dragOverColumn === 'done') && (
+                    <>
+                      <div className="flex items-center gap-2.5 mb-4 mt-6">
+                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full shrink-0 shadow-sm"></div>
+                        <h3 className="text-base font-bold text-gray-900">Done</h3>
+                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.done)).length})</span>
+                      </div>
+                      {dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 ? (
+                        <div className="space-y-3">
+                          {dedupeTasks(filterTasks(normalizedTasks.done)).map((task) => (
+                            <TaskCard
+                              key={task.id}
+                              task={task}
+                              currentColumn="done"
+                              onMoveTask={(taskId, toColumn) => moveTask(taskId, 'done', toColumn)}
+                              onCompleteTask={completeTask}
+                              onEditTask={(task) => {
+                                setEditingTask({ ...task, column: 'done' });
+                                setIsModalOpen(true);
+                              }}
+                              onDeleteTask={deleteTask}
+                              onDragStart={(task, fromColumn) => {
+                                setDraggedTask(task);
+                                setDraggedFromColumn(fromColumn);
+                              }}
+                              onDragEnd={() => {
+                                setDraggedTask(null);
+                                setDraggedFromColumn(null);
+                                setDragOverColumn(null);
+                              }}
+                              isDragging={draggedTask?.id === task.id}
+                              viewMode={viewMode}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        dragOverColumn === 'done' && (
+                          <div className="text-center py-8 text-blue-500 font-medium text-sm">
+                            Drop task here
+                          </div>
+                        )
+                      )}
+                    </>
+                  )}
+                </div>
+
                 {/* Empty State */}
-                {filterTasks(tasks.todaysFocus).length === 0 && 
-                 filterTasks(tasks.inProgress).length === 0 && 
-                 filterTasks(tasks.backlog).length === 0 &&
+                {filterTasks(normalizedTasks.todaysFocus).length === 0 && 
+                 filterTasks(normalizedTasks.inProgress).length === 0 && 
+                 filterTasks(normalizedTasks.backlog).length === 0 &&
+                 filterTasks(normalizedTasks.done).length === 0 &&
                  !dragOverColumn && (
                   <div className="text-center py-12 text-gray-400 text-sm">
                     No tasks found
@@ -964,7 +1183,6 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Task Modal */}
       {isModalOpen && (
         <TaskModal
           task={editingTask}
@@ -984,7 +1202,6 @@ export default function TasksPage() {
         />
       )}
 
-      {/* Click outside to close filter menu */}
       {showFilterMenu && (
         <div
           className="fixed inset-0 z-40"
@@ -1017,10 +1234,10 @@ function TaskColumn({
     purple: 'bg-purple-500',
     orange: 'bg-orange-500',
     gray: 'bg-gray-300',
+    green: 'bg-green-500',
   };
 
   const isDragOver = dragOverColumn === columnKey;
-  const isDraggingFromHere = draggedFromColumn === columnKey;
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -1037,7 +1254,6 @@ function TaskColumn({
   const handleDragLeave = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only clear drag over if we're actually leaving the column area
     if (!e.currentTarget.contains(e.relatedTarget)) {
       if (dragOverColumn === columnKey) {
         onDragOver(null);
@@ -1105,15 +1321,26 @@ function TaskCard({
   viewMode = 'grid'
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [menuOpenUpward, setMenuOpenUpward] = useState(false);
+  const menuTriggerRef = useRef(null);
+
+  const MENU_ESTIMATED_HEIGHT = 280;
+
+  useLayoutEffect(() => {
+    if (!showMenu || !menuTriggerRef.current) return;
+    const rect = menuTriggerRef.current.getBoundingClientRect();
+    const spaceBelow = typeof window !== 'undefined' ? window.innerHeight - rect.bottom : MENU_ESTIMATED_HEIGHT;
+    setMenuOpenUpward(spaceBelow < MENU_ESTIMATED_HEIGHT);
+  }, [showMenu]);
 
   const columnOptions = [
     { value: 'todaysFocus', label: "Today's Focus" },
     { value: 'inProgress', label: 'In Progress' },
     { value: 'backlog', label: 'Backlog' },
+    { value: 'done', label: 'Done' },
   ].filter(opt => opt.value !== currentColumn);
 
   const handleDragStart = (e) => {
-    // Prevent drag if clicking on menu button or its children
     const target = e.target;
     if (target.closest('button') || target.closest('[draggable="false"]') || showMenu) {
       e.preventDefault();
@@ -1122,7 +1349,6 @@ function TaskCard({
     
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', task.id.toString());
-    // Add a slight delay to allow the drag image to be set
     setTimeout(() => {
       onDragStart(task, currentColumn);
     }, 0);
@@ -1147,8 +1373,8 @@ function TaskCard({
       }`}
       style={showMenu ? { pointerEvents: 'none' } : {}}
     >
-      {/* Menu Button */}
       <div 
+        ref={menuTriggerRef}
         className="absolute top-4 right-4 z-10" 
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
@@ -1175,13 +1401,9 @@ function TaskCard({
         
         {showMenu && (
           <div 
-            className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-2 z-1000 pointer-events-auto"
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-            }}
+            className={`absolute right-0 w-48 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-2 z-1000 pointer-events-auto ${menuOpenUpward ? 'bottom-full mb-2' : 'mt-2'}`}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             draggable={false}
           >
             <button
@@ -1189,16 +1411,8 @@ function TaskCard({
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                console.log('Edit clicked');
                 onEditTask(task);
                 setShowMenu(false);
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
               }}
               draggable={false}
               className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-none first:rounded-t-lg"
@@ -1216,16 +1430,8 @@ function TaskCard({
                   onClick={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    console.log('Move to clicked:', opt.value);
                     onMoveTask(task.id, opt.value);
                     setShowMenu(false);
-                  }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                  }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
                   }}
                   draggable={false}
                   className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100 cursor-pointer transition-all duration-200 rounded-none"
@@ -1234,46 +1440,34 @@ function TaskCard({
                 </button>
               ))}
             </div>
-            <div className="border-t border-gray-200 my-1"></div>
+            {currentColumn !== 'done' && (
+              <>
+                <div className="border-t border-gray-200 my-1"></div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onCompleteTask(task);
+                    setShowMenu(false);
+                  }}
+                  draggable={false}
+                  className="w-full px-4 py-2.5 text-left text-sm text-green-700 hover:bg-green-50 hover:text-green-800 active:bg-green-100 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-none"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Complete
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                console.log('Complete clicked');
-                onCompleteTask(task.id);
-                setShowMenu(false);
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-              }}
-              draggable={false}
-              className="w-full px-4 py-2.5 text-left text-sm text-green-700 hover:bg-green-50 hover:text-green-800 active:bg-green-100 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-none"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Complete
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                console.log('Delete clicked');
                 onDeleteTask(task.id);
                 setShowMenu(false);
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
               }}
               draggable={false}
               className="w-full px-4 py-2.5 text-left text-sm text-red-700 hover:bg-red-50 hover:text-red-800 active:bg-red-100 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-none last:rounded-b-lg"
@@ -1285,17 +1479,14 @@ function TaskCard({
         )}
       </div>
 
-      {/* Category Badge */}
       <div className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold mb-3 ${task.categoryColor}`}>
         {task.category}
       </div>
 
-      {/* Task Title */}
       <h3 className="text-base font-bold text-gray-900 mb-3 pr-8">
         {task.title}
       </h3>
 
-      {/* Priority Indicator */}
       {task.priority && (
         <div className="flex items-center gap-2 mb-3">
           <div className={`w-1 h-4 ${task.priority.color} rounded-full`}></div>
@@ -1303,9 +1494,7 @@ function TaskCard({
         </div>
       )}
 
-      {/* Footer */}
       <div className="flex items-center justify-between mt-4">
-        {/* Left Side - Due Time */}
         {task.dueTime && (
           <div className="flex items-center gap-1.5 text-xs text-gray-600">
             <Clock className="w-4 h-4" />
@@ -1313,7 +1502,6 @@ function TaskCard({
           </div>
         )}
         
-        {/* Right Side - Assigned Users */}
         {task.assignedUsers && task.assignedUsers.length > 0 && (
           <div className="flex items-center -space-x-2">
             {task.assignedUsers.map((user, index) => (
@@ -1333,18 +1521,12 @@ function TaskCard({
         )}
       </div>
 
-      {/* Click outside to close menu */}
       {showMenu && (
         <div
           className="fixed inset-0 z-999"
-          onClick={(e) => {
-            setShowMenu(false);
-          }}
+          onClick={() => setShowMenu(false)}
           onMouseDown={(e) => {
-            // Only close if clicking directly on the overlay, not on menu
-            if (e.target === e.currentTarget) {
-              setShowMenu(false);
-            }
+            if (e.target === e.currentTarget) setShowMenu(false);
           }}
         />
       )}
@@ -1390,19 +1572,14 @@ function TaskModal({ task, onClose, onSave }) {
           <h2 className="text-2xl font-bold text-gray-900">
             {task ? 'Edit Task' : 'New Task'}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Task Title *
-            </label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Task Title *</label>
             <input
               type="text"
               value={title}
@@ -1415,9 +1592,7 @@ function TaskModal({ task, onClose, onSave }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Category
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
@@ -1430,9 +1605,7 @@ function TaskModal({ task, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Priority
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Priority</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
@@ -1448,9 +1621,7 @@ function TaskModal({ task, onClose, onSave }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Due Date
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Due Date</label>
               <input
                 type="date"
                 value={dueDate}
@@ -1460,9 +1631,7 @@ function TaskModal({ task, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Due Time
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Due Time</label>
               <input
                 type="time"
                 value={dueTime}
@@ -1473,9 +1642,7 @@ function TaskModal({ task, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Column
-            </label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Column</label>
             <select
               value={column}
               onChange={(e) => setColumn(e.target.value)}

@@ -148,7 +148,7 @@ export default function FocusPage() {
   return (
     <div className="min-h-screen">
       {/* Landscape background is provided by layout */}
-      {showTask && <FocusTaskBar task="Drafting Q3 Report" />}
+      {showTask && <FocusTaskBar />}
       {showTimer && <TimerWidget />}
       {showMusic && <MusicWidget />}
       

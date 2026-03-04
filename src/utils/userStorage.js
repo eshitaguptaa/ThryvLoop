@@ -136,3 +136,32 @@ export async function setFocusTimerStateToSupabase(userId, state) {
     // ignore
   }
 }
+
+/**
+ * Log a completed focus session to Supabase for analytics (trends, peak hours).
+ * Call when a Pomodoro focus phase or Countdown completes, or when Stopwatch is paused/reset.
+ * Pass either sessionMinutes (countdown/pomodoro) or durationSeconds (stopwatch).
+ */
+export async function logFocusSessionToSupabase(userId, options) {
+  if (typeof window === 'undefined' || !userId) return;
+  const { sessionMinutes, durationSeconds: durationSecondsOpt, phase = 'session', mode = 'pomodoro' } = options || {};
+  const durationSeconds = durationSecondsOpt != null && durationSecondsOpt > 0
+    ? Math.floor(durationSecondsOpt)
+    : Math.max(1, (sessionMinutes || 25) * 60);
+  const completedAt = new Date();
+  const startedAt = new Date(completedAt.getTime() - durationSeconds * 1000);
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    await supabase.from('focus_sessions').insert({
+      user_id: userId,
+      started_at: startedAt.toISOString(),
+      completed_at: completedAt.toISOString(),
+      duration_seconds: durationSeconds,
+      phase: phase === 'longBreak' ? 'long_break' : phase === 'shortBreak' ? 'short_break' : 'session',
+      mode: mode || 'pomodoro',
+    });
+  } catch {
+    // ignore
+  }
+}
