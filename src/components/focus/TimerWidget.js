@@ -224,8 +224,8 @@ export default function TimerWidget() {
       <div
         className={`
           relative flex flex-col justify-between overflow-hidden
-          bg-black/30 backdrop-blur-2xl
-          rounded-[48px] shadow-2xl border
+          bg-black/40 backdrop-blur-2xl
+          rounded-3xl border
           pointer-events-auto select-none transition-colors duration-300
           ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}
         `}
@@ -233,8 +233,8 @@ export default function TimerWidget() {
           width: `${size.width}px`,
           height: `${size.height}px`,
           padding: `${padding}px`,
-          borderColor: `${theme.dot}40`,
-          boxShadow: `0 25px 50px -12px rgba(0,0,0,0.25), 0 0 0 1px ${theme.dot}30`,
+          borderColor: `${theme.dot}35`,
+          boxShadow: `0 32px 64px -16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06), 0 0 40px -10px ${theme.glow}`,
         }}
         onMouseDown={handleMouseDown}
       >
@@ -246,10 +246,10 @@ export default function TimerWidget() {
         <div className="flex items-center justify-between w-full relative z-10 mb-2">
           <div className="flex items-center gap-2.5">
             <div
-              className="w-1.5 h-1.5 rounded-full transition-colors duration-300"
-              style={{ backgroundColor: theme.dot, boxShadow: `0 0 8px ${theme.glow}` }}
+              className="w-2 h-2 rounded-full transition-colors duration-300"
+              style={{ backgroundColor: theme.dot, boxShadow: `0 0 10px ${theme.glow}` }}
             />
-            <span className="text-[10px] font-bold tracking-[0.2em] text-white/60 uppercase">
+            <span className="text-xs font-semibold tracking-wide text-white/70">
               {phaseLabel}
             </span>
           </div>
@@ -279,7 +279,7 @@ export default function TimerWidget() {
             {formatTime(time)}
           </h1>
           {timerMode === 'pomodoro' && (
-            <p className="text-white/45 text-xs mt-1">{sessionsCompletedToday} / 8 sessions today</p>
+            <p className="text-white/50 text-xs mt-1.5">{sessionsCompletedToday} of 8 sessions today</p>
           )}
         </div>
 

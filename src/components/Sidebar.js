@@ -106,7 +106,7 @@ const navigationItems = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ className = '' }) {
   const pathname = usePathname();
   const router = useRouter();
   const { signOut } = useClerk();
@@ -307,7 +307,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="fixed left-0 top-0 h-full w-24 bg-white flex flex-col items-center py-5 z-40 border-r border-gray-200 font-(--font-poppins)">
+    <div className={`fixed left-0 top-0 h-full w-24 bg-white flex flex-col items-center py-5 z-40 border-r border-gray-200 font-(--font-poppins) ${className}`}>
       {/* Logo/Brand Section */}
       <Link href="/home" className="mb-10 no-underline">
         <div className="w-10 h-10 flex items-center justify-center">

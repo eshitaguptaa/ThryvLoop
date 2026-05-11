@@ -58,45 +58,60 @@ function ConfettiBurst() {
   );
 }
 
-const CONTENT_BY_TYPE = {
-  task: {
-    headline: "You did it!",
-    subtext: (payload) =>
-      payload?.taskTitle
-        ? `"${payload.taskTitle}" is complete. One less thing on your mind.`
-        : 'Task complete. Nice work.',
-    cta: 'Keep going',
-    emoji: '✨',
-    gradient: 'from-indigo-500/25 via-[#5043F3]/20 to-violet-500/25',
-    accent: THRYV_PURPLE,
-  },
-  focus_session: {
-    headline: 'Focus session complete',
-    subtext: (payload) => {
-      const mins = payload?.sessionMinutes ?? 25;
-      return `${mins} minutes of deep work. Your future self will thank you.`;
-    },
-    cta: 'Start another',
-    emoji: '🎯',
-    gradient: 'from-indigo-500/25 via-[#5043F3]/20 to-violet-500/25',
-    accent: THRYV_PURPLE,
-  },
-  streak: {
-    headline: 'Streak unlocked!',
-    subtext: (payload) =>
-      payload?.days
-        ? `${payload.days} days in a row. You're on fire.`
-        : "You're building a habit. Keep it up.",
-    cta: 'View progress',
-    emoji: '🔥',
-    gradient: 'from-amber-500/20 via-orange-500/10 to-rose-500/20',
-    accent: '#f59e0b',
-  },
+// Varied congratulations — a different one each time (MS Teams style)
+const TASK_VARIANTS = [
+  { headline: "You did it!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" is done. One less thing on your mind.` : 'Task complete. Nice work.', emoji: '✨' },
+  { headline: "Nailed it!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — checked off.` : 'Done and done.', emoji: '🎯' },
+  { headline: "Task crushed!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" didn't stand a chance.` : 'Another one in the books.', emoji: '💪' },
+  { headline: "Boom!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — complete. Keep the momentum.` : 'You’re on a roll.', emoji: '🚀' },
+  { headline: "That’s a wrap!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" is finished.` : 'Task complete. Well done.', emoji: '🎬' },
+  { headline: "Mission accomplished!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — mission complete.` : 'Nice work.', emoji: '⭐' },
+  { headline: "Done and dusted!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — off the list.` : 'One less thing to think about.', emoji: '✨' },
+  { headline: "Crushing it!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" is behind you.` : 'Task complete. Keep going.', emoji: '🔥' },
+  { headline: "Check, check!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — checked. What’s next?` : 'Another win.', emoji: '✅' },
+  { headline: "Smooth sailing!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — done. You’re in the zone.` : 'Task complete. Great focus.', emoji: '🌊' },
+  { headline: "High five!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" is complete. Well played.` : 'Task done. Celebrate a little.', emoji: '🙌' },
+  { headline: "On fire!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — finished. You’re unstoppable.` : 'Another task down.', emoji: '🔥' },
+  { headline: "That’s what we like to see!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — complete.` : 'Task done. Keep it up.', emoji: '👏' },
+  { headline: "Shipped it!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — delivered.` : 'Task complete. Nice.', emoji: '📦' },
+  { headline: "Gold star!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — all done. You earned it.` : 'Task complete. Star worthy.', emoji: '🌟' },
+  { headline: "Noice!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — complete. Very noice.` : 'Task done. Noice.', emoji: '😎' },
+  { headline: "Crossed the line!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — finished. What’s next?` : 'Task complete. On to the next.', emoji: '🏁' },
+  { headline: "Wrapped up!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — wrapped. Clean and done.` : 'Task complete. Tidy.', emoji: '🎁' },
+  { headline: "Knocked out!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — knocked out.` : 'Task done. Power move.', emoji: '🥊' },
+  { headline: "Victory lap!", subtext: (p) => p?.taskTitle ? `"${p.taskTitle}" — complete. Take a quick lap.` : 'Task complete. You won this round.', emoji: '🏆' },
+];
+
+const FOCUS_VARIANTS = [
+  { headline: 'Focus session complete', subtext: (p) => `${p?.sessionMinutes ?? 25} minutes of deep work. Your future self will thank you.`, emoji: '🎯' },
+  { headline: 'You stayed in the zone', subtext: (p) => `${p?.sessionMinutes ?? 25} min of flow. Well done.`, emoji: '🧘' },
+  { headline: 'Session shipped', subtext: (p) => `${p?.sessionMinutes ?? 25} min of focused work. That’s real progress.`, emoji: '⚡' },
+  { headline: 'Deep work done', subtext: (p) => `${p?.sessionMinutes ?? 25} minutes. You showed up.`, emoji: '🔥' },
+  { headline: 'Focus time: complete', subtext: (p) => `${p?.sessionMinutes ?? 25} min in the books. Nice one.`, emoji: '✨' },
+];
+
+const STREAK_VARIANTS = [
+  { headline: 'Streak unlocked!', subtext: (p) => p?.days ? `${p.days} days in a row. You're on fire.` : "You're building a habit. Keep it up.", emoji: '🔥' },
+  { headline: 'Consistency wins', subtext: (p) => p?.days ? `${p.days} days straight. That’s discipline.` : "You're building a habit. Keep it up.", emoji: '💪' },
+  { headline: 'Streak alert!', subtext: (p) => p?.days ? `${p.days} days in a row. Don’t stop.` : "You're building a habit. Keep it up.", emoji: '⭐' },
+];
+
+const SHARED_BY_TYPE = {
+  task: { cta: 'Keep going', gradient: 'from-indigo-500/25 via-[#5043F3]/20 to-violet-500/25', accent: THRYV_PURPLE },
+  focus_session: { cta: 'Start another', gradient: 'from-indigo-500/25 via-[#5043F3]/20 to-violet-500/25', accent: THRYV_PURPLE },
+  streak: { cta: 'View progress', gradient: 'from-amber-500/20 via-orange-500/10 to-rose-500/20', accent: '#f59e0b' },
 };
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 function getContent(payload) {
   const type = payload?.type ?? 'task';
-  return CONTENT_BY_TYPE[type] || CONTENT_BY_TYPE.task;
+  const shared = SHARED_BY_TYPE[type] || SHARED_BY_TYPE.task;
+  const variants = type === 'task' ? TASK_VARIANTS : type === 'focus_session' ? FOCUS_VARIANTS : type === 'streak' ? STREAK_VARIANTS : TASK_VARIANTS;
+  const variant = pickRandom(variants);
+  return { ...shared, ...variant };
 }
 
 export default function CelebrationModal() {

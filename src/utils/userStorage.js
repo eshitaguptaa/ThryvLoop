@@ -90,6 +90,7 @@ export function removeUserStorageItem(userId, key) {
 }
 
 const FOCUS_TIMER_STATE_KEY = 'focus_timer_state';
+const FOCUS_TIMER_RECIPES_KEY = 'focus_timer_recipes';
 
 /**
  * Focus timer state shape for Supabase (user_preferences).
@@ -128,6 +129,51 @@ export async function setFocusTimerStateToSupabase(userId, state) {
           user_id: userId,
           key: FOCUS_TIMER_STATE_KEY,
           value: state,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,key' }
+      );
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Load custom focus timer recipes from Supabase (user_preferences).
+ */
+export async function getFocusTimerRecipesFromSupabase(userId) {
+  if (typeof window === 'undefined' || !userId) return [];
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('value')
+      .eq('user_id', userId)
+      .eq('key', FOCUS_TIMER_RECIPES_KEY)
+      .maybeSingle();
+    if (error || !data?.value) return [];
+    return Array.isArray(data.value) ? data.value : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persist custom focus timer recipes to Supabase (user_preferences).
+ */
+export async function setFocusTimerRecipesToSupabase(userId, recipes) {
+  if (typeof window === 'undefined' || !userId) return;
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    await supabase
+      .from('user_preferences')
+      .upsert(
+        {
+          user_id: userId,
+          key: FOCUS_TIMER_RECIPES_KEY,
+          value: Array.isArray(recipes) ? recipes : [],
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,key' }

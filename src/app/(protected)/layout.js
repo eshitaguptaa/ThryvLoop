@@ -60,7 +60,7 @@ export default function ProtectedLayout({ children }) {
               <SpacesBackgroundVideo />
               <div className={`relative z-10 flex min-h-screen ${pathname === '/focus' ? 'bg-transparent' : 'bg-linear-to-br from-slate-900 via-purple-900 to-slate-900'}`}>
                 <MusicProvider>
-                  {!isFullscreen && <Sidebar />}
+                  <Sidebar className={isFullscreen ? 'opacity-0 pointer-events-none' : ''} />
                   <main className={`flex-1 ${!isFullscreen ? 'ml-24' : ''}`}>
                     {children}
                   </main>

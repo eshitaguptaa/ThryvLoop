@@ -53,6 +53,7 @@ export default function TasksPage() {
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [taskError, setTaskError] = useState('');
+  const [clearConfirmColumn, setClearConfirmColumn] = useState(null);
   
   const addTaskInProgressRef = useRef(false);
   const moveInProgressRef = useRef(new Set());
@@ -374,6 +375,39 @@ export default function TasksPage() {
     } catch (error) {
       console.error('Error clearing tasks:', error);
       setTaskError('Unable to clear tasks.');
+    }
+  };
+
+  const columnDisplayNames = {
+    todaysFocus: "Today's Focus",
+    inProgress: 'In Progress',
+    backlog: 'Backlog',
+    done: 'Done',
+  };
+
+  const openClearColumnConfirm = (columnKey) => {
+    const list = tasks[columnKey] || [];
+    if (list.length === 0) return;
+    setClearConfirmColumn(columnKey);
+  };
+
+  const clearColumn = async (columnKey) => {
+    const list = tasks[columnKey] || [];
+    if (list.length === 0) return;
+    setClearConfirmColumn(null);
+    await ensureFreshToken();
+    const supabase = getSupabase();
+    if (!ensureSupabase()) return;
+    const ids = list.map((t) => t.id).filter(Boolean);
+    if (ids.length === 0) return;
+    try {
+      const { error } = await supabase.from('tasks').delete().in('id', ids).eq('user_id', userId);
+      if (error) throw error;
+      setTasks((prev) => ({ ...prev, [columnKey]: [] }));
+      setTaskError('');
+    } catch (error) {
+      console.error('Error clearing column:', error);
+      setTaskError('Unable to clear column.');
     }
   };
 
@@ -734,6 +768,7 @@ export default function TasksPage() {
                 setIsModalOpen(true);
               }}
               onDeleteTask={deleteTask}
+              onClearColumn={openClearColumnConfirm}
               draggedTask={draggedTask}
               draggedFromColumn={draggedFromColumn}
               dragOverColumn={dragOverColumn}
@@ -770,6 +805,7 @@ export default function TasksPage() {
                 setIsModalOpen(true);
               }}
               onDeleteTask={deleteTask}
+              onClearColumn={openClearColumnConfirm}
               draggedTask={draggedTask}
               draggedFromColumn={draggedFromColumn}
               dragOverColumn={dragOverColumn}
@@ -806,6 +842,7 @@ export default function TasksPage() {
                 setIsModalOpen(true);
               }}
               onDeleteTask={deleteTask}
+              onClearColumn={openClearColumnConfirm}
               draggedTask={draggedTask}
               draggedFromColumn={draggedFromColumn}
               dragOverColumn={dragOverColumn}
@@ -842,6 +879,7 @@ export default function TasksPage() {
                 setIsModalOpen(true);
               }}
               onDeleteTask={deleteTask}
+              onClearColumn={openClearColumnConfirm}
               draggedTask={draggedTask}
               draggedFromColumn={draggedFromColumn}
               dragOverColumn={dragOverColumn}
@@ -901,10 +939,23 @@ export default function TasksPage() {
                 >
                   {(dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length > 0 || dragOverColumn === 'todaysFocus') && (
                     <>
-                      <div className="flex items-center gap-2.5 mb-4">
-                        <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0 shadow-sm"></div>
-                        <h3 className="text-base font-bold text-gray-900">Today's Focus</h3>
-                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length})</span>
+                      <div className="flex items-center justify-between gap-2 mb-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0 shadow-sm"></div>
+                          <h3 className="text-base font-bold text-gray-900">Today's Focus</h3>
+                          <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length})</span>
+                        </div>
+                        {dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openClearColumnConfirm('todaysFocus')}
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                            title="Clear all tasks from Today's Focus"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Clear all
+                          </button>
+                        )}
                       </div>
                       {dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length > 0 ? (
                         <div className="space-y-3">
@@ -975,10 +1026,23 @@ export default function TasksPage() {
                 >
                   {(dedupeTasks(filterTasks(normalizedTasks.inProgress)).length > 0 || dragOverColumn === 'inProgress') && (
                     <>
-                      <div className="flex items-center gap-2.5 mb-4 mt-6">
-                        <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shrink-0 shadow-sm"></div>
-                        <h3 className="text-base font-bold text-gray-900">In Progress</h3>
-                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.inProgress)).length})</span>
+                      <div className="flex items-center justify-between gap-2 mb-4 mt-6">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shrink-0 shadow-sm"></div>
+                          <h3 className="text-base font-bold text-gray-900">In Progress</h3>
+                          <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.inProgress)).length})</span>
+                        </div>
+                        {dedupeTasks(filterTasks(normalizedTasks.inProgress)).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openClearColumnConfirm('inProgress')}
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                            title="Clear all tasks from In Progress"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Clear all
+                          </button>
+                        )}
                       </div>
                       {dedupeTasks(filterTasks(normalizedTasks.inProgress)).length > 0 ? (
                         <div className="space-y-3">
@@ -1049,10 +1113,23 @@ export default function TasksPage() {
                 >
                   {(dedupeTasks(filterTasks(normalizedTasks.backlog)).length > 0 || dragOverColumn === 'backlog') && (
                     <>
-                      <div className="flex items-center gap-2.5 mb-4 mt-6">
-                        <div className="w-2.5 h-2.5 bg-gray-300 rounded-full shrink-0 shadow-sm"></div>
-                        <h3 className="text-base font-bold text-gray-900">Backlog</h3>
-                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.backlog)).length})</span>
+                      <div className="flex items-center justify-between gap-2 mb-4 mt-6">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-2.5 h-2.5 bg-gray-300 rounded-full shrink-0 shadow-sm"></div>
+                          <h3 className="text-base font-bold text-gray-900">Backlog</h3>
+                          <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.backlog)).length})</span>
+                        </div>
+                        {dedupeTasks(filterTasks(normalizedTasks.backlog)).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openClearColumnConfirm('backlog')}
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                            title="Clear all tasks from Backlog"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Clear all
+                          </button>
+                        )}
                       </div>
                       {dedupeTasks(filterTasks(normalizedTasks.backlog)).length > 0 ? (
                         <div className="space-y-3">
@@ -1123,10 +1200,23 @@ export default function TasksPage() {
                 >
                   {(dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 || dragOverColumn === 'done') && (
                     <>
-                      <div className="flex items-center gap-2.5 mb-4 mt-6">
-                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full shrink-0 shadow-sm"></div>
-                        <h3 className="text-base font-bold text-gray-900">Done</h3>
-                        <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.done)).length})</span>
+                      <div className="flex items-center justify-between gap-2 mb-4 mt-6">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-2.5 h-2.5 bg-green-500 rounded-full shrink-0 shadow-sm"></div>
+                          <h3 className="text-base font-bold text-gray-900">Done</h3>
+                          <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.done)).length})</span>
+                        </div>
+                        {dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openClearColumnConfirm('done')}
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                            title="Clear all tasks from Done"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Clear all
+                          </button>
+                        )}
                       </div>
                       {dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 ? (
                         <div className="space-y-3">
@@ -1202,6 +1292,49 @@ export default function TasksPage() {
         />
       )}
 
+      {clearConfirmColumn != null && (() => {
+        const list = tasks[clearConfirmColumn] || [];
+        const count = list.length;
+        const name = columnDisplayNames[clearConfirmColumn] || clearConfirmColumn;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setClearConfirmColumn(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Clear column?</h3>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {count} task{count === 1 ? '' : 's'} from {name}
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 mb-6">
+                This cannot be undone. All tasks in this column will be permanently deleted.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setClearConfirmColumn(null)}
+                  className="px-4 py-2.5 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearColumn(clearConfirmColumn)}
+                  className="px-4 py-2.5 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 transition-colors flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {showFilterMenu && (
         <div
           className="fixed inset-0 z-40"
@@ -1221,6 +1354,7 @@ function TaskColumn({
   onCompleteTask, 
   onEditTask, 
   onDeleteTask,
+  onClearColumn,
   draggedTask,
   draggedFromColumn,
   dragOverColumn,
@@ -1268,12 +1402,23 @@ function TaskColumn({
       onDrop={handleDrop}
       onDragLeave={handleDragLeave}
     >
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-between gap-2 mb-5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className={`w-2.5 h-2.5 ${colorClasses[color]} rounded-full shrink-0 shadow-sm`}></div>
-          <h2 className="text-base font-bold text-gray-900">{title}</h2>
-          <span className="text-xs text-gray-500 font-medium">({tasks.length})</span>
+          <h2 className="text-base font-bold text-gray-900 truncate">{title}</h2>
+          <span className="text-xs text-gray-500 font-medium shrink-0">({tasks.length})</span>
         </div>
+        {onClearColumn && tasks.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onClearColumn(columnKey)}
+            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+            title={`Clear all tasks from ${title}`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Clear all
+          </button>
+        )}
       </div>
       
       <div 

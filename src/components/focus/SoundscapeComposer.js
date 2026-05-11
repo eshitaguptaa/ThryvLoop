@@ -3,12 +3,22 @@
 import { useState, useEffect, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useAuth } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
-import { getSupabaseClient, getUserStorageItem, getUserStorageJson, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
+import {
+  getSupabaseClient,
+  getUserStorageItem,
+  getUserStorageJson,
+  setUserStorageItem,
+  setUserStorageJson,
+  setSupabaseAuthToken,
+  getFocusTimerRecipesFromSupabase,
+  setFocusTimerRecipesToSupabase,
+} from '@/utils/userStorage';
 
 export default function SoundscapeComposer({ isOpen, onClose }) {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const userId = user?.id || null;
   const pathname = usePathname();
   const focusContext = useContext(FocusContext);
@@ -111,6 +121,81 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   const [autoStartBreaks, setAutoStartBreaks] = useState(true);
   const [alarmVolume, setAlarmVolume] = useState(60);
   const [tickSound, setTickSound] = useState(true);
+  const [customTimerRecipes, setCustomTimerRecipes] = useState([]);
+  /** 'sound' = Save Recipe modal saves soundscape mix; 'timer' = same modal saves Focus Flow timer preset */
+  const [saveRecipeModalKind, setSaveRecipeModalKind] = useState('sound');
+
+  // Local string state for duration inputs so users can type freely (e.g. clear and type "30") without value jumping
+  const [durationInputStr, setDurationInputStr] = useState({
+    session: '',
+    shortBreak: '',
+    longBreak: '',
+    countdown: '',
+  });
+
+  const defaultTimerRecipes = [
+    {
+      id: 'timer-recipe-animedoro',
+      name: 'Animedoro',
+      icon: 'pen',
+      timerMode: 'pomodoro',
+      sessionMinutes: 50,
+      shortBreakMinutes: 10,
+      longBreakMinutes: 20,
+      countdownMinutes: 5,
+      autoStartBreaks: true,
+      alarmVolume: 60,
+      tickSound: true,
+      isCustom: false,
+    },
+    {
+      id: 'timer-recipe-52-17',
+      name: '52/17',
+      icon: 'code',
+      timerMode: 'pomodoro',
+      sessionMinutes: 52,
+      shortBreakMinutes: 17,
+      longBreakMinutes: 25,
+      countdownMinutes: 5,
+      autoStartBreaks: true,
+      alarmVolume: 60,
+      tickSound: true,
+      isCustom: false,
+    },
+  ];
+
+  const timerRecipes = [...defaultTimerRecipes, ...customTimerRecipes];
+
+  const normalizeTimerRecipe = (recipe) => {
+    if (!recipe || typeof recipe !== 'object') return null;
+    const mode = recipe.timerMode === 'stopwatch' || recipe.timerMode === 'countdown' ? recipe.timerMode : 'pomodoro';
+    const session = Number.parseInt(recipe.sessionMinutes, 10);
+    const shortBreak = Number.parseInt(recipe.shortBreakMinutes, 10);
+    const longBreak = Number.parseInt(recipe.longBreakMinutes, 10);
+    const countdown = Number.parseInt(recipe.countdownMinutes, 10);
+    const alarm = Number.parseInt(recipe.alarmVolume, 10);
+    const safeName = typeof recipe.name === 'string' ? recipe.name.trim() : '';
+    if (!safeName) return null;
+
+    const allowedIcons = ['bolt', 'code', 'pen', 'lotus', 'briefcase'];
+    const icon = allowedIcons.includes(recipe.icon) ? recipe.icon : 'bolt';
+
+    return {
+      id: recipe.id || `timer-recipe-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: safeName,
+      icon,
+      timerMode: mode,
+      sessionMinutes: Number.isNaN(session) ? 25 : Math.max(1, Math.min(120, session)),
+      shortBreakMinutes: Number.isNaN(shortBreak) ? 5 : Math.max(1, Math.min(60, shortBreak)),
+      longBreakMinutes: Number.isNaN(longBreak) ? 15 : Math.max(1, Math.min(60, longBreak)),
+      countdownMinutes: Number.isNaN(countdown) ? 5 : Math.max(1, Math.min(120, countdown)),
+      autoStartBreaks: recipe.autoStartBreaks !== false,
+      alarmVolume: Number.isNaN(alarm) ? 60 : Math.max(0, Math.min(100, alarm)),
+      tickSound: recipe.tickSound !== false,
+      isCustom: recipe.isCustom !== false,
+      createdAt: recipe.createdAt || new Date().toISOString(),
+    };
+  };
   
   // Hydrate Focus Flow settings from storage when modal opens or userId is ready
   useEffect(() => {
@@ -133,6 +218,45 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     if (ts !== null && ts !== undefined) setTickSound(ts === 'true');
   }, [userId, isOpen]);
 
+  // Sync duration input strings when opening modal or switching to Focus Flow panel (so displayed values match numbers)
+  useEffect(() => {
+    if (isOpen && settingsPanel === 'focusflow') {
+      setDurationInputStr({
+        session: String(sessionMinutes),
+        shortBreak: String(shortBreakMinutes),
+        longBreak: String(longBreakMinutes),
+        countdown: String(countdownMinutes),
+      });
+    }
+  }, [isOpen, settingsPanel, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const loadTimerRecipes = async () => {
+      const remoteRecipes = await getFocusTimerRecipesFromSupabase(userId);
+      if (cancelled) return;
+      const normalizedRemote = Array.isArray(remoteRecipes)
+        ? remoteRecipes.map(normalizeTimerRecipe).filter(Boolean)
+        : [];
+      if (normalizedRemote.length > 0) {
+        setCustomTimerRecipes(normalizedRemote);
+        setJson('focus-timer-custom-recipes', normalizedRemote);
+        return;
+      }
+      const cached = getJson('focus-timer-custom-recipes');
+      if (Array.isArray(cached)) {
+        setCustomTimerRecipes(cached.map(normalizeTimerRecipe).filter(Boolean));
+      }
+    };
+
+    loadTimerRecipes();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   const audioRefs = useRef({});
   const isUpdatingFromComposerRef = useRef(false);
   const initializedRef = useRef(false);
@@ -142,6 +266,18 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   const hasStartedPlaybackRef = useRef(false);
   const stateHydratedRef = useRef(false);
   const saveStateTimeoutRef = useRef(null);
+
+  /** User added / chose sounds — mark an active session and play so the global audio effect does not pause clips. */
+  const ensureSoundscapeSessionPlaying = () => {
+    if (typeof window === 'undefined') return;
+    setSessionActive(true);
+    setItem('soundscape-is-playing', 'true');
+    hasStartedPlaybackRef.current = true;
+    setIsPlaying(true);
+    window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
+      detail: { isPlaying: true },
+    }));
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -531,21 +667,19 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     }, 16); // ~60fps
   };
 
-  // Initialize active sounds on mount - only load sounds that are actually playing
+  // Defer persistence until layout/context is ready — do not clear activeSounds (that races Supabase/localStorage after refresh).
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (initializedRef.current) return;
-    
-    // Small delay to ensure context is loaded
+
     const timeoutId = setTimeout(() => {
       if (initializedRef.current) return;
       initializedRef.current = true;
-      setActiveSounds([]);
       setSpacesVolumeState(getSpacesVolume());
-    }, 100); // Small delay to ensure context is loaded
-    
+    }, 100);
+
     return () => clearTimeout(timeoutId);
-  }, []); // Only run once on mount
+  }, []);
 
   // Listen for volume changes from SpacesDrawer
   useEffect(() => {
@@ -597,6 +731,13 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     }
   }, [isPlaying]);
 
+  // Opening Settings is a user gesture; allow audio engine off /focus (browser autoplay rules).
+  useEffect(() => {
+    if (isOpen) {
+      hasStartedPlaybackRef.current = true;
+    }
+  }, [isOpen]);
+
   // Listen for play/pause changes from MusicWidget
   useEffect(() => {
     const handlePlayPauseChange = (e) => {
@@ -614,7 +755,8 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
   // Initialize and manage audio - keep playing even when modal is closed
   useEffect(() => {
-    const canAutoplay = pathname === '/focus' || hasStartedPlaybackRef.current;
+    const canAutoplay =
+      pathname === '/focus' || hasStartedPlaybackRef.current || isOpen;
     if (!canAutoplay && isPlaying) {
       return;
     }
@@ -662,7 +804,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         }
       }
     });
-  }, [activeSounds, globalVolume, isPlaying, pathname]); // Added isPlaying dependency
+  }, [activeSounds, globalVolume, isPlaying, pathname, isOpen]);
 
   // Enforce 3-layer limit as a safeguard (runs after any state update)
   useEffect(() => {
@@ -848,6 +990,8 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         });
       }
     } else {
+      ensureSoundscapeSessionPlaying();
+
       const soundName = soundLibrary[category]?.find(s => s.id === soundId)?.name || soundId;
       
       // Rhythm Rule: Only ONE "Rhythm" type sound allowed at a time
@@ -939,17 +1083,101 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     setActiveSounds(prevSounds => prevSounds.map((s) => s.id === soundId ? { ...s, volume: newVolume } : s));
   };
 
+  const applyTimerRecipe = (recipe) => {
+    if (!recipe) return;
+    const normalized = normalizeTimerRecipe(recipe);
+    if (!normalized) return;
+    setTimerMode(normalized.timerMode);
+    setSessionMinutes(normalized.sessionMinutes);
+    setShortBreakMinutes(normalized.shortBreakMinutes);
+    setLongBreakMinutes(normalized.longBreakMinutes);
+    setCountdownMinutes(normalized.countdownMinutes);
+    setAutoStartBreaks(normalized.autoStartBreaks);
+    setAlarmVolume(normalized.alarmVolume);
+    setTickSound(normalized.tickSound);
+    setDurationInputStr({
+      session: String(normalized.sessionMinutes),
+      shortBreak: String(normalized.shortBreakMinutes),
+      longBreak: String(normalized.longBreakMinutes),
+      countdown: String(normalized.countdownMinutes),
+    });
+  };
+
+  const deleteTimerRecipe = async (recipeId, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const nextRecipes = customTimerRecipes.filter((recipe) => recipe.id !== recipeId);
+    setCustomTimerRecipes(nextRecipes);
+    setJson('focus-timer-custom-recipes', nextRecipes);
+    await setFocusTimerRecipesToSupabase(userId, nextRecipes);
+  };
+
   const handleSaveRecipe = () => {
+    if (settingsPanel === 'focusflow') {
+      setSaveRecipeModalKind('timer');
+      setRecipeName('');
+      setRecipeType('bolt');
+      setShowSaveModal(true);
+      return;
+    }
     if (activeSounds.length === 0) {
       alert('Please add at least one sound before saving a recipe.');
       return;
     }
+    setSaveRecipeModalKind('sound');
+    setRecipeName('');
+    setRecipeType('bolt');
     setShowSaveModal(true);
   };
 
   const handleConfirmSaveRecipe = async () => {
     if (!recipeName.trim()) {
       alert('Please enter a recipe name.');
+      return;
+    }
+
+    if (typeof window !== 'undefined' && userId) {
+      try {
+        const token = await getToken({ template: 'supabase' });
+        if (token) setSupabaseAuthToken(token);
+      } catch (_) {
+        // continue; insert may still work if SupabaseAuthBridge already set a valid token
+      }
+    }
+
+    if (saveRecipeModalKind === 'timer') {
+      const safeName = recipeName.trim();
+      const nameExists = customTimerRecipes.some((r) => r.name.toLowerCase() === safeName.toLowerCase());
+      if (nameExists) {
+        alert('A timer recipe with this name already exists.');
+        return;
+      }
+      const draftRecipe = normalizeTimerRecipe({
+        id: `timer-recipe-${Date.now()}`,
+        name: safeName,
+        icon: recipeType,
+        timerMode,
+        sessionMinutes,
+        shortBreakMinutes,
+        longBreakMinutes,
+        countdownMinutes,
+        autoStartBreaks,
+        alarmVolume,
+        tickSound,
+        isCustom: true,
+        createdAt: new Date().toISOString(),
+      });
+      if (!draftRecipe) return;
+      const nextRecipes = [...customTimerRecipes, draftRecipe];
+      setCustomTimerRecipes(nextRecipes);
+      setJson('focus-timer-custom-recipes', nextRecipes);
+      await setFocusTimerRecipesToSupabase(userId, nextRecipes);
+      setRecipeName('');
+      setRecipeType('bolt');
+      setSaveRecipeModalKind('sound');
+      setShowSaveModal(false);
       return;
     }
 
@@ -976,7 +1204,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
           updated_at: new Date().toISOString(),
         })
         .select('*')
-        .single();
+        .maybeSingle();
       if (!error && data) {
         const newRecipe = {
           id: data.id,
@@ -991,14 +1219,25 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         setCustomRecipes(updatedCustomRecipes);
         setJson('soundscape-custom-recipes', updatedCustomRecipes);
       } else {
-        alert('Unable to save recipe. Please try again.');
+        if (process.env.NODE_ENV === 'development' && error) {
+          console.error('soundscape_recipes insert failed', error);
+        }
+        const hint = error?.message ? ` ${error.message}` : '';
+        alert(`Unable to save recipe.${hint}`);
         return;
       }
+    } else if (!userId) {
+      alert('You must be signed in to save a recipe.');
+      return;
+    } else {
+      alert('Cloud save is unavailable (missing Supabase configuration).');
+      return;
     }
     
     // Reset form
     setRecipeName('');
     setRecipeType('bolt');
+    setSaveRecipeModalKind('sound');
     setShowSaveModal(false);
   };
 
@@ -1074,6 +1313,10 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         .filter(s => !finalSounds.some(f => f.id === s.id))
         .map(s => s.id);
       removedSoundIds.forEach(id => delete soundTimestampsRef.current[id]);
+
+      if (finalSounds.length > 0) {
+        ensureSoundscapeSessionPlaying();
+      }
 
       // Update UI immediately
       setActiveSounds(finalSounds);
@@ -1270,20 +1513,20 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       />
 
       {/* Main Modal Container */}
-      <div className={`relative w-full max-w-[1000px] bg-[#0f0f12] rounded-[32px] shadow-2xl border border-white/5 overflow-hidden flex flex-col max-h-[90vh] transition-all duration-300 ease-out ${
+      <div className={`relative w-full max-w-[1000px] bg-[#0f0f12] rounded-3xl shadow-[0_24px_80px_-24px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.06)] overflow-hidden flex flex-col max-h-[90vh] transition-all duration-300 ease-out ${
         isOpen 
           ? 'opacity-100 scale-100 translate-y-0' 
           : 'opacity-0 scale-95 translate-y-4'
       }`}>
         
         {/* HEADER */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-white/5">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-white/[0.06]">
           <div>
             <h2 className="text-2xl font-bold text-white tracking-tight">Settings</h2>
-            <p className="text-white/40 text-sm mt-0.5">
+            <p className="text-white/50 text-sm mt-1">
               {settingsPanel === 'composer'
-                ? `Mixing ${playableSounds.length} layers • Focused`
-                : 'Focus Flow Timer • Stay Productive'}
+                ? `Mixing ${playableSounds.length} layers`
+                : 'Timer, presets & sound'}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -1335,24 +1578,24 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         {/* BODY: Sidebar + Content */}
         <div className="flex flex-1 min-h-0">
           {/* LEFT SIDEBAR */}
-          <div className="w-[180px] shrink-0 border-r border-white/5 bg-[#0a0a0c]/50 flex flex-col py-4 px-3">
-            <div className="text-white/60 text-xs font-medium uppercase tracking-wider mb-2 px-3">Composer</div>
+          <div className="w-[200px] shrink-0 border-r border-white/[0.06] bg-[#0c0c0e]/80 flex flex-col py-5 px-3">
+            <div className="text-white/40 text-xs font-medium tracking-wide mb-3 px-3">Panel</div>
             <button
               onClick={() => setSettingsPanel('composer')}
-              className={`mb-1 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-colors ${
+              className={`mb-1.5 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all duration-200 ${
                 settingsPanel === 'composer'
-                  ? 'bg-[#8b5cf6] text-white'
-                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                  ? 'bg-[#8b5cf6] text-white shadow-[0_0_16px_rgba(139,92,246,0.25)]'
+                  : 'text-white/60 hover:bg-white/[0.06] hover:text-white'
               }`}
             >
               Composer
             </button>
             <button
               onClick={() => setSettingsPanel('focusflow')}
-              className={`px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-colors ${
+              className={`px-4 py-3 rounded-xl text-left text-sm font-medium transition-all duration-200 ${
                 settingsPanel === 'focusflow'
-                  ? 'bg-[#8b5cf6] text-white'
-                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                  ? 'bg-[#8b5cf6] text-white shadow-[0_0_16px_rgba(139,92,246,0.25)]'
+                  : 'text-white/60 hover:bg-white/[0.06] hover:text-white'
               }`}
             >
               Focus Flow
@@ -1363,50 +1606,53 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
           <div className="flex-1 overflow-y-auto custom-scrollbar min-w-0">
             {settingsPanel === 'focusflow' ? (
               /* FOCUS FLOW PANEL */
-              <div className="p-8 max-w-2xl mx-auto space-y-6">
+              <div className="p-8 max-w-2xl mx-auto space-y-8 bg-gradient-to-b from-[#0f0f12] via-[#0f0f12] to-[#0a0a0c]">
                 {/* Hero: Timer display + Apply */}
-                <div className="text-center rounded-2xl bg-gradient-to-b from-[#18181b] to-[#0f0f12] border border-white/5 p-8 shadow-inner">
-                  <div
-                    className="text-6xl font-bold text-white tracking-tighter tabular-nums mb-2"
-                    style={{ textShadow: '0 0 40px rgba(139,92,246,0.25)' }}
-                  >
-                    {timerMode === 'countdown'
-                      ? `${String(countdownMinutes).padStart(2, '0')}:00`
-                      : timerMode === 'pomodoro'
-                        ? `${String(sessionMinutes).padStart(2, '0')}:00`
-                        : '00:00'}
+                <div className="relative text-center rounded-3xl overflow-hidden border border-white/[0.08] bg-gradient-to-b from-[#1a1a1f] to-[#121214] p-10 shadow-[0_0_0_1px_rgba(255,255,255,0.03)_inset,0_24px_48px_-12px_rgba(0,0,0,0.4)]">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(139,92,246,0.12),transparent)] pointer-events-none" />
+                  <div className="relative">
+                    <div
+                      className="text-7xl font-bold text-white tracking-[-0.04em] tabular-nums mb-1"
+                      style={{ textShadow: '0 0 60px rgba(139,92,246,0.2), 0 2px 0 rgba(0,0,0,0.2)' }}
+                    >
+                      {timerMode === 'countdown'
+                        ? `${String(countdownMinutes).padStart(2, '0')}:00`
+                        : timerMode === 'pomodoro'
+                          ? `${String(sessionMinutes).padStart(2, '0')}:00`
+                          : '00:00'}
+                    </div>
+                    <p className="text-white/40 text-sm font-medium mb-5">Timer preview</p>
+                    <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/70 text-sm mb-6">
+                      <span className="w-2 h-2 rounded-full bg-[#8b5cf6] shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
+                      {focusFlowSessionsToday} of 8 sessions today
+                    </div>
+                    <button
+                      onClick={() => {
+                        setItem('focus-settings-timer-mode', timerMode);
+                        setItem('focus-settings-session-minutes', sessionMinutes.toString());
+                        setItem('focus-settings-short-break-minutes', shortBreakMinutes.toString());
+                        setItem('focus-settings-long-break-minutes', longBreakMinutes.toString());
+                        setItem('focus-settings-countdown-minutes', countdownMinutes.toString());
+                        setItem('focus-settings-auto-start-breaks', autoStartBreaks ? 'true' : 'false');
+                        setItem('focus-settings-alarm-volume', alarmVolume.toString());
+                        setItem('focus-settings-tick-sound', tickSound ? 'true' : 'false');
+                        if (typeof window !== 'undefined') {
+                          window.dispatchEvent(new CustomEvent('focus-settings-applied', {
+                            detail: { timerMode, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, autoStartBreaks, alarmVolume, tickSound }
+                          }));
+                        }
+                      }}
+                      className="px-10 py-4 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-sm font-semibold rounded-2xl transition-all shadow-[0_0_24px_rgba(139,92,246,0.35)] hover:shadow-[0_0_32px_rgba(139,92,246,0.45)] hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      Apply settings
+                    </button>
                   </div>
-                  <p className="text-white/50 text-sm mb-6">Preview</p>
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/60 text-xs mb-6">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]" />
-                    {focusFlowSessionsToday} / 8 sessions today
-                  </div>
-                  <button
-                    onClick={() => {
-                      setItem('focus-settings-timer-mode', timerMode);
-                      setItem('focus-settings-session-minutes', sessionMinutes.toString());
-                      setItem('focus-settings-short-break-minutes', shortBreakMinutes.toString());
-                      setItem('focus-settings-long-break-minutes', longBreakMinutes.toString());
-                      setItem('focus-settings-countdown-minutes', countdownMinutes.toString());
-                      setItem('focus-settings-auto-start-breaks', autoStartBreaks ? 'true' : 'false');
-                      setItem('focus-settings-alarm-volume', alarmVolume.toString());
-                      setItem('focus-settings-tick-sound', tickSound ? 'true' : 'false');
-                      if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('focus-settings-applied', {
-                          detail: { timerMode, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, autoStartBreaks, alarmVolume, tickSound }
-                        }));
-                      }
-                    }}
-                    className="px-8 py-3.5 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white font-semibold rounded-full transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_28px_rgba(139,92,246,0.4)] hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    Apply Settings
-                  </button>
                 </div>
 
                 {/* Timer Mode */}
-                <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
-                  <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Timer Mode</h3>
-                  <div className="flex gap-2">
+                <section className="rounded-2xl border border-white/[0.06] bg-[#141416]/80 p-6 backdrop-blur-sm">
+                  <h3 className="text-base font-semibold text-white mb-4">Timer mode</h3>
+                  <div className="flex gap-3">
                     {['Pomodoro', 'Stopwatch', 'Countdown'].map((mode) => {
                       const key = mode.toLowerCase();
                       const active = timerMode === key;
@@ -1414,10 +1660,10 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                         <button
                           key={key}
                           onClick={() => setTimerMode(key)}
-                          className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                          className={`flex-1 px-5 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                             active
-                              ? 'bg-[#8b5cf6] text-white shadow-[0_0_16px_rgba(139,92,246,0.25)]'
-                              : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5'
+                              ? 'bg-[#8b5cf6] text-white shadow-[0_0_20px_rgba(139,92,246,0.3)]'
+                              : 'bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white border border-white/[0.06]'
                           }`}
                         >
                           {mode}
@@ -1427,104 +1673,143 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                   </div>
                 </section>
 
-                {/* Durations (Pomodoro) or Countdown Duration */}
+                {/* Pomodoro: Durations + Presets */}
                 {timerMode === 'pomodoro' && (
-                  <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
-                    <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Durations</h3>
-                    <div className="grid grid-cols-3 gap-4">
-                      {[
-                        { label: 'Session', suffix: 'min', value: sessionMinutes, setter: setSessionMinutes, max: 120 },
-                        { label: 'Short Break', suffix: 'min', value: shortBreakMinutes, setter: setShortBreakMinutes, max: 60 },
-                        { label: 'Long Break', suffix: 'min', value: longBreakMinutes, setter: setLongBreakMinutes, max: 60 },
-                      ].map(({ label, suffix, value, setter, max }) => (
-                        <div key={label}>
-                          <label className="block text-white/60 text-xs font-medium mb-2">{label}</label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={max}
-                            value={value}
-                            onChange={(e) => {
-                              const n = parseInt(e.target.value, 10);
-                              if (!Number.isNaN(n)) setter(Math.max(1, Math.min(max, n)));
+                  <>
+                    <section className="rounded-2xl border border-white/[0.06] bg-[#141416]/80 p-6 backdrop-blur-sm">
+                      <h3 className="text-base font-semibold text-white mb-4">Durations</h3>
+                      <div className="grid grid-cols-3 gap-5">
+                        {[
+                          { key: 'session', label: 'Session', suffix: 'min', value: sessionMinutes, setter: setSessionMinutes, max: 120 },
+                          { key: 'shortBreak', label: 'Short break', suffix: 'min', value: shortBreakMinutes, setter: setShortBreakMinutes, max: 60 },
+                          { key: 'longBreak', label: 'Long break', suffix: 'min', value: longBreakMinutes, setter: setLongBreakMinutes, max: 60 },
+                        ].map(({ key, label, suffix, value, setter, max }) => (
+                          <div key={label}>
+                            <label className="block text-white/50 text-sm font-medium mb-2">{label}</label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              min={1}
+                              max={max}
+                              value={durationInputStr[key]}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/\D/g, '');
+                                setDurationInputStr((prev) => ({ ...prev, [key]: raw }));
+                              }}
+                              onBlur={() => {
+                                const raw = durationInputStr[key].trim();
+                                const n = raw === '' ? value : parseInt(raw, 10);
+                                if (Number.isNaN(n) || n < 1) {
+                                  setter(Math.max(1, Math.min(max, value)));
+                                  setDurationInputStr((prev) => ({ ...prev, [key]: String(value) }));
+                                } else {
+                                  const clamped = Math.max(1, Math.min(max, n));
+                                  setter(clamped);
+                                  setDurationInputStr((prev) => ({ ...prev, [key]: String(clamped) }));
+                                }
+                              }}
+                              className="w-full px-4 py-3.5 bg-[#0c0c0e] border border-white/10 rounded-xl text-white text-center text-lg font-semibold tabular-nums focus:outline-none focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]/20 transition-all"
+                            />
+                            <span className="block text-white/40 text-xs mt-1.5">{suffix}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-white/[0.06] bg-[#141416]/80 p-6 backdrop-blur-sm">
+                      <h3 className="text-base font-semibold text-white mb-4">Quick presets</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { name: 'Deep Work', duration: '25m', icon: 'bulb', mins: 25, type: 'session' },
+                          { name: 'Long Session', duration: '50m', icon: 'clock', mins: 50, type: 'session' },
+                          { name: 'Short Break', duration: '5m', icon: 'play', mins: 5, type: 'short' },
+                          { name: 'Long Break', duration: '15m', icon: 'break', mins: 15, type: 'long' },
+                        ].map(({ name, duration, icon, mins, type }) => (
+                          <button
+                            key={name}
+                            onClick={() => {
+                              if (type === 'session') {
+                                setSessionMinutes(mins);
+                                setDurationInputStr((prev) => ({ ...prev, session: String(mins) }));
+                              } else if (type === 'short') {
+                                setShortBreakMinutes(mins);
+                                setDurationInputStr((prev) => ({ ...prev, shortBreak: String(mins) }));
+                              } else {
+                                setLongBreakMinutes(mins);
+                                setDurationInputStr((prev) => ({ ...prev, longBreak: String(mins) }));
+                              }
+                              setTimerMode('pomodoro');
                             }}
-                            className="w-full px-4 py-3 bg-[#0f0f12] border border-white/10 rounded-xl text-white text-center text-lg font-semibold tabular-nums focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6]/30 transition-colors"
-                          />
-                          <span className="block text-white/40 text-xs mt-1">{suffix}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
+                            className="group flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[#0c0c0e]/80 border border-white/[0.06] hover:border-[#8b5cf6]/30 hover:bg-[#161618] transition-all text-center"
+                          >
+                            {icon === 'bulb' && <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center ring-1 ring-amber-500/20"><svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></div>}
+                            {icon === 'clock' && <div className="w-10 h-10 rounded-xl bg-[#8b5cf6]/15 flex items-center justify-center ring-1 ring-[#8b5cf6]/20"><svg className="w-5 h-5 text-[#a78bfa]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
+                            {icon === 'play' && <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center ring-1 ring-emerald-500/20"><svg className="w-5 h-5 text-emerald-400 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>}
+                            {icon === 'break' && <div className="w-10 h-10 rounded-xl bg-rose-500/15 flex items-center justify-center ring-1 ring-rose-500/20"><svg className="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg></div>}
+                            <span className="font-medium text-white group-hover:text-[#a78bfa] transition-colors">{name}</span>
+                            <span className="text-white/45 text-xs">{duration}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </>
                 )}
+
+                {/* Countdown: Duration only */}
                 {timerMode === 'countdown' && (
-                  <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
-                    <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Countdown Duration</h3>
-                    <div>
-                      <label className="block text-white/60 text-xs font-medium mb-2">Duration (minutes)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={120}
-                        value={countdownMinutes}
-                        onChange={(e) => {
-                          const n = parseInt(e.target.value, 10);
-                          if (!Number.isNaN(n)) setCountdownMinutes(Math.max(1, Math.min(120, n)));
-                        }}
-                        className="w-full max-w-[140px] px-4 py-3 bg-[#0f0f12] border border-white/10 rounded-xl text-white text-center text-lg font-semibold tabular-nums focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6]/30 transition-colors"
-                      />
+                  <section className="rounded-2xl border border-white/[0.06] bg-[#141416]/80 p-6 backdrop-blur-sm">
+                    <h3 className="text-base font-semibold text-white mb-2">Countdown duration</h3>
+                    <p className="text-white/50 text-sm mb-4">How long the countdown runs (1–120 minutes).</p>
+                    <div className="flex flex-wrap items-end gap-4">
+                      <div className="flex-1 min-w-[120px] max-w-[160px]">
+                        <label className="block text-white/50 text-sm font-medium mb-2">Minutes</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={durationInputStr.countdown}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/\D/g, '');
+                            setDurationInputStr((prev) => ({ ...prev, countdown: raw }));
+                          }}
+                          onBlur={() => {
+                            const raw = durationInputStr.countdown.trim();
+                            const n = raw === '' ? countdownMinutes : parseInt(raw, 10);
+                            if (Number.isNaN(n) || n < 1) {
+                              const fallback = Math.max(1, Math.min(120, countdownMinutes));
+                              setCountdownMinutes(fallback);
+                              setDurationInputStr((prev) => ({ ...prev, countdown: String(fallback) }));
+                            } else {
+                              const clamped = Math.max(1, Math.min(120, n));
+                              setCountdownMinutes(clamped);
+                              setDurationInputStr((prev) => ({ ...prev, countdown: String(clamped) }));
+                            }
+                          }}
+                          className="w-full px-4 py-3.5 bg-[#0c0c0e] border border-white/10 rounded-xl text-white text-center text-lg font-semibold tabular-nums focus:outline-none focus:border-[#8b5cf6] focus:ring-2 focus:ring-[#8b5cf6]/20 transition-all"
+                        />
+                      </div>
+                      <span className="text-white/40 text-sm pb-3">min</span>
                     </div>
                   </section>
                 )}
 
-                {/* Presets */}
-                <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
-                  <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Presets</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                      { name: 'Deep Work', duration: '25m', icon: 'bulb', mins: 25, type: 'session' },
-                      { name: 'Long Session', duration: '50m', icon: 'clock', mins: 50, type: 'session' },
-                      { name: 'Short Break', duration: '5m', icon: 'play', mins: 5, type: 'short' },
-                      { name: 'Long Break', duration: '15m', icon: 'break', mins: 15, type: 'long' },
-                    ].map(({ name, duration, icon, mins, type }) => (
-                      <button
-                        key={name}
-                        onClick={() => {
-                          if (type === 'session') setSessionMinutes(mins);
-                          else if (type === 'short') setShortBreakMinutes(mins);
-                          else setLongBreakMinutes(mins);
-                          setTimerMode('pomodoro');
-                        }}
-                        className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-[#0f0f12] border border-white/5 hover:border-[#8b5cf6]/40 hover:bg-[#18181b] transition-all text-center"
-                      >
-                        {icon === 'bulb' && <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center"><svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></div>}
-                        {icon === 'clock' && <div className="w-9 h-9 rounded-lg bg-[#8b5cf6]/20 flex items-center justify-center"><svg className="w-5 h-5 text-[#a78bfa]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>}
-                        {icon === 'play' && <div className="w-9 h-9 rounded-lg bg-emerald-500/20 flex items-center justify-center"><svg className="w-5 h-5 text-emerald-400 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>}
-                        {icon === 'break' && <div className="w-9 h-9 rounded-lg bg-rose-500/20 flex items-center justify-center"><svg className="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg></div>}
-                        <span className="font-medium text-white group-hover:text-[#a78bfa] transition-colors">{name}</span>
-                        <span className="text-white/45 text-xs">{duration}</span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-
-                {/* Settings */}
-                <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
-                  <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Settings</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between py-2 border-b border-white/5">
-                      <span className="text-white/90 text-sm">Auto-start Breaks</span>
+                {/* Settings (all modes) */}
+                <section className="rounded-2xl border border-white/[0.06] bg-[#141416]/80 p-6 backdrop-blur-sm">
+                  <h3 className="text-base font-semibold text-white mb-4">Sound & behavior</h3>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-white/[0.03] transition-colors">
+                      <span className="text-white/90 text-sm">Auto-start breaks</span>
                       <button
                         role="switch"
                         aria-checked={autoStartBreaks}
                         onClick={() => setAutoStartBreaks((v) => !v)}
-                        className={`relative w-11 h-6 rounded-full transition-colors ${autoStartBreaks ? 'bg-[#8b5cf6]' : 'bg-[#2d2d36]'}`}
+                        className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${autoStartBreaks ? 'bg-[#8b5cf6]' : 'bg-[#27272a]'}`}
                       >
-                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${autoStartBreaks ? 'right-0.5' : 'left-0.5'}`} />
+                        <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ease-out ${autoStartBreaks ? 'right-1' : 'left-1'}`} />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between gap-4 py-2 border-b border-white/5">
-                      <span className="text-white/90 text-sm">Alarm Volume</span>
-                      <div className="flex items-center gap-3 flex-1 max-w-[180px]">
+                    <div className="flex items-center justify-between gap-4 py-3 px-3 rounded-xl hover:bg-white/[0.03] transition-colors">
+                      <span className="text-white/90 text-sm">Alarm volume</span>
+                      <div className="flex items-center gap-3 flex-1 max-w-[200px]">
                         <input
                           type="range"
                           min="0"
@@ -1534,11 +1819,12 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                           className="flex-1 h-2 rounded-full appearance-none cursor-pointer slider-purple"
                           style={{ background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${alarmVolume}%, rgba(255,255,255,0.08) ${alarmVolume}%, rgba(255,255,255,0.08) 100%)` }}
                         />
-                        <span className="text-white/80 text-sm font-medium tabular-nums w-9">{alarmVolume}%</span>
+                        <span className="text-white/80 text-sm font-medium tabular-nums w-10">{alarmVolume}%</span>
                       </div>
+
                     </div>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-white/90 text-sm">Tick Sound</span>
+                    <div className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-white/[0.03] transition-colors">
+                      <span className="text-white/90 text-sm">Tick sound</span>
                       <button
                         role="switch"
                         aria-checked={tickSound}
@@ -1550,50 +1836,50 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                             window.dispatchEvent(new CustomEvent('focus-settings-tick-sound-changed', { detail: { tickSound: next } }));
                           }
                         }}
-                        className={`relative w-11 h-6 rounded-full transition-colors ${tickSound ? 'bg-[#8b5cf6]' : 'bg-[#2d2d36]'}`}
+                        className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${tickSound ? 'bg-[#8b5cf6]' : 'bg-[#27272a]'}`}
                       >
-                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${tickSound ? 'right-0.5' : 'left-0.5'}`} />
+                        <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ease-out ${tickSound ? 'right-1' : 'left-1'}`} />
                       </button>
                     </div>
                   </div>
                 </section>
 
-                {/* Pomodoro Recipes */}
-                <section className="rounded-2xl bg-[#18181b]/60 border border-white/5 p-5">
-                  <h3 className="text-sm font-semibold text-white/90 uppercase tracking-wider mb-4">Pomodoro Recipes</h3>
+                <section className="rounded-2xl border border-white/[0.06] bg-[#141416]/80 p-6 backdrop-blur-sm">
+                  <h3 className="text-base font-semibold text-white mb-4">Timer recipes</h3>
                   <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={() => {
-                        setSessionMinutes(50);
-                        setShortBreakMinutes(10);
-                        setTimerMode('pomodoro');
-                      }}
-                      className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[#0f0f12] border border-white/5 hover:border-[#8b5cf6]/40 hover:bg-[#1a1a1f] transition-all"
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-[#8b5cf6]/20 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-[#a78bfa]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {timerRecipes.map((recipe) => (
+                      <div key={recipe.id} className="relative group">
+                        <button
+                          onClick={() => applyTimerRecipe(recipe)}
+                          className="flex items-center gap-4 px-5 py-3.5 rounded-xl bg-[#0c0c0e]/80 border border-white/[0.06] hover:border-[#8b5cf6]/30 hover:bg-[#161618] transition-all"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-[#8b5cf6]/15 flex items-center justify-center ring-1 ring-[#8b5cf6]/20 text-[#a78bfa]">
+                            <RecipeIcon icon={recipe.icon || 'bolt'} className="w-5 h-5" />
+                          </div>
+                          <div className="text-left">
+                            <div className="font-medium text-white">{recipe.name}</div>
+                            <div className="text-xs text-white/50">
+                              {recipe.timerMode === 'countdown'
+                                ? `${recipe.countdownMinutes} min countdown`
+                                : recipe.timerMode === 'stopwatch'
+                                  ? 'Stopwatch'
+                                  : `${recipe.sessionMinutes}/${recipe.shortBreakMinutes}/${recipe.longBreakMinutes} min`}
+                            </div>
+                          </div>
+                        </button>
+                        {recipe.isCustom && (
+                          <button
+                            onClick={(e) => deleteTimerRecipe(recipe.id, e)}
+                            className="absolute -top-2 -right-2 w-5 h-5 bg-[#2d2d36] hover:bg-[#3d3d46] border border-white/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Delete timer recipe"
+                          >
+                            <svg className="w-3 h-3 text-white/60 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
-                      <div className="text-left">
-                        <div className="font-medium text-white">Animedoro</div>
-                        <div className="text-xs text-white/50">50 min work · 10 min break</div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSessionMinutes(52);
-                        setShortBreakMinutes(17);
-                        setTimerMode('pomodoro');
-                      }}
-                      className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[#0f0f12] border border-white/5 hover:border-[#8b5cf6]/40 hover:bg-[#1a1a1f] transition-all"
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-[#8b5cf6]/20 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-[#a78bfa]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      </div>
-                      <div className="text-left">
-                        <div className="font-medium text-white">52/17</div>
-                        <div className="text-xs text-white/50">52 min work · 17 min break</div>
-                      </div>
-                    </button>
+                    ))}
                   </div>
                 </section>
               </div>
@@ -1894,10 +2180,17 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setShowSaveModal(false)}
+            onClick={() => {
+              setShowSaveModal(false);
+              setRecipeName('');
+              setRecipeType('bolt');
+              setSaveRecipeModalKind('sound');
+            }}
           />
           <div className="relative bg-[#0f0f12] rounded-2xl border border-white/5 shadow-2xl p-8 w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-6">Save Recipe</h3>
+            <h3 className="text-xl font-bold text-white mb-6">
+              {saveRecipeModalKind === 'timer' ? 'Save Timer Recipe' : 'Save Recipe'}
+            </h3>
             
             <div className="space-y-6">
               {/* Recipe Name */}
@@ -1909,7 +2202,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                   type="text"
                   value={recipeName}
                   onChange={(e) => setRecipeName(e.target.value)}
-                  placeholder="e.g., My Focus Mix"
+                  placeholder={saveRecipeModalKind === 'timer' ? 'e.g., Morning deep work' : 'e.g., My Focus Mix'}
                   className="w-full px-4 py-2.5 bg-[#18181b] border border-white/5 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50 transition-colors"
                   autoFocus
                   onKeyDown={(e) => {
@@ -1917,6 +2210,9 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                       handleConfirmSaveRecipe();
                     } else if (e.key === 'Escape') {
                       setShowSaveModal(false);
+                      setRecipeName('');
+                      setRecipeType('bolt');
+                      setSaveRecipeModalKind('sound');
                     }
                   }}
                 />
@@ -1960,6 +2256,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                     setShowSaveModal(false);
                     setRecipeName('');
                     setRecipeType('bolt');
+                    setSaveRecipeModalKind('sound');
                   }}
                   className="flex-1 px-4 py-2.5 bg-[#18181b] hover:bg-[#202024] text-white/70 hover:text-white rounded-lg transition-colors"
                 >

@@ -111,9 +111,10 @@ export default function AnalyticsDashboard() {
         setSeedMessage(data.error || 'Failed to load sample data.');
         return;
       }
-      setSeedMessage(`Added ${data.focus_sessions_added ?? 0} sessions and ${data.tasks_added ?? 0} tasks.`);
       await loadData();
-      setSeedMessage('Sample data loaded.');
+      setSeedMessage(
+        `Sample data loaded: ${data.focus_sessions_added ?? 0} focus session(s), ${data.tasks_added ?? 0} task(s). Charts refresh automatically.`
+      );
     } catch (e) {
       setSeedMessage(e?.message || 'Request failed.');
     } finally {
@@ -212,6 +213,40 @@ export default function AnalyticsDashboard() {
     else break;
   }
 
+  const handleExport = () => {
+    if (typeof window === 'undefined') return;
+    const escapeCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [];
+    lines.push(['ThryvLoop Analytics', new Date().toISOString()].map(escapeCell).join(','));
+    lines.push('');
+    lines.push(['Metric', 'Value'].map(escapeCell).join(','));
+    lines.push([escapeCell('Sessions today'), escapeCell(displaySessions)].join(','));
+    lines.push([escapeCell('Focus minutes today'), escapeCell(focusMinutesToday)].join(','));
+    lines.push([escapeCell('Focus minutes this week'), escapeCell(Math.round(focusMinutesThisWeek))].join(','));
+    lines.push([escapeCell('Sessions this week (count)'), escapeCell(sessionsThisWeek)].join(','));
+    lines.push([escapeCell('Tasks completed this week'), escapeCell(tasksCompletedThisWeek)].join(','));
+    lines.push([escapeCell('Streak (days)'), escapeCell(streak)].join(','));
+    lines.push([escapeCell('Efficiency %'), escapeCell(focusEfficiency)].join(','));
+    lines.push([escapeCell('Preferred timer mode'), escapeCell(modeLabel)].join(','));
+    lines.push([escapeCell('Total tasks'), escapeCell(totalTasks)].join(','));
+    lines.push([escapeCell('Done tasks'), escapeCell(doneCount)].join(','));
+    lines.push('');
+    lines.push(['Date', 'Label', 'Focus minutes', 'Sessions'].map(escapeCell).join(','));
+    chartData.forEach((d) => {
+      lines.push([escapeCell(d.date), escapeCell(d.label), escapeCell(d.focusMinutes), escapeCell(d.sessions)].join(','));
+    });
+    const csv = '\uFEFF' + lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `thryvloop-analytics-${todayStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const taskDistributionData = [
     { name: "Today's Focus", value: todaysFocusCount, color: '#5043F3' },
     { name: 'In Progress', value: inProgressCount, color: '#f59e0b' },
@@ -269,50 +304,20 @@ export default function AnalyticsDashboard() {
               )}
               Load sample data
             </button>
-            <button className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-sm transition-colors shadow-sm">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={loading || !!error}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-sm transition-colors shadow-sm disabled:opacity-50 disabled:pointer-events-none"
+            >
               <Download className="w-4 h-4" />
-              Export
+              Export CSV
             </button>
           </div>
         </header>
 
-        {/* KPI strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 mb-10">
-          {[
-            { label: 'Sessions today', value: displaySessions, sub: `${focusMinutesToday} min`, icon: Activity, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
-            { label: 'Focus this week', value: Math.round(focusMinutesThisWeek), sub: 'minutes', icon: TrendingUp, color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.08)' },
-            { label: 'Tasks done (week)', value: tasksCompletedThisWeek, sub: 'completed', icon: CheckCircle2, color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
-            { label: 'Streak', value: streak, sub: 'days', icon: Flame, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
-            { label: 'Efficiency', value: `${focusEfficiency}%`, sub: modeLabel, icon: Target, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
-            { label: 'Total tasks', value: totalTasks, sub: `${doneCount} done`, icon: BarChart3, color: '#64748b', bg: 'rgba(100, 116, 139, 0.08)' },
-          ].map((kpi) => (
-            <div
-              key={kpi.label}
-              className="group relative rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:border-slate-300/80 hover:-translate-y-0.5"
-              style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)' }}
-            >
-              <div className="absolute top-0 left-0 w-1 h-full opacity-90" style={{ backgroundColor: kpi.color }} />
-              <div className="relative p-5">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">{kpi.label}</span>
-                  <div
-                    className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110"
-                    style={{ backgroundColor: kpi.bg }}
-                  >
-                    <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} strokeWidth={2.5} />
-                  </div>
-                </div>
-                <p className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums tracking-tight" style={{ letterSpacing: '-0.02em' }}>
-                  {kpi.value}
-                </p>
-                <p className="text-xs font-medium text-slate-500 mt-1">{kpi.sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-                    
-        {/* Main chart: Focus time (area) + Sessions (line) */}
-        <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 mb-8" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+        {/* Main chart: Focus time (area) + Sessions (line) — above KPI cards */}
+        <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 mb-8 lg:mb-10" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
           <div className="p-6 lg:p-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 mb-5 border-b border-slate-100">
             <div>
@@ -353,6 +358,41 @@ export default function AnalyticsDashboard() {
             </ResponsiveContainer>
           </div>
           </div>
+        </div>
+
+        {/* KPI strip — below Focus & sessions chart */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 mb-10">
+          {[
+            { label: 'Sessions today', value: displaySessions, sub: `${focusMinutesToday} min`, icon: Activity, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
+            { label: 'Focus this week', value: Math.round(focusMinutesThisWeek), sub: 'minutes', icon: TrendingUp, color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.08)' },
+            { label: 'Tasks done (week)', value: tasksCompletedThisWeek, sub: 'completed', icon: CheckCircle2, color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
+            { label: 'Streak', value: streak, sub: 'days', icon: Flame, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
+            { label: 'Efficiency', value: `${focusEfficiency}%`, sub: modeLabel, icon: Target, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
+            { label: 'Total tasks', value: totalTasks, sub: `${doneCount} done`, icon: BarChart3, color: '#64748b', bg: 'rgba(100, 116, 139, 0.08)' },
+          ].map((kpi) => (
+            <div
+              key={kpi.label}
+              className="group relative rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:border-slate-300/80 hover:-translate-y-0.5"
+              style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)' }}
+            >
+              <div className="absolute top-0 left-0 w-1 h-full opacity-90" style={{ backgroundColor: kpi.color }} />
+              <div className="relative p-5">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">{kpi.label}</span>
+                  <div
+                    className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110"
+                    style={{ backgroundColor: kpi.bg }}
+                  >
+                    <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} strokeWidth={2.5} />
+                  </div>
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums tracking-tight" style={{ letterSpacing: '-0.02em' }}>
+                  {kpi.value}
+                </p>
+                <p className="text-xs font-medium text-slate-500 mt-1">{kpi.sub}</p>
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
