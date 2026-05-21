@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Bell,
@@ -13,7 +13,11 @@ import {
   ListTodo,
   ListChecks,
   Focus,
+  Video,
+  Mail,
 } from 'lucide-react';
+import { useWorkspace } from '@/hooks/useWorkspace';
+import { formatWorkspaceSyncError } from '@/lib/workspace/userMessages';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient, setSupabaseAuthToken, getUserStorageItem, getUserStorageJson, setUserStorageItem } from '@/utils/userStorage';
@@ -43,6 +47,20 @@ function endOfDay(d) {
   return x.toISOString();
 }
 
+function formatWorkspaceWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (isToday) return `Today · ${time}`;
+  if (isTomorrow) return `Tomorrow · ${time}`;
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const { user } = useUser();
@@ -58,6 +76,24 @@ export default function Dashboard() {
   const [homeLoading, setHomeLoading] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef(null);
+  const productivityTrendRef = useRef(null);
+  const [productivityTrendHeight, setProductivityTrendHeight] = useState(null);
+  const workspaceSyncedRef = useRef(false);
+
+  const {
+    hasConnection,
+    needsWorkspaceSync,
+    needsWorkspaceReconnect,
+    googleConnection,
+    inMeeting,
+    currentMeeting,
+    upcomingMeetings,
+    meetingMinutesToday,
+    notifications: workspaceNotifications,
+    unreadCount,
+    sync: syncWorkspace,
+    loading: workspaceLoading,
+  } = useWorkspace({ enabled: Boolean(isSignedIn && userId) });
 
   const [soundscapeIsPlaying, setSoundscapeIsPlaying] = useState(false);
   const [soundscapeActiveSounds, setSoundscapeActiveSounds] = useState([]);
@@ -104,6 +140,28 @@ export default function Dashboard() {
       window.removeEventListener('soundscape-stop-all', onStop);
     };
   }, [userId, getSoundscapeState]);
+
+  useEffect(() => {
+    const el = productivityTrendRef.current;
+    if (!el || typeof window === 'undefined') return;
+
+    const syncHeight = () => {
+      if (window.matchMedia('(min-width: 1024px)').matches) {
+        setProductivityTrendHeight(el.offsetHeight);
+      } else {
+        setProductivityTrendHeight(null);
+      }
+    };
+
+    syncHeight();
+    const ro = new ResizeObserver(syncHeight);
+    ro.observe(el);
+    window.addEventListener('resize', syncHeight);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', syncHeight);
+    };
+  }, [homeLoading, weeklyFocusMinutes.length]);
 
   const toggleSoundscapePlayPause = useCallback(() => {
     if (typeof window === 'undefined' || !userId) return;
@@ -236,6 +294,12 @@ export default function Dashboard() {
   }, [isLoaded, isSignedIn, userId, loadHomeData]);
 
   useEffect(() => {
+    if (!hasConnection || workspaceSyncedRef.current) return;
+    workspaceSyncedRef.current = true;
+    void syncWorkspace().catch(() => {});
+  }, [hasConnection, syncWorkspace]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     router.prefetch('/focus');
   }, [router]);
@@ -243,8 +307,11 @@ export default function Dashboard() {
   const todayFormatted = typeof window !== 'undefined'
     ? new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
     : '';
+  const meetingSecondsToday = meetingMinutesToday * 60;
+  const productiveSecondsToday = todayFocusSeconds + meetingSecondsToday;
   const goalSeconds = FOCUS_GOAL_MINUTES * 60;
-  const focusPercent = goalSeconds > 0 ? Math.min(100, Math.round((todayFocusSeconds / goalSeconds) * 100)) : 0;
+  const focusPercent =
+    goalSeconds > 0 ? Math.min(100, Math.round((productiveSecondsToday / goalSeconds) * 100)) : 0;
   const vsYesterday =
     yesterdayFocusSeconds > 0
       ? Math.round(((todayFocusSeconds - yesterdayFocusSeconds) / yesterdayFocusSeconds) * 100)
@@ -261,6 +328,69 @@ export default function Dashboard() {
         )
       : 0;
 
+  const workspaceAlertFeed = useMemo(() => {
+    const items = [];
+
+    if (inMeeting && currentMeeting) {
+      items.push({
+        key: 'meeting-now',
+        kind: 'meeting-now',
+        sortAt: Date.now(),
+        meetingId: currentMeeting.id,
+        title: currentMeeting.title || 'In meeting',
+        when: currentMeeting.endsAt
+          ? `Until ${new Date(currentMeeting.endsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+          : 'Happening now',
+        isOnline: currentMeeting.isOnlineMeeting,
+        meetUrl: currentMeeting.meetUrl,
+        canJoin: currentMeeting.canJoin,
+        href: currentMeeting.canJoin && currentMeeting.id ? `/meet/${currentMeeting.id}` : null,
+      });
+    }
+
+    for (const m of upcomingMeetings) {
+      items.push({
+        key: m.id ? `cal-${m.id}` : `cal-${m.startsAt}-${m.title}`,
+        kind: 'calendar',
+        sortAt: new Date(m.startsAt).getTime(),
+        meetingId: m.id,
+        title: m.title || '(No title)',
+        when: formatWorkspaceWhen(m.startsAt),
+        isOnline: m.isOnlineMeeting,
+        meetUrl: m.meetUrl,
+        canJoin: m.canJoin,
+        href: m.canJoin && m.id ? `/meet/${m.id}` : null,
+      });
+    }
+
+    for (const n of workspaceNotifications) {
+      if (n.is_read) continue;
+      items.push({
+        key: `mail-${n.id}`,
+        kind: 'gmail',
+        sortAt: new Date(n.received_at).getTime(),
+        title: n.subject || '(No subject)',
+        when: formatWorkspaceWhen(n.received_at),
+        preview: n.preview,
+        href: n.link_url,
+      });
+    }
+
+    items.sort((a, b) => {
+      if (a.kind === 'meeting-now') return -1;
+      if (b.kind === 'meeting-now') return 1;
+      return a.sortAt - b.sortAt;
+    });
+
+    return items.slice(0, 12);
+  }, [inMeeting, currentMeeting, upcomingMeetings, workspaceNotifications]);
+
+  const hasWorkspaceAlerts = workspaceAlertFeed.length > 0;
+  const workspaceSyncMessage = formatWorkspaceSyncError(googleConnection?.sync_error);
+  const showConnectPrompt = !workspaceLoading && !hasConnection;
+  const showReconnectPrompt = !workspaceLoading && needsWorkspaceReconnect;
+  const showSyncBanner = !workspaceLoading && hasConnection && Boolean(workspaceSyncMessage);
+
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-2 pb-4 sm:px-6 sm:pt-3 sm:pb-6 md:px-8 md:pt-4 md:pb-8 lg:px-12 lg:pt-6 lg:pb-10 font-[var(--font-poppins)]">
       <div className="max-w-7xl mx-auto">
@@ -276,21 +406,78 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center gap-3 sm:gap-4 relative" ref={notificationsRef}>
+            {inMeeting ? (
+              currentMeeting?.canJoin && currentMeeting?.id ? (
+                <Link
+                  href={`/meet/${currentMeeting.id}`}
+                  className="hidden sm:inline-flex items-center gap-2 px-3 py-2 bg-amber-500 border border-amber-400 rounded-full text-white text-xs font-bold shadow-sm hover:bg-amber-600 transition-colors max-w-[220px]"
+                >
+                  <Video size={14} className="shrink-0" />
+                  <span className="truncate">Join · {currentMeeting.title || 'Meeting'}</span>
+                </Link>
+              ) : (
+                <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-semibold max-w-[200px] truncate">
+                  <Video size={14} className="shrink-0" />
+                  <span className="truncate">{currentMeeting?.title || 'In meeting'}</span>
+                </div>
+              )
+            ) : null}
             <button
               type="button"
               onClick={() => setNotificationsOpen((o) => !o)}
-              className={`p-2.5 sm:p-3 bg-white border rounded-full shadow-sm hover:shadow-md transition-all ${notificationsOpen ? 'border-indigo-200 text-indigo-600 ring-2 ring-indigo-100' : 'border-gray-100 text-gray-600'}`}
+              className={`relative p-2.5 sm:p-3 bg-white border rounded-full shadow-sm hover:shadow-md transition-all ${notificationsOpen ? 'border-indigo-200 text-indigo-600 ring-2 ring-indigo-100' : 'border-gray-100 text-gray-600'}`}
               aria-label="Notifications and quick actions"
             >
               <Bell size={18} className="sm:w-5 sm:h-5" />
+              {unreadCount > 0 ? (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              ) : needsWorkspaceSync && !workspaceLoading ? (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-500 ring-2 ring-white animate-pulse" aria-hidden />
+              ) : null}
             </button>
             {notificationsOpen && (
               <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50">
                 <div className="px-4 py-2 border-b border-gray-100">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Notifications</p>
                 </div>
-                <div className="px-4 py-4 text-center text-gray-500 text-sm">
-                  You&apos;re all caught up.
+                <div className="max-h-64 overflow-y-auto">
+                  {workspaceLoading && !workspaceNotifications.length ? (
+                    <div className="px-4 py-4 text-center text-gray-400 text-sm">Loading…</div>
+                  ) : workspaceNotifications.length === 0 ? (
+                    <div className="px-4 py-4 text-center text-gray-500 text-sm">
+                      {needsWorkspaceSync && !workspaceLoading ? (
+                        <Link
+                          href="/settings/integrations"
+                          onClick={() => setNotificationsOpen(false)}
+                          className="text-indigo-600 font-semibold hover:underline"
+                        >
+                          Sync Gmail & Calendar →
+                        </Link>
+                      ) : (
+                        "You're all caught up."
+                      )}
+                    </div>
+                  ) : (
+                    workspaceNotifications.slice(0, 8).map((n) => (
+                      <a
+                        key={n.id}
+                        href={n.link_url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setNotificationsOpen(false)}
+                        className="flex gap-3 px-4 py-3 hover:bg-indigo-50 border-b border-gray-50 last:border-0"
+                      >
+                        <Mail size={16} className="text-indigo-500 shrink-0 mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">{n.subject}</p>
+                          <p className="text-xs text-gray-500 truncate">{n.preview}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5 uppercase">{n.source} · {n.provider}</p>
+                        </div>
+                      </a>
+                    ))
+                  )}
                 </div>
                 <div className="border-t border-gray-100 px-2 pt-2">
                   <p className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quick actions</p>
@@ -402,7 +589,7 @@ export default function Dashboard() {
                     <div className="p-1.5 sm:p-2 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl shadow-sm border border-indigo-200/50">
                       <Timer size={14} className="sm:w-4 sm:h-4 text-indigo-600" />
                     </div>
-                    <span className="text-gray-500 font-semibold text-[10px] sm:text-xs tracking-wider uppercase">Time Focused</span>
+                    <span className="text-gray-500 font-semibold text-[10px] sm:text-xs tracking-wider uppercase">Productive time</span>
                   </div>
                   <div className={`${vsYesterday >= 0 ? 'bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-700 border-emerald-200/50' : 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200/50'} text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 shadow-sm border`}>
                     <ArrowUpRight size={11} className={`sm:w-3.5 sm:h-3.5 ${vsYesterday < 0 ? 'rotate-180' : ''}`} />
@@ -417,11 +604,17 @@ export default function Dashboard() {
                   ) : (
                     <>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none">{Math.floor(todayFocusSeconds / 3600)}</span>
+                        <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none">{Math.floor(productiveSecondsToday / 3600)}</span>
                         <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">h</span>
-                        <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none ml-2">{Math.floor((todayFocusSeconds % 3600) / 60)}</span>
+                        <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none ml-2">{Math.floor((productiveSecondsToday % 3600) / 60)}</span>
                         <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">m</span>
                       </div>
+                      {meetingMinutesToday > 0 ? (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Includes {meetingMinutesToday}m meetings
+                          {todayFocusSeconds > 0 ? ` · ${Math.floor(todayFocusSeconds / 60)}m focus timer` : ''}
+                        </p>
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -539,16 +732,19 @@ export default function Dashboard() {
         </div>
 
         {/* --- Bottom Grid --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 md:gap-8 pb-4 sm:pb-6 md:pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 md:gap-8 pb-4 sm:pb-6 md:pb-8 lg:items-start">
           
-          {/* Productivity Trend Graph */}
-          <div className="bg-gradient-to-br from-white to-indigo-50/30 p-5 sm:p-6 md:p-8 rounded-3xl sm:rounded-[40px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 flex flex-col justify-between group relative overflow-hidden">
+          {/* Productivity Trend Graph — natural height; right card matches this on lg */}
+          <div
+            ref={productivityTrendRef}
+            className="bg-gradient-to-br from-white to-indigo-50/30 p-5 sm:p-6 md:p-8 rounded-3xl sm:rounded-[40px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 flex flex-col justify-between group relative overflow-hidden"
+          >
             {/* Background decorative elements */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100/20 rounded-full blur-2xl"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-100/20 rounded-full blur-xl"></div>
             
-            <div className="relative z-10">
-              <div className="flex justify-between items-start mb-4 sm:mb-5 md:mb-6 gap-4">
+            <div className="relative z-10 flex flex-col">
+              <div className="flex justify-between items-start mb-4 sm:mb-5 md:mb-6 gap-4 shrink-0">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <div className="p-1.5 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg shadow-sm border border-indigo-200/50">
@@ -643,15 +839,22 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Upcoming & Alerts */}
-          <div className="bg-gradient-to-br from-white to-indigo-50/20 p-5 sm:p-6 md:p-8 rounded-3xl sm:rounded-[40px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 group relative overflow-hidden">
+          {/* Upcoming & Alerts — same height as Productivity Trend on lg; list scrolls inside */}
+          <div
+            className="bg-gradient-to-br from-white to-indigo-50/20 p-4 sm:p-5 md:p-6 rounded-3xl sm:rounded-[40px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 group relative overflow-hidden flex flex-col w-full"
+            style={
+              productivityTrendHeight
+                ? { height: productivityTrendHeight, maxHeight: productivityTrendHeight }
+                : undefined
+            }
+          >
             {/* Background decorative elements */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100/20 rounded-full blur-2xl"></div>
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-100/20 rounded-full blur-xl"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100/20 rounded-full blur-2xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-100/20 rounded-full blur-xl pointer-events-none"></div>
             
-            <div className="relative z-10">
-             <div className="flex justify-between items-center mb-4 sm:mb-5 md:mb-6 gap-4">
-               <div className="flex-1">
+            <div className="relative z-10 flex flex-col flex-1 min-h-0 h-full overflow-hidden">
+             <div className="flex justify-between items-start mb-3 sm:mb-4 shrink-0 gap-4">
+               <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <div className="p-1.5 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg shadow-sm border border-indigo-200/50">
                       <Calendar size={14} className="sm:w-4 sm:h-4 text-indigo-600" />
@@ -660,19 +863,174 @@ export default function Dashboard() {
                   </div>
                   <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">Your day at a glance</p>
                </div>
+               <Link
+                 href="/settings/integrations"
+                 className="shrink-0 inline-flex items-center justify-center rounded-full border border-indigo-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-600 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
+               >
+                 Integrations
+               </Link>
              </div>
 
-             <div className="space-y-3 sm:space-y-4 md:space-y-5">
+             <div className="relative h-[11rem] sm:h-[12rem] md:h-[13rem] lg:h-auto lg:flex-1 lg:min-h-0">
+               <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-none overscroll-contain px-0.5 py-2">
+             <div className="space-y-2 sm:space-y-2.5">
+                {showConnectPrompt ? (
+                  <Link
+                    href="/settings/integrations"
+                    className="flex items-start gap-3 p-4 rounded-2xl border-2 border-indigo-200/90 bg-gradient-to-r from-indigo-50 to-violet-50/80 hover:border-indigo-300 hover:shadow-md transition-all group"
+                  >
+                    <span className="relative flex h-3 w-3 shrink-0 mt-1">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-indigo-950">Sync Gmail & Calendar</p>
+                      <p className="text-xs text-indigo-800/80 mt-0.5 leading-relaxed">
+                        Connect Google to see meetings and unread mail here.
+                      </p>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-600 shrink-0 group-hover:translate-x-0.5 transition-transform">
+                      →
+                    </span>
+                  </Link>
+                ) : null}
+
+                {showReconnectPrompt ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-indigo-200/90 bg-indigo-50/60">
+                    <p className="flex-1 text-xs sm:text-sm text-indigo-950 leading-relaxed">
+                      Google connection expired. Reconnect to see meetings and mail here.
+                    </p>
+                    <Link
+                      href="/settings/integrations"
+                      className="shrink-0 inline-flex items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
+                    >
+                      Open integrations
+                    </Link>
+                  </div>
+                ) : null}
+
+                {showSyncBanner ? (
+                  <Link
+                    href="/settings/integrations"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs font-medium hover:bg-amber-100/80 transition-colors"
+                  >
+                    <span className="shrink-0 w-2 h-2 rounded-full bg-amber-500" />
+                    <span className="flex-1 truncate">{workspaceSyncMessage}</span>
+                    <span className="shrink-0 font-semibold">Fix →</span>
+                  </Link>
+                ) : null}
+
+                {workspaceLoading && !hasWorkspaceAlerts ? (
+                  <div className="py-6 text-center text-gray-400 text-sm">Loading Gmail & Calendar…</div>
+                ) : null}
+
+                {!workspaceLoading && hasWorkspaceAlerts ? (
+                  <div className="space-y-2 sm:space-y-2.5">
+                    {workspaceAlertFeed.map((alert) => {
+                      const isNow = alert.kind === 'meeting-now';
+                      const isCal = alert.kind === 'calendar';
+                      const isMeeting = isNow || isCal;
+                      const Icon = isNow ? Video : isCal ? Calendar : Mail;
+                      const iconClass = isNow
+                        ? 'text-amber-600 bg-amber-50 border-amber-200/60'
+                        : isCal
+                          ? 'text-indigo-600 bg-indigo-50 border-indigo-200/60'
+                          : 'text-violet-600 bg-violet-50 border-violet-200/60';
+                      const row = (
+                        <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+                          <div
+                            className={`flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl border shrink-0 ${iconClass}`}
+                          >
+                            <Icon size={18} className="sm:w-[18px] sm:h-[18px]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">
+                              {isNow ? `Now · ${alert.title}` : alert.title}
+                            </p>
+                            <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium mt-0.5 truncate">
+                              {alert.when}
+                              {isCal && alert.isOnline ? ' · Video call' : ''}
+                              {alert.kind === 'gmail' ? ' · Gmail' : isCal ? ' · Calendar' : ''}
+                            </p>
+                            {alert.preview ? (
+                              <p className="text-[10px] text-gray-400 mt-0.5 truncate">{alert.preview}</p>
+                            ) : null}
+                          </div>
+                          {isMeeting && alert.canJoin ? (
+                            <span className="shrink-0 rounded-full bg-[#615FFF] px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
+                              Join
+                            </span>
+                          ) : !isNow && alert.href ? (
+                            <ArrowUpRight size={14} className="text-gray-300 shrink-0 mt-1" />
+                          ) : null}
+                        </div>
+                      );
+
+                      const rowClassName = `flex p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all ${
+                        isNow
+                          ? 'border-amber-200/80 ring-1 ring-amber-100/50 bg-white/70 hover:bg-amber-50/40'
+                          : 'border-gray-100/80 bg-white/70 hover:bg-indigo-50/40 hover:border-indigo-100'
+                      }`;
+
+                      if (alert.href?.startsWith('/')) {
+                        return (
+                          <Link key={alert.key} href={alert.href} className={rowClassName}>
+                            {row}
+                          </Link>
+                        );
+                      }
+
+                      if (alert.href) {
+                        return (
+                          <a
+                            key={alert.key}
+                            href={alert.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={rowClassName}
+                          >
+                            {row}
+                          </a>
+                        );
+                      }
+
+                      return (
+                        <div key={alert.key} className={rowClassName}>
+                          {row}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {!workspaceLoading && hasConnection && !hasWorkspaceAlerts && !showConnectPrompt ? (
+                  <div className="py-4 text-center text-gray-500 text-sm rounded-2xl border border-dashed border-gray-200/80 bg-white/40">
+                    <p>No upcoming meetings or unread mail.</p>
+                    <Link
+                      href="/settings/integrations"
+                      className="text-indigo-600 font-medium hover:underline text-xs mt-1 inline-block"
+                    >
+                      Sync now →
+                    </Link>
+                  </div>
+                ) : null}
+
+                {upcomingTasks.length > 0 ? (
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-400 pt-1">
+                    Tasks
+                  </p>
+                ) : null}
+
                 {homeLoading ? (
-                  <div className="py-6 text-center text-gray-400 text-sm">Loading…</div>
-                ) : upcomingTasks.length === 0 ? (
-                  <div className="py-6 text-center text-gray-500 text-sm">
-                    <p className="mb-2">No upcoming tasks</p>
+                  <div className="py-4 text-center text-gray-400 text-sm">Loading tasks…</div>
+                ) : upcomingTasks.length === 0 && !hasWorkspaceAlerts && !showConnectPrompt && !workspaceLoading ? (
+                  <div className="py-4 text-center text-gray-500 text-sm">
+                    <p className="mb-2">No tasks in focus</p>
                     <Link href="/tasks" className="text-indigo-600 font-medium hover:underline inline-flex items-center gap-1">
                       <ListTodo size={14} /> Go to Tasks
                     </Link>
                   </div>
-                ) : (
+                ) : upcomingTasks.length > 0 ? (
                   upcomingTasks.map((task) => {
                     const due = task.due_date ? new Date(task.due_date) : null;
                     const isToday = due && due.toDateString() === new Date().toDateString();
@@ -701,7 +1059,7 @@ export default function Dashboard() {
                       </Link>
                     );
                   })
-                )}
+                ) : null}
                 {!homeLoading && upcomingTasks.length > 0 && (
                   <Link
                     href="/tasks"
@@ -710,6 +1068,8 @@ export default function Dashboard() {
                     View all tasks →
                   </Link>
                 )}
+             </div>
+               </div>
              </div>
             </div>
           </div>

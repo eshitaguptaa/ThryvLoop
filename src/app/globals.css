@@ -220,3 +220,14 @@ body {
     box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
   }
 }
+
+/* Hide scrollbars while keeping scroll (e.g. Upcoming & Alerts feed) */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

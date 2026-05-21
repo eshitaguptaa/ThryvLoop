@@ -1,0 +1,61 @@
+/**
+ * B2B workspace UI shell — slate canvas (matches personal `/home`), elevated cards.
+ * Keep in sync with org routes under /o.
+ */
+
+export const orgPrimary = '#5D3FD3';
+export const orgPrimaryHover = '#5032c4';
+export const orgLavender = '#F3F0FF';
+export const orgLavenderMuted = '#FAF8FF';
+
+/** Workspaces directory (`/o`) — slate base + soft centered mesh (lavender / purple) */
+export const workspacesDirectorySurfaceClass = [
+  'min-h-screen w-full text-[#111827] antialiased',
+  'bg-[#F1F5F9]',
+  '[background-image:radial-gradient(ellipse_75%_55%_at_50%_42%,rgba(139,92,246,0.11),transparent_58%),radial-gradient(ellipse_65%_50%_at_50%_58%,rgba(167,139,250,0.09),transparent_55%),radial-gradient(ellipse_90%_70%_at_50%_50%,rgba(244,114,182,0.05),transparent_68%)]',
+].join(' ');
+
+/** Workspaces list (`/o`) — centered column; avoids ultra-wide stretch */
+export const workspaceDirectoryContentClass = 'w-full max-w-7xl mx-auto';
+
+/** Main canvas — slate + subtle dot grid (org workspace routes under `/o/[slug]`) */
+export const workspaceSurfaceClass = [
+  'min-h-screen w-full text-[#111827] antialiased bg-[#F1F5F9]',
+  '[background-image:radial-gradient(circle_at_center,rgba(100,116,139,0.2)_1px,transparent_1px)]',
+  '[background-size:20px_20px]',
+].join(' ');
+
+/** Horizontal + vertical padding — extra top space so first headings don’t hug the shell */
+export const workspaceInsetClass =
+  'px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-6 md:px-8 md:pt-9 md:pb-8 lg:px-12 lg:pt-10 lg:pb-10 font-[var(--font-poppins)] text-[#1A1A1A]';
+
+/** Inner content width — matches personal `max-w-7xl mx-auto` band */
+export const workspaceContentClass = 'max-w-7xl mx-auto';
+
+/** White cards with clear lift off #F1F5F9 */
+export const workspaceCardClass =
+  'rounded-xl sm:rounded-2xl bg-white border border-slate-200/90 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),0_12px_32px_-12px_rgba(15,23,42,0.14)]';
+
+/** Eyebrow — matches personal dashboard (`/home`) */
+export const workspaceEyebrowClass =
+  'text-indigo-500 text-xs font-semibold uppercase tracking-widest mb-2';
+
+/** Workspace shell navbar — white card on slate background (reference UI) */
+export const workspaceNavbarCardClass =
+  'rounded-xl sm:rounded-2xl border border-slate-200/90 bg-white px-4 py-2.5 sm:px-5 sm:py-3 md:px-6 md:py-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),0_12px_32px_-12px_rgba(15,23,42,0.12)]';
+
+/** Primary page `<h1>` — matches personal app scale */
+export const workspacePageTitleClass =
+  'text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-2 leading-tight';
+
+/** Primary CTA — solid purple */
+export const workspacePrimaryButtonClass =
+  'rounded-xl bg-[#5D3FD3] hover:bg-[#5032c4] text-white px-5 py-2.5 text-sm font-semibold shadow-sm transition-colors';
+
+/** Muted text link (Personal app, breadcrumbs) */
+export const workspaceMutedLinkClass =
+  'text-sm font-medium text-[#5D3FD3] hover:text-[#5032c4] transition-colors';
+
+/** Invite / callout panels — reads as a card on slate */
+export const workspaceInvitePanelClass =
+  'rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),0_10px_28px_-10px_rgba(15,23,42,0.12)]';

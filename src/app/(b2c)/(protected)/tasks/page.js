@@ -131,9 +131,9 @@ export default function TasksPage() {
 
   const groupTasksByColumn = (rows) => {
     const grouped = { todaysFocus: [], inProgress: [], backlog: [], done: [] };
-    const tasks = rows.map((row) => mapRowToTask(row));
+    const taskList = rows.map((row) => mapRowToTask(row));
     const byId = new Map();
-    tasks.forEach((task) => {
+    taskList.forEach((task) => {
       const id = String(task?.id ?? '').trim();
       if (!id) return;
       const existing = byId.get(id);
@@ -182,7 +182,7 @@ export default function TasksPage() {
         .order('created_at', { ascending: true });
       if (error) throw error;
       if (fetchIdRef.current !== thisFetchId || fetchCancelledRef.current) return;
-      
+
       const next = !data || data.length === 0
         ? { todaysFocus: [], inProgress: [], backlog: [], done: [] }
         : groupTasksByColumn(data);
@@ -273,8 +273,8 @@ export default function TasksPage() {
           next[column] = next[column].filter((item) => item.id !== task.id);
         });
         const column = next[task.column] ? task.column : 'backlog';
-        if (!next[column].some(t => taskIdMatches(t.id, task.id))) {
-            next[column] = [...next[column], task];
+        if (!next[column].some((t) => taskIdMatches(t.id, task.id))) {
+          next[column] = [...next[column], task];
         }
         return next;
       });
@@ -525,7 +525,7 @@ export default function TasksPage() {
   const filterTasks = (taskList) => {
     let filtered = taskList;
     if (searchQuery.trim()) {
-      filtered = filtered.filter(task =>
+      filtered = filtered.filter((task) =>
         task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         task.category.toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -1362,7 +1362,7 @@ function TaskColumn({
   onDragEnd,
   onDragOver,
   onDrop,
-  viewMode = 'grid'
+  viewMode = 'grid',
 }) {
   const colorClasses = {
     purple: 'bg-purple-500',
@@ -1463,7 +1463,7 @@ function TaskCard({
   onDragStart,
   onDragEnd,
   isDragging,
-  viewMode = 'grid'
+  viewMode = 'grid',
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [menuOpenUpward, setMenuOpenUpward] = useState(false);
@@ -1717,7 +1717,7 @@ function TaskModal({ task, onClose, onSave }) {
           <h2 className="text-2xl font-bold text-gray-900">
             {task ? 'Edit Task' : 'New Task'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -1793,7 +1793,7 @@ function TaskModal({ task, onClose, onSave }) {
               onChange={(e) => setColumn(e.target.value)}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             >
-              <option value="todaysFocus">Today's Focus</option>
+              <option value="todaysFocus">Today&apos;s Focus</option>
               <option value="inProgress">In Progress</option>
               <option value="backlog">Backlog</option>
             </select>

@@ -31,7 +31,10 @@ import {
   Flame,
   BarChart3,
   CircleDot,
+  Video,
+  Mail,
 } from 'lucide-react';
+import { useWorkspace } from '@/hooks/useWorkspace';
 import { Outfit } from 'next/font/google';
 import { getSupabaseClient, setSupabaseAuthToken, getFocusTimerStateFromSupabase } from '@/utils/userStorage';
 
@@ -53,6 +56,13 @@ export default function AnalyticsDashboard() {
   const [error, setError] = useState('');
   const [seedLoading, setSeedLoading] = useState(false);
   const [seedMessage, setSeedMessage] = useState('');
+
+  const {
+    meetingMinutesToday,
+    meetingMinutesThisWeek,
+    inMeeting,
+    hasConnection,
+  } = useWorkspace({ enabled: Boolean(isSignedIn && userId) });
 
   const loadData = useCallback(async () => {
     if (!userId) return;
@@ -192,6 +202,8 @@ export default function AnalyticsDashboard() {
   const focusMinutesThisWeek = focusSessions
     .filter((s) => s.completed_at && s.completed_at.slice(0, 10) >= weekStartStr)
     .reduce((sum, s) => sum + (s.duration_seconds || 0) / 60, 0);
+  const productiveMinutesToday = Math.round(focusMinutesToday + meetingMinutesToday);
+  const productiveMinutesThisWeek = Math.round(focusMinutesThisWeek + meetingMinutesThisWeek);
   const tasksCompletedThisWeek = completedTasks.filter((t) => t.completed_at && t.completed_at.slice(0, 10) >= weekStartStr).length;
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -361,14 +373,15 @@ export default function AnalyticsDashboard() {
         </div>
 
         {/* KPI strip — below Focus & sessions chart */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4 sm:gap-5 mb-10">
           {[
-            { label: 'Sessions today', value: displaySessions, sub: `${focusMinutesToday} min`, icon: Activity, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
-            { label: 'Focus this week', value: Math.round(focusMinutesThisWeek), sub: 'minutes', icon: TrendingUp, color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.08)' },
+            { label: 'Sessions today', value: displaySessions, sub: `${focusMinutesToday} min timer`, icon: Activity, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
+            { label: 'Meetings today', value: meetingMinutesToday, sub: inMeeting ? 'In meeting now' : hasConnection ? 'calendar' : 'Not connected', icon: Video, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.08)' },
+            { label: 'Productive today', value: productiveMinutesToday, sub: 'focus + meetings', icon: TrendingUp, color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.08)' },
+            { label: 'Productive (week)', value: productiveMinutesThisWeek, sub: 'minutes', icon: Mail, color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.08)' },
             { label: 'Tasks done (week)', value: tasksCompletedThisWeek, sub: 'completed', icon: CheckCircle2, color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
             { label: 'Streak', value: streak, sub: 'days', icon: Flame, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
             { label: 'Efficiency', value: `${focusEfficiency}%`, sub: modeLabel, icon: Target, color: '#5043F3', bg: 'rgba(80, 67, 243, 0.08)' },
-            { label: 'Total tasks', value: totalTasks, sub: `${doneCount} done`, icon: BarChart3, color: '#64748b', bg: 'rgba(100, 116, 139, 0.08)' },
           ].map((kpi) => (
             <div
               key={kpi.label}

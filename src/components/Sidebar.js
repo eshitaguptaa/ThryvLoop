@@ -78,6 +78,19 @@ const navigationItems = [
     ],
   },
   {
+    name: 'Calendar',
+    href: '/calendar',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+        />
+      </svg>
+    ),
+  },
+  {
     name: 'Tasks',
     href: '/tasks',
     icon: (
@@ -101,6 +114,15 @@ const navigationItems = [
         {/* Plus signs above first and third points */}
         <path d="M4 10 L4 12 M3 11 L5 11" stroke="currentColor" strokeWidth={1.5} />
         <path d="M20 6 L20 8 M19 7 L21 7" stroke="currentColor" strokeWidth={1.5} />
+      </svg>
+    ),
+  },
+  {
+    name: 'Workspaces',
+    href: '/o',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
       </svg>
     ),
   },
@@ -136,7 +158,7 @@ export default function Sidebar({ className = '' }) {
   });
   const [showSpacesDrawer, setShowSpacesDrawer] = useState(false);
   const [showSoundscapeComposer, setShowSoundscapeComposer] = useState(false);
-  
+
   // Save expanded items to localStorage whenever they change
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -324,7 +346,10 @@ export default function Sidebar({ className = '' }) {
       {/* Navigation Items */}
       <nav className="flex-1 flex flex-col items-center space-y-2 w-full overflow-y-auto px-2 sidebar-scroll">
         {navigationItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive =
+            pathname === item.href
+            || (item.href === '/o' && !!pathname && pathname.startsWith('/o/'))
+            || (item.href === '/calendar' && !!pathname && pathname.startsWith('/calendar'));
           const hasSubItems = item.subItems && item.subItems.length > 0;
           const isExpanded = expandedItems.includes(item.name);
           const isActiveSubItem = hasSubItems && item.subItems?.some((subItem) => pathname === subItem.href);
@@ -499,6 +524,7 @@ export default function Sidebar({ className = '' }) {
 
       {/* Settings (Soundscape/Timer) Button */}
       <button
+        type="button"
         onClick={() => setShowSoundscapeComposer(true)}
         className="flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 transition-all duration-200 mb-2 group"
         title="Settings"
