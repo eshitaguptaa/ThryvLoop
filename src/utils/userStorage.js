@@ -188,18 +188,23 @@ export async function setFocusTimerRecipesToSupabase(userId, recipes) {
  * Call when a Pomodoro focus phase or Countdown completes, or when Stopwatch is paused/reset.
  * Pass either sessionMinutes (countdown/pomodoro) or durationSeconds (stopwatch).
  */
-export async function logFocusSessionToSupabase(userId, options) {
-  if (typeof window === 'undefined' || !userId) return;
+/**
+ * @returns {Promise<string|null>} Error message, or null on success.
+ */
+export async function logFocusSessionToSupabase(userId, options, accessToken) {
+  if (typeof window === 'undefined' || !userId) return 'Not signed in';
   const { sessionMinutes, durationSeconds: durationSecondsOpt, phase = 'session', mode = 'pomodoro' } = options || {};
   const durationSeconds = durationSecondsOpt != null && durationSecondsOpt > 0
     ? Math.floor(durationSecondsOpt)
     : Math.max(1, (sessionMinutes || 25) * 60);
+  if (durationSeconds < 1) return null;
   const completedAt = new Date();
   const startedAt = new Date(completedAt.getTime() - durationSeconds * 1000);
   try {
+    if (accessToken) setSupabaseAuthToken(accessToken);
     const supabase = getSupabaseClient();
-    if (!supabase) return;
-    await supabase.from('focus_sessions').insert({
+    if (!supabase) return 'Database not configured';
+    const { error } = await supabase.from('focus_sessions').insert({
       user_id: userId,
       started_at: startedAt.toISOString(),
       completed_at: completedAt.toISOString(),
@@ -207,7 +212,14 @@ export async function logFocusSessionToSupabase(userId, options) {
       phase: phase === 'longBreak' ? 'long_break' : phase === 'shortBreak' ? 'short_break' : 'session',
       mode: mode || 'pomodoro',
     });
-  } catch {
-    // ignore
+    if (error) {
+      console.error('focus_sessions insert failed:', error.message);
+      return error.message;
+    }
+    return null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed to log focus session';
+    console.error('focus_sessions insert failed:', msg);
+    return msg;
   }
 }

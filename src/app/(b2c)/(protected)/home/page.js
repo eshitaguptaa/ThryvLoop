@@ -21,6 +21,8 @@ import { formatWorkspaceSyncError } from '@/lib/workspace/userMessages';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient, setSupabaseAuthToken, getUserStorageItem, getUserStorageJson, setUserStorageItem } from '@/utils/userStorage';
+import { localEndOfDay, localStartOfDay } from '@/lib/dateRanges';
+import { useTimer } from '@/contexts/TimerContext';
 
 const FOCUS_GOAL_MINUTES = 120; // 2 hours default daily goal
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -35,17 +37,6 @@ const SOUNDSCAPE_SOUND_NAMES = {
   synthwave: 'Synthwave',
   spaces: 'Spaces',
 };
-
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setUTCHours(0, 0, 0, 0);
-  return x.toISOString();
-}
-function endOfDay(d) {
-  const x = new Date(d);
-  x.setUTCHours(23, 59, 59, 999);
-  return x.toISOString();
-}
 
 function formatWorkspaceWhen(iso) {
   if (!iso) return '';
@@ -79,6 +70,8 @@ export default function Dashboard() {
   const productivityTrendRef = useRef(null);
   const [productivityTrendHeight, setProductivityTrendHeight] = useState(null);
   const workspaceSyncedRef = useRef(false);
+
+  const { unloggedFocusSeconds } = useTimer();
 
   const {
     hasConnection,
@@ -202,15 +195,15 @@ export default function Dashboard() {
         return;
       }
       const now = new Date();
-      const todayStart = startOfDay(now);
-      const todayEnd = endOfDay(now);
+      const todayStart = localStartOfDay(now);
+      const todayEnd = localEndOfDay(now);
       const yesterday = new Date(now);
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStart = startOfDay(yesterday);
-      const yesterdayEnd = endOfDay(yesterday);
+      const yesterdayStart = localStartOfDay(yesterday);
+      const yesterdayEnd = localEndOfDay(yesterday);
       const weekAgo = new Date(now);
       weekAgo.setDate(weekAgo.getDate() - 6);
-      const weekStart = startOfDay(weekAgo);
+      const weekStart = localStartOfDay(weekAgo);
 
       const [todayRes, yesterdayRes, weekRes, tasksRes] = await Promise.all([
         supabase
@@ -294,6 +287,22 @@ export default function Dashboard() {
   }, [isLoaded, isSignedIn, userId, loadHomeData]);
 
   useEffect(() => {
+    const onSessionLogged = () => {
+      void loadHomeData();
+    };
+    window.addEventListener('focus-session-logged', onSessionLogged);
+    return () => window.removeEventListener('focus-session-logged', onSessionLogged);
+  }, [loadHomeData]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !userId) return;
+    const id = setInterval(() => {
+      void loadHomeData();
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [isLoaded, isSignedIn, userId, loadHomeData]);
+
+  useEffect(() => {
     if (!hasConnection || workspaceSyncedRef.current) return;
     workspaceSyncedRef.current = true;
     void syncWorkspace().catch(() => {});
@@ -308,7 +317,8 @@ export default function Dashboard() {
     ? new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
     : '';
   const meetingSecondsToday = meetingMinutesToday * 60;
-  const productiveSecondsToday = todayFocusSeconds + meetingSecondsToday;
+  const productiveSecondsToday =
+    todayFocusSeconds + meetingSecondsToday + (unloggedFocusSeconds || 0);
   const goalSeconds = FOCUS_GOAL_MINUTES * 60;
   const focusPercent =
     goalSeconds > 0 ? Math.min(100, Math.round((productiveSecondsToday / goalSeconds) * 100)) : 0;
@@ -609,10 +619,16 @@ export default function Dashboard() {
                         <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none ml-2">{Math.floor((productiveSecondsToday % 3600) / 60)}</span>
                         <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">m</span>
                       </div>
-                      {meetingMinutesToday > 0 ? (
+                      {(meetingMinutesToday > 0 || productiveSecondsToday > meetingSecondsToday) ? (
                         <p className="text-xs text-gray-500 mt-2">
-                          Includes {meetingMinutesToday}m meetings
-                          {todayFocusSeconds > 0 ? ` · ${Math.floor(todayFocusSeconds / 60)}m focus timer` : ''}
+                          {meetingMinutesToday > 0 ? `Includes ${meetingMinutesToday}m meetings` : null}
+                          {productiveSecondsToday > meetingSecondsToday ? (
+                            <>
+                              {meetingMinutesToday > 0 ? ' · ' : null}
+                              {Math.floor((productiveSecondsToday - meetingSecondsToday) / 60)}m focus timer
+                              {unloggedFocusSeconds > 0 ? ' (timer running)' : ''}
+                            </>
+                          ) : null}
                         </p>
                       ) : null}
                     </>
