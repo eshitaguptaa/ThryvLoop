@@ -129,39 +129,89 @@ async function syncGoogleGmail(userId, token) {
 }
 
 async function upsertGmailNotifications(userId, token, gmailList, supabase) {
+  const messageItems = (gmailList?.messages || []).slice(0, 15);
+  const nowIso = new Date().toISOString();
 
-  const notifications = [];
-  for (const item of (gmailList?.messages || []).slice(0, 10)) {
-    const msgRes = await fetch(
-      `https://www.googleapis.com/gmail/v1/users/me/messages/${item.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const msg = await msgRes.json();
-    if (!msgRes.ok) continue;
-    const headers = msg.payload?.headers || [];
-    const subject = headers.find((h) => h.name === 'Subject')?.value || '(No subject)';
-    const from = headers.find((h) => h.name === 'From')?.value || '';
-    const received = msg.internalDate
-      ? new Date(parseInt(msg.internalDate, 10)).toISOString()
-      : new Date().toISOString();
-    notifications.push({
-      user_id: userId,
-      provider: 'google',
-      source: 'gmail',
-      external_id: item.id,
-      subject,
-      preview: from.slice(0, 200),
-      received_at: received,
-      is_read: false,
-      link_url: `https://mail.google.com/mail/u/0/#inbox/${item.id}`,
-      synced_at: new Date().toISOString(),
-    });
+  if (!messageItems.length) {
+    await supabase
+      .from('workspace_notifications')
+      .update({ is_read: true, synced_at: nowIso })
+      .eq('user_id', userId)
+      .eq('source', 'gmail')
+      .eq('is_read', false);
+    return;
   }
+
+  const fetched = await Promise.all(
+    messageItems.map(async (item) => {
+      const msgRes = await fetch(
+        `https://www.googleapis.com/gmail/v1/users/me/messages/${item.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const msg = await msgRes.json();
+      if (!msgRes.ok) return null;
+
+      const headers = msg.payload?.headers || [];
+      const subject = headers.find((h) => h.name === 'Subject')?.value || '(No subject)';
+      const from = headers.find((h) => h.name === 'From')?.value || '';
+      const internalDateMs = msg.internalDate ? parseInt(msg.internalDate, 10) : Date.now();
+      const received = new Date(internalDateMs).toISOString();
+      const isUnread = Array.isArray(msg.labelIds) ? msg.labelIds.includes('UNREAD') : true;
+
+      return {
+        user_id: userId,
+        provider: 'google',
+        source: 'gmail',
+        external_id: item.id,
+        subject,
+        preview: from.slice(0, 200),
+        received_at: received,
+        is_read: !isUnread,
+        link_url: `https://mail.google.com/mail/u/0/#inbox/${item.id}`,
+        synced_at: nowIso,
+        internalDateMs,
+      };
+    })
+  );
+
+  const sorted = fetched
+    .filter(Boolean)
+    .sort((a, b) => b.internalDateMs - a.internalDateMs)
+    .slice(0, 10);
+
+  const notifications = sorted.map(({ internalDateMs, ...row }) => row);
+  const syncedIds = notifications.map((n) => n.external_id);
+
   if (notifications.length) {
     await supabase.from('workspace_notifications').upsert(notifications, {
       onConflict: 'user_id,provider,external_id',
     });
   }
+
+  // Mark messages no longer unread in Gmail as read in our feed
+  let markReadQuery = supabase
+    .from('workspace_notifications')
+    .update({ is_read: true, synced_at: nowIso })
+    .eq('user_id', userId)
+    .eq('source', 'gmail')
+    .eq('is_read', false);
+
+  if (syncedIds.length > 0) {
+    markReadQuery = markReadQuery.not('external_id', 'in', `(${syncedIds.join(',')})`);
+  }
+
+  await markReadQuery;
+
+  // Drop read Gmail rows older than 14 days so the feed stays current
+  const staleBefore = new Date();
+  staleBefore.setDate(staleBefore.getDate() - 14);
+  await supabase
+    .from('workspace_notifications')
+    .delete()
+    .eq('user_id', userId)
+    .eq('source', 'gmail')
+    .eq('is_read', true)
+    .lt('received_at', staleBefore.toISOString());
 }
 
 /** @param {string} userId */

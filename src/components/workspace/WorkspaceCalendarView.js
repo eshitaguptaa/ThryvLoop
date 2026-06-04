@@ -8,16 +8,30 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Plus,
+  Pencil,
   RefreshCw,
   Video,
   Clock,
 } from 'lucide-react';
 import { workspaceApiFetch } from '@/lib/workspace/clientApi';
+import CalendarEventModal from '@/components/workspace/CalendarEventModal';
+import {
+  eventOverlapsLocalDay,
+  isSameLocalDay,
+  localDayKey,
+  localMinutesFromMidnight,
+} from '@/lib/calendarDateUtils';
+import { layoutDayEventsForGrid } from '@/lib/calendarEventLayout';
 
-const HOUR_START = 6;
-const HOUR_END = 22;
+const HOUR_START = 0;
+const HOUR_END = 23;
 const HOUR_HEIGHT = 56;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
+const HOUR_COUNT = HOURS.length;
+/** Room so first/last hour labels aren't clipped by the day header or container edge */
+const TIME_GRID_INSET = 16;
+const DEFAULT_SLOT_DURATION_MINUTES = 60;
 
 function startOfDay(d) {
   const x = new Date(d);
@@ -43,11 +57,7 @@ function endOfWeek(weekStart) {
 }
 
 function isSameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return isSameLocalDay(a, b);
 }
 
 function formatTime(iso) {
@@ -68,8 +78,23 @@ function formatWeekRange(weekStart) {
 }
 
 function eventMinutesFromMidnight(iso) {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
+  return localMinutesFromMidnight(iso);
+}
+
+/** @param {Date} day @param {number} clickY px from top of day column @param {number} gridBodyHeight full column height including insets */
+function slotRangeFromClick(day, clickY, gridBodyHeight) {
+  const contentHeight = gridBodyHeight - TIME_GRID_INSET * 2;
+  const y = Math.max(0, Math.min(contentHeight, clickY - TIME_GRID_INSET));
+  const hourIndex = Math.min(
+    HOUR_COUNT - 1,
+    Math.max(0, Math.floor((y / contentHeight) * HOUR_COUNT))
+  );
+  const totalMinutes = (HOUR_START + hourIndex) * 60;
+
+  const start = new Date(day);
+  start.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+  const end = new Date(start.getTime() + DEFAULT_SLOT_DURATION_MINUTES * 60 * 1000);
+  return { start, end };
 }
 
 export default function WorkspaceCalendarView() {
@@ -83,6 +108,12 @@ export default function WorkspaceCalendarView() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState('create');
+  const [activeEvent, setActiveEvent] = useState(null);
+  const [createSlotRange, setCreateSlotRange] = useState(null);
+  const [eventSaving, setEventSaving] = useState(false);
+  const [modalSaveError, setModalSaveError] = useState('');
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
@@ -102,8 +133,8 @@ export default function WorkspaceCalendarView() {
     }
     setLoading(true);
     setError('');
-    const rangeStart = weekStart;
-    const rangeEnd = endOfWeek(weekStart);
+    const rangeStart = startOfDay(weekStart);
+    const rangeEnd = addDays(startOfDay(weekStart), 7);
     try {
       const res = await workspaceApiFetch(
         `/api/workspace/calendar?start=${encodeURIComponent(rangeStart.toISOString())}&end=${encodeURIComponent(rangeEnd.toISOString())}`,
@@ -151,18 +182,144 @@ export default function WorkspaceCalendarView() {
     setSelectedDay(today);
   };
 
+  const openCreateModal = (slotRange = null) => {
+    setCreateSlotRange(slotRange);
+    setActiveEvent(null);
+    setModalMode('create');
+    setModalSaveError('');
+    setModalOpen(true);
+  };
+
+  const openCreateModalAtSlot = (day, clickY, gridBodyHeight) => {
+    const range = slotRangeFromClick(day, clickY, gridBodyHeight);
+    setSelectedDay(startOfDay(day));
+    openCreateModal(range);
+  };
+
+  const openEventModal = (ev) => {
+    setActiveEvent(ev);
+    setModalMode(ev.editable ? 'edit' : 'view');
+    setModalSaveError('');
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    if (eventSaving) return;
+    setModalOpen(false);
+    setActiveEvent(null);
+    setCreateSlotRange(null);
+    setModalSaveError('');
+  };
+
+  const saveEvent = async (payload) => {
+    setEventSaving(true);
+    setModalSaveError('');
+    setError('');
+    try {
+      const isCreate = modalMode === 'create';
+      const path = isCreate
+        ? '/api/workspace/calendar/events'
+        : `/api/workspace/calendar/events/${activeEvent.id}`;
+      const res = await workspaceApiFetch(
+        path,
+        {
+          method: isCreate ? 'POST' : 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+        getToken
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        setModalSaveError(json.error || 'Could not save this event. Check the details and try again.');
+        return;
+      }
+      if (json.event) {
+        setEvents((prev) => {
+          const key = (e) => `${e.source}-${e.id}`;
+          const merged = [...prev.filter((e) => key(e) !== key(json.event)), json.event];
+          return merged.sort(
+            (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+          );
+        });
+      }
+      setModalOpen(false);
+      setActiveEvent(null);
+      setCreateSlotRange(null);
+      setModalSaveError('');
+      await fetchCalendar();
+    } catch {
+      setModalSaveError('Could not save this event. Please try again.');
+    } finally {
+      setEventSaving(false);
+    }
+  };
+
+  const deleteEvent = async () => {
+    if (!activeEvent?.id) return;
+    setEventSaving(true);
+    setError('');
+    try {
+      const res = await workspaceApiFetch(
+        `/api/workspace/calendar/events/${activeEvent.id}`,
+        { method: 'DELETE' },
+        getToken
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to delete event');
+      setModalOpen(false);
+      setActiveEvent(null);
+      await fetchCalendar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete event');
+    } finally {
+      setEventSaving(false);
+    }
+  };
+
+  const appEventCount = useMemo(
+    () => events.filter((e) => e.source === 'app').length,
+    [events]
+  );
+
+  const eventsByLocalDate = useMemo(() => {
+    const map = new Map();
+    for (const ev of events) {
+      const key = localDayKey(ev.startsAt);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(ev);
+    }
+    return map;
+  }, [events]);
+
+  const gridSegmentOpts = useMemo(
+    () => ({ hourStart: HOUR_START, hourCount: HOUR_COUNT }),
+    []
+  );
+
   const eventsByDay = useMemo(() => {
     const map = new Map();
     for (const day of weekDays) {
       map.set(day.toDateString(), []);
     }
     for (const ev of events) {
-      const start = new Date(ev.startsAt);
-      const key = startOfDay(start).toDateString();
-      if (map.has(key)) map.get(key).push(ev);
+      for (const day of weekDays) {
+        if (eventOverlapsLocalDay(ev, day)) {
+          map.get(day.toDateString()).push(ev);
+        }
+      }
     }
     return map;
   }, [events, weekDays]);
+
+  const eventLayoutsByDay = useMemo(() => {
+    const map = new Map();
+    for (const day of weekDays) {
+      const dayEvents = eventsByDay.get(day.toDateString()) || [];
+      map.set(day.toDateString(), layoutDayEventsForGrid(dayEvents, day, gridSegmentOpts));
+    }
+    return map;
+  }, [eventsByDay, weekDays, gridSegmentOpts]);
 
   const selectedDayEvents = useMemo(() => {
     const list = eventsByDay.get(selectedDay.toDateString()) || [];
@@ -171,30 +328,39 @@ export default function WorkspaceCalendarView() {
 
   const now = new Date();
   const nowMinutes = eventMinutesFromMidnight(now);
-  const gridHeight = (HOUR_END - HOUR_START) * HOUR_HEIGHT;
+  const gridHeight = HOUR_COUNT * HOUR_HEIGHT;
+  const gridBodyHeight = gridHeight + TIME_GRID_INSET * 2;
 
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-2 pb-8 sm:px-6 sm:pt-4 md:px-8 lg:px-12 font-(--font-poppins)">
-      <div className="max-w-[1600px] mx-auto">
+      <div className="max-w-[1920px] mx-auto">
         <header className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6 sm:mb-8">
           <div>
             <p className="text-indigo-500 text-xs font-semibold uppercase tracking-widest mb-2">Schedule</p>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Calendar</h1>
             <p className="text-sm text-gray-500 mt-1 font-medium">
               {hasConnection && accountEmail
-                ? `Synced from ${accountEmail}`
-                : 'Connect Google to see your calendar here'}
+                ? `ThryvLoop events + Google (${accountEmail})`
+                : 'Schedule in ThryvLoop — connect Google to sync external events'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               type="button"
+              onClick={() => openCreateModal()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 shadow-lg hover:shadow-xl transition-all"
+            >
+              <Plus size={16} />
+              New Event
+            </button>
+            <button
+              type="button"
               onClick={goToday}
-              className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+              className="px-4 py-2.5 rounded-xl border-2 border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm hover:shadow-md transition-all"
             >
               Today
             </button>
-            <div className="flex items-center rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="flex items-center rounded-xl border-2 border-gray-200 bg-white shadow-sm hover:shadow-md overflow-hidden transition-shadow">
               <button
                 type="button"
                 onClick={() => setWeekStart((w) => addDays(w, -7))}
@@ -237,31 +403,33 @@ export default function WorkspaceCalendarView() {
         </header>
 
         {error ? (
-          <div className="mb-6 rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+          <div className="mb-6 rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
             {error}
           </div>
         ) : null}
 
+        <p className="mb-4 text-xs text-gray-500 font-medium hidden sm:block">
+          Tip: click any empty time in the week view to schedule · ThryvLoop events are editable, Google events sync read-only
+        </p>
+
         {!hasConnection && !loading ? (
-          <div className="rounded-3xl border-2 border-dashed border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-white p-10 sm:p-14 text-center shadow-sm">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-600 mb-4">
-              <Calendar size={28} />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">Connect your Google Calendar</h2>
-            <p className="text-gray-500 text-sm mt-2 max-w-md mx-auto leading-relaxed">
-              See your meetings week-by-week, join Google Meet calls, and keep ThryvLoop in sync with your schedule.
+          <div className="mb-5 rounded-xl border-2 border-indigo-100 bg-indigo-50/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-indigo-900/90">
+              <span className="font-semibold">Google Calendar not connected.</span> You can still create events
+              here. Connect Google to import meetings and Meet links.
             </p>
             <Link
               href="/settings/integrations"
-              className="mt-6 inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-700 transition-colors"
+              className="shrink-0 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
             >
-              Open integrations
+              Connect Google
             </Link>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-[240px_1fr_300px] gap-5 sm:gap-6">
+        ) : null}
+
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(168px,188px)_minmax(0,1fr)_minmax(220px,248px)] gap-4 sm:gap-5 xl:gap-4">
             {/* Mini month */}
-            <aside className="bg-white rounded-3xl border border-gray-100/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-4 sm:p-5 h-fit">
+            <aside className="bg-white rounded-2xl border-2 border-gray-100/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-3 sm:p-4 h-fit self-start xl:sticky xl:top-6 xl:max-w-[188px]">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm font-bold text-gray-900">{formatMonthYear(selectedDay)}</p>
                 <div className="flex gap-0.5">
@@ -299,7 +467,7 @@ export default function WorkspaceCalendarView() {
                   const inMonth = day.getMonth() === selectedDay.getMonth();
                   const selected = isSameDay(day, selectedDay);
                   const isToday = isSameDay(day, now);
-                  const hasEvents = (eventsByDay.get(day.toDateString()) || []).length > 0;
+                  const hasEvents = (eventsByLocalDate.get(day.toDateString()) || []).length > 0;
                   return (
                     <button
                       key={day.toISOString()}
@@ -331,8 +499,8 @@ export default function WorkspaceCalendarView() {
               ) : null}
             </aside>
 
-            {/* Week grid */}
-            <section className="bg-white rounded-3xl border border-gray-100/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] overflow-hidden min-h-[480px]">
+            {/* Week grid — click empty cells to create at that time (30-min snap, 1 hr default) */}
+            <section className="bg-white rounded-2xl border-2 border-gray-100/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] overflow-hidden min-h-[480px]">
               {loading ? (
                 <div className="flex items-center justify-center py-32 text-gray-400">
                   <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
@@ -368,21 +536,27 @@ export default function WorkspaceCalendarView() {
                     })}
                   </div>
 
-                  <div className="grid grid-cols-[52px_repeat(7,1fr)] overflow-x-auto">
-                    <div className="border-r border-gray-100 relative" style={{ height: gridHeight }}>
-                      {HOURS.map((h) => (
+                  <div className="grid grid-cols-[52px_repeat(7,1fr)] overflow-x-auto overflow-y-auto max-h-[min(720px,70vh)] pb-1">
+                    <div className="border-r border-gray-100 relative" style={{ height: gridBodyHeight }}>
+                      {HOURS.map((h) => {
+                        const isFirst = h === HOUR_START;
+                        const isLast = h === HOUR_END;
+                        return (
                         <div
                           key={h}
-                          className="absolute left-0 right-0 text-[10px] text-gray-400 font-medium pr-2 text-right -translate-y-1/2"
-                          style={{ top: (h - HOUR_START) * HOUR_HEIGHT }}
+                          className={`absolute left-0 right-0 text-[10px] text-gray-400 font-medium pr-2 text-right leading-none ${
+                            isFirst ? 'translate-y-0' : isLast ? '-translate-y-full' : '-translate-y-1/2'
+                          }`}
+                          style={{ top: TIME_GRID_INSET + (h - HOUR_START) * HOUR_HEIGHT }}
                         >
-                          {h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`}
+                          {h === 0 ? '12 AM' : h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {weekDays.map((day) => {
-                      const dayEvents = eventsByDay.get(day.toDateString()) || [];
+                      const dayLayouts = eventLayoutsByDay.get(day.toDateString()) || [];
                       const isToday = isSameDay(day, now);
                       const showNowLine =
                         isToday && nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
@@ -390,16 +564,31 @@ export default function WorkspaceCalendarView() {
                       return (
                         <div
                           key={day.toISOString()}
-                          className={`relative border-r border-gray-100 last:border-r-0 ${
+                          className={`relative border-r border-gray-100 last:border-r-0 group/col cursor-pointer ${
                             isSameDay(day, selectedDay) ? 'bg-indigo-50/20' : ''
                           }`}
-                          style={{ height: gridHeight }}
+                          style={{ height: gridBodyHeight }}
                         >
+                          <button
+                            type="button"
+                            className="absolute inset-0 z-0 w-full cursor-pointer opacity-0 hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/60 transition-opacity"
+                            aria-label={`Add event on ${day.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}`}
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              openCreateModalAtSlot(day, e.clientY - rect.top, gridBodyHeight);
+                            }}
+                          >
+                            <span className="sr-only">Add event at clicked time</span>
+                          </button>
+                          <div
+                            className="absolute inset-0 z-[1] pointer-events-none opacity-0 group-hover/col:opacity-100 transition-opacity bg-indigo-500/[0.04]"
+                            aria-hidden
+                          />
                           {HOURS.map((h) => (
                             <div
                               key={h}
-                              className="absolute left-0 right-0 border-t border-gray-100/80"
-                              style={{ top: (h - HOUR_START) * HOUR_HEIGHT }}
+                              className="absolute left-0 right-0 border-t border-gray-100/80 pointer-events-none"
+                              style={{ top: TIME_GRID_INSET + (h - HOUR_START) * HOUR_HEIGHT }}
                             />
                           ))}
 
@@ -408,8 +597,9 @@ export default function WorkspaceCalendarView() {
                               className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
                               style={{
                                 top:
-                                  ((nowMinutes - HOUR_START * 60) / ((HOUR_END - HOUR_START) * 60)) *
-                                  gridHeight,
+                                  TIME_GRID_INSET +
+                                  ((nowMinutes - HOUR_START * 60) / (HOUR_COUNT * 60)) *
+                                    gridHeight,
                               }}
                             >
                               <span className="w-2 h-2 rounded-full bg-rose-500 -ml-1 shrink-0" />
@@ -417,36 +607,48 @@ export default function WorkspaceCalendarView() {
                             </div>
                           ) : null}
 
-                          {dayEvents.map((ev) => {
-                            const startMin = eventMinutesFromMidnight(ev.startsAt);
-                            const endMin = eventMinutesFromMidnight(ev.endsAt);
-                            const clampStart = Math.max(startMin, HOUR_START * 60);
-                            const clampEnd = Math.min(endMin, (HOUR_END + 1) * 60);
-                            if (clampEnd <= clampStart) return null;
+                          {dayLayouts.map(({ ev, clampStart, clampEnd, column, totalColumns }) => {
                             const top =
-                              ((clampStart - HOUR_START * 60) / ((HOUR_END - HOUR_START) * 60)) *
-                              gridHeight;
+                              TIME_GRID_INSET +
+                              ((clampStart - HOUR_START * 60) / (HOUR_COUNT * 60)) *
+                                gridHeight;
                             const height = Math.max(
-                              ((clampEnd - clampStart) / ((HOUR_END - HOUR_START) * 60)) * gridHeight,
+                              ((clampEnd - clampStart) / (HOUR_COUNT * 60)) * gridHeight,
                               28
                             );
+                            const widthPct = 100 / totalColumns;
+                            const leftPct = column * widthPct;
                             const isFree = ev.showAs === 'free';
                             const isLive =
                               new Date(ev.startsAt) <= now && new Date(ev.endsAt) > now;
+                            const isApp = ev.source === 'app';
 
                             return (
                               <button
-                                key={ev.id}
+                                key={`${ev.source}-${ev.id}`}
                                 type="button"
-                                onClick={() => setSelectedDay(startOfDay(new Date(ev.startsAt)))}
-                                className={`absolute left-0.5 right-0.5 z-10 rounded-lg px-1.5 py-1 text-left overflow-hidden border transition-shadow hover:shadow-md ${
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedDay(startOfDay(new Date(ev.startsAt)));
+                                  openEventModal(ev);
+                                }}
+                                className={`absolute z-10 rounded-lg px-1 py-1 text-left overflow-hidden border transition-shadow hover:shadow-md hover:z-20 pointer-events-auto ${
                                   isFree
-                                    ? 'bg-gray-50/90 border-gray-200/80 border-dashed text-gray-600'
+                                    ? 'bg-gray-50/95 border-gray-200/80 border-dashed text-gray-600'
                                     : isLive
-                                      ? 'bg-gradient-to-br from-amber-100 to-orange-50 border-amber-300/80 text-amber-950 ring-1 ring-amber-200/60'
-                                      : 'bg-gradient-to-br from-indigo-100 to-violet-50 border-indigo-200/70 text-indigo-950'
+                                      ? isApp
+                                        ? 'bg-gradient-to-br from-violet-100 to-indigo-50 border-violet-300/80 text-violet-950 ring-1 ring-violet-200/60'
+                                        : 'bg-gradient-to-br from-amber-100 to-orange-50 border-amber-300/80 text-amber-950 ring-1 ring-amber-200/60'
+                                      : isApp
+                                        ? 'bg-gradient-to-br from-violet-50/95 to-indigo-50/95 border-violet-200/80 text-violet-950 shadow-sm'
+                                        : 'bg-gradient-to-br from-indigo-100 to-violet-50 border-indigo-200/70 text-indigo-950'
                                 }`}
-                                style={{ top, height }}
+                                style={{
+                                  top,
+                                  height,
+                                  left: `calc(${leftPct}% + 2px)`,
+                                  width: `calc(${widthPct}% - ${totalColumns > 1 ? 4 : 3}px)`,
+                                }}
                               >
                                 <p className="text-[10px] font-bold truncate leading-tight">{ev.title}</p>
                                 <p className="text-[9px] opacity-80 truncate">
@@ -454,6 +656,10 @@ export default function WorkspaceCalendarView() {
                                 </p>
                                 {ev.isOnlineMeeting ? (
                                   <Video size={10} className="mt-0.5 opacity-70" />
+                                ) : isApp && totalColumns === 1 ? (
+                                  <span className="text-[8px] font-semibold text-violet-700/80 mt-0.5 block truncate">
+                                    ThryvLoop
+                                  </span>
                                 ) : null}
                               </button>
                             );
@@ -467,14 +673,23 @@ export default function WorkspaceCalendarView() {
             </section>
 
             {/* Day agenda */}
-            <aside className="bg-white rounded-3xl border border-gray-100/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-4 sm:p-5 h-fit xl:sticky xl:top-6">
+            <aside className="bg-white rounded-2xl border-2 border-gray-100/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-3 sm:p-4 h-fit self-start xl:sticky xl:top-6 xl:max-w-[248px]">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Agenda</p>
               <h2 className="text-lg font-bold text-gray-900">
                 {selectedDay.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
               </h2>
-              <p className="text-xs text-gray-500 mt-1 mb-4">
+              <p className="text-xs text-gray-500 mt-1 mb-3">
                 {selectedDayEvents.length} event{selectedDayEvents.length === 1 ? '' : 's'}
+                {appEventCount > 0 ? ` · ${appEventCount} in ThryvLoop this week` : ''}
               </p>
+              <button
+                type="button"
+                onClick={() => openCreateModal()}
+                className="w-full mb-4 py-2.5 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-700 text-xs font-bold hover:bg-indigo-50/80 hover:border-indigo-300 transition-colors inline-flex items-center justify-center gap-1.5"
+              >
+                <Plus size={14} />
+                Add on this day
+              </button>
 
               {selectedDayEvents.length === 0 ? (
                 <p className="text-sm text-gray-400 py-8 text-center">Nothing scheduled</p>
@@ -486,18 +701,36 @@ export default function WorkspaceCalendarView() {
                     const duration = Math.round(
                       (new Date(ev.endsAt) - new Date(ev.startsAt)) / 60_000
                     );
+                    const isApp = ev.source === 'app';
                     return (
                       <li
-                        key={ev.id}
+                        key={`${ev.source}-${ev.id}`}
                         className={`rounded-2xl border p-3.5 ${
                           isLive
-                            ? 'border-amber-200/80 bg-amber-50/50'
+                            ? isApp
+                              ? 'border-violet-200/80 bg-violet-50/50'
+                              : 'border-amber-200/80 bg-amber-50/50'
                             : ev.showAs === 'free'
                               ? 'border-gray-200 bg-gray-50/50'
-                              : 'border-indigo-100/80 bg-indigo-50/30'
+                              : isApp
+                                ? 'border-violet-100/80 bg-violet-50/30'
+                                : 'border-indigo-100/80 bg-indigo-50/30'
                         }`}
                       >
-                        <p className="text-sm font-semibold text-gray-900 leading-snug">{ev.title}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-gray-900 leading-snug flex-1">{ev.title}</p>
+                          <button
+                            type="button"
+                            onClick={() => openEventModal(ev)}
+                            className="shrink-0 p-1.5 rounded-lg hover:bg-white/80 text-gray-500 hover:text-gray-800"
+                            aria-label={ev.editable ? 'Edit event' : 'View event'}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                        {isApp ? (
+                          <p className="text-[10px] font-semibold text-violet-600 mt-0.5 uppercase tracking-wide">ThryvLoop</p>
+                        ) : null}
                         <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
                           <Clock size={12} className="shrink-0" />
                           {formatTime(ev.startsAt)} – {formatTime(ev.endsAt)}
@@ -512,7 +745,7 @@ export default function WorkspaceCalendarView() {
                         {ev.canJoin && ev.id ? (
                           <Link
                             href={`/meet/${ev.id}`}
-                            className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#615FFF] py-2 text-xs font-bold text-white hover:bg-[#545BE8] transition-colors"
+                            className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm transition-colors"
                           >
                             <Video size={14} />
                             {isLive ? 'Join now' : 'Join meeting'}
@@ -525,7 +758,21 @@ export default function WorkspaceCalendarView() {
               )}
             </aside>
           </div>
-        )}
+
+        <CalendarEventModal
+          open={modalOpen}
+          mode={modalMode}
+          event={activeEvent}
+          anchorDay={selectedDay}
+          initialRange={modalMode === 'create' ? createSlotRange : null}
+          saving={eventSaving}
+          saveError={modalSaveError}
+          existingEvents={events}
+          onClearSaveError={() => setModalSaveError('')}
+          onClose={closeModal}
+          onSave={saveEvent}
+          onDelete={modalMode === 'edit' && activeEvent?.editable ? deleteEvent : undefined}
+        />
       </div>
     </div>
   );

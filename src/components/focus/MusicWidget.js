@@ -12,7 +12,7 @@ export default function MusicWidget() {
   const userId = user?.id || null;
   const pathname = usePathname();
   const [activeSounds, setActiveSounds] = useState([]);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -85,12 +85,7 @@ export default function MusicWidget() {
           setIsPlaying(false);
         } else {
           const savedPlaying = getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing');
-          if (savedPlaying !== null) {
-            setIsPlaying(savedPlaying === 'true');
-          } else if (hasActiveSounds || spacesPlaying) {
-            setIsPlaying(true);
-            setUserStorageItem(userId, 'soundscape-is-playing', 'true');
-          }
+          setIsPlaying(savedPlaying === 'true');
         }
       } catch (e) {
         console.error('Error loading active sounds:', e);
@@ -105,20 +100,9 @@ export default function MusicWidget() {
       }
     };
     
-    const handleSpacesVolumeChange = () => {
+    const handleSpacesVolumeChange = (e) => {
+      if (e.detail?.playbackOnly) return;
       loadActiveSounds();
-      const spacesPlaying = checkSpacesPlaying();
-      if (spacesPlaying && getSessionActive()) {
-        if (!isPlaying) {
-          setIsPlaying(true);
-          if (typeof window !== 'undefined') {
-            setUserStorageItem(userId, 'soundscape-is-playing', 'true');
-            window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
-              detail: { isPlaying: true }
-            }));
-          }
-        }
-      }
     };
     
     const handleStopAll = () => {
@@ -153,14 +137,7 @@ export default function MusicWidget() {
     return () => clearInterval(interval);
   }, [activeSounds.length]);
 
-  // Dispatch play/pause
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
-        detail: { isPlaying }
-      }));
-    }
-  }, [isPlaying]);
+  // Play/pause is dispatched from the widget toggle and SoundscapeComposer — not on every state sync.
 
   // Initialize position
   useEffect(() => {
@@ -254,6 +231,9 @@ export default function MusicWidget() {
     const newPlayingState = !isPlaying;
     setIsPlaying(newPlayingState);
     if (typeof window !== 'undefined') {
+      if (newPlayingState) {
+        setSessionActive(true);
+      }
       setUserStorageItem(userId, 'soundscape-is-playing', newPlayingState.toString());
       window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
         detail: { isPlaying: newPlayingState }

@@ -1,5 +1,6 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { mapCalendarBlockForClient } from '@/lib/workspace/meetUrl';
+import { getUserCalendarEventsInRange } from '@/lib/workspace/userCalendarEvents';
 
 /**
  * Calendar events overlapping [rangeStart, rangeEnd].
@@ -27,10 +28,21 @@ export async function getWorkspaceCalendarEvents(userId, rangeStart, rangeEnd) {
   const connections = connectionsRes.data || [];
   const google = connections.find((c) => c.provider === 'google') ?? null;
 
-  const events = (eventsRes.data || []).map((block) => ({
+  const googleEvents = (eventsRes.data || []).map((block) => ({
     ...mapCalendarBlockForClient(block),
     provider: block.provider,
   }));
+
+  let appEvents = [];
+  try {
+    appEvents = await getUserCalendarEventsInRange(userId, rangeStart, rangeEnd);
+  } catch (err) {
+    console.error('Failed to load ThryvLoop calendar events:', err);
+  }
+
+  const events = [...googleEvents, ...appEvents].sort(
+    (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+  );
 
   return {
     events,

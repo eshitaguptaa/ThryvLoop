@@ -33,11 +33,11 @@ export function FocusProvider({ children }) {
     return saved || null;
   });
 
-  const [volume, setVolume] = useState(() => {
+  const [volume, setVolumeState] = useState(() => {
     if (typeof window === 'undefined') return 50;
     const saved = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
-    const parsed = saved ? parseInt(saved) : 50;
-    return parsed > 0 ? parsed : 50;
+    const parsed = saved ? parseInt(saved, 10) : 50;
+    return Number.isNaN(parsed) ? 50 : Math.max(0, Math.min(100, parsed));
   });
 
   // Save widget states to localStorage when they change
@@ -78,9 +78,16 @@ export function FocusProvider({ children }) {
     const savedVideoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
     setBackgroundVideoId(savedVideoId || null);
     const savedVolume = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
-    const parsed = savedVolume ? parseInt(savedVolume) : 50;
-    setVolume(parsed > 0 ? parsed : 50);
+    const parsed = savedVolume ? parseInt(savedVolume, 10) : 50;
+    setVolumeState(Number.isNaN(parsed) ? 50 : Math.max(0, Math.min(100, parsed)));
   }, [userId]);
+
+  const setVolume = (next) => {
+    setVolumeState((prev) => {
+      const value = Math.max(0, Math.min(100, next));
+      return value === prev ? prev : value;
+    });
+  };
 
   const toggleTimer = () => {
     setShowTimer(prev => !prev);

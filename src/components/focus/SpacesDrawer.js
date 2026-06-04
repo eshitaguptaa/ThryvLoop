@@ -32,6 +32,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
   // Listen for volume changes from SoundscapeComposer
   useEffect(() => {
     const handleVolumeChange = (e) => {
+      if (e.detail?.playbackOnly) return;
       // Ignore if we're the one who triggered this event
       if (isUpdatingFromDrawerRef.current) {
         isUpdatingFromDrawerRef.current = false;
@@ -57,14 +58,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
     }
   }, [focusContext?.setVolume]);
   
-  // Sync volume with context
-  useEffect(() => {
-    if (focusContext?.volume !== undefined) {
-      setVolumeState(focusContext.volume);
-    }
-  }, [focusContext?.volume]);
-  
-  // Use context setter if available
+  // Use context when inside FocusProvider; local state is fallback only
   const volume = focusContext?.volume ?? volumeState;
   const setVolume = (val) => {
     const newVolume = Math.max(0, Math.min(100, val)); // Clamp between 0 and 100
@@ -72,12 +66,10 @@ export default function SpacesDrawer({ isOpen, onClose }) {
     // Mark that we're updating from this component
     isUpdatingFromDrawerRef.current = true;
     
-    // Update context if available
     if (focusContext?.setVolume) {
       focusContext.setVolume(newVolume);
-    } else {
-      setVolumeState(newVolume);
     }
+    setVolumeState(newVolume);
     
     // Always save to localStorage
     if (typeof window !== 'undefined') {

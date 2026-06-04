@@ -6,6 +6,16 @@ import { usePathname } from 'next/navigation';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
 import {
+  SOUNDSCAPE_SOUND_FILES,
+  getSoundscapeSoundName,
+} from '@/lib/soundscapeConstants';
+import {
+  getOrCreateSoundscapeAudio,
+  removeSoundscapeAudio,
+  soundscapeSoundTimestamps,
+  stopAllSoundscapeAudioElements,
+} from '@/lib/soundscapeAudioEngine';
+import {
   getSupabaseClient,
   getUserStorageItem,
   getUserStorageJson,
@@ -52,32 +62,18 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
   const getSpacesVolume = () => {
     if (focusContext?.volume !== undefined) {
-      const v = focusContext.volume;
-      return v > 0 ? v : 50;
+      return focusContext.volume;
     }
     if (typeof window !== 'undefined') {
       const saved = getItem('focus-video-volume');
-      const parsed = saved ? parseInt(saved) : 50;
-      return parsed > 0 ? parsed : 50;
+      const parsed = saved ? parseInt(saved, 10) : 50;
+      return Number.isNaN(parsed) ? 50 : Math.max(0, Math.min(100, parsed));
     }
     return 50;
   };
 
-  const setSpacesVolume = (val) => {
-    const newVolume = Math.max(0, Math.min(100, val));
-    // Update context if available
-    if (focusContext?.setVolume) {
-      focusContext.setVolume(newVolume);
-    }
-    // Always save to localStorage
-    if (typeof window !== 'undefined') {
-      setItem('focus-video-volume', newVolume.toString());
-      // Dispatch custom event to ensure video player gets the update
-      window.dispatchEvent(new CustomEvent('focus-volume-changed', {
-        detail: { volume: newVolume }
-      }));
-    }
-  };
+  const isUpdatingFromComposerRef = useRef(false);
+  const lastPlaybackVolumeRef = useRef(null);
 
   const getEffectiveSpacesVolume = (baseVolume) => {
     if (!isPlaying) return 0;
@@ -85,22 +81,65 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     return Math.round(baseVolume * (globalVolume / 100));
   };
 
+  /** Persist the user's Spaces volume preference (base level). */
+  const persistSpacesVolume = (val) => {
+    const newVolume = Math.max(0, Math.min(100, val));
+    if (focusContext?.volume === newVolume) {
+      return;
+    }
+    if (focusContext?.setVolume) {
+      focusContext.setVolume(newVolume);
+    }
+    if (typeof window !== 'undefined') {
+      setItem('focus-video-volume', newVolume.toString());
+      isUpdatingFromComposerRef.current = true;
+      window.dispatchEvent(
+        new CustomEvent('focus-volume-changed', { detail: { volume: newVolume } })
+      );
+      setTimeout(() => {
+        isUpdatingFromComposerRef.current = false;
+      }, 0);
+    }
+  };
+
+  /** Update YouTube playback level only (ducking). Does not persist or sync UI sliders. */
+  const dispatchSpacesPlaybackVolume = (baseVolume) => {
+    if (typeof window === 'undefined') return;
+    const playbackVolume = getEffectiveSpacesVolume(baseVolume);
+    window.dispatchEvent(
+      new CustomEvent('focus-volume-changed', {
+        detail: { volume: playbackVolume, playbackOnly: true },
+      })
+    );
+  };
+
+  const loadPersistedActiveSounds = () => {
+    if (typeof window === 'undefined') return [];
+    const saved = getJson('soundscape-active-sounds');
+    if (!Array.isArray(saved)) return [];
+    return saved
+      .filter((sound) => SOUNDSCAPE_SOUND_FILES[sound?.id])
+      .map((sound) => ({
+        id: sound.id,
+        name: sound.name || getSoundscapeSoundName(sound.id),
+        volume: sound.volume ?? 50,
+        category: sound.category || 'Atmosphere',
+      }));
+  };
+
   const [activeTab, setActiveTab] = useState('Atmosphere');
   const [spacesVolume, setSpacesVolumeState] = useState(() => getSpacesVolume());
   const [globalVolume, setGlobalVolume] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = getItem('soundscape-global-volume');
-      return saved ? parseInt(saved) : 75;
+      return saved ? parseInt(saved, 10) : 75;
     }
     return 75;
   });
-  const [activeSounds, setActiveSounds] = useState([]);
+  const [activeSounds, setActiveSounds] = useState(() => loadPersistedActiveSounds());
   const [isPlaying, setIsPlaying] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = getItem('soundscape-is-playing');
-      return saved === null ? true : saved === 'true';
-    }
-    return true;
+    if (typeof window === 'undefined') return false;
+    return getItem('soundscape-is-playing') === 'true';
   });
   const [soloSoundId, setSoloSoundId] = useState(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -258,7 +297,6 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   }, [userId]);
 
   const audioRefs = useRef({});
-  const isUpdatingFromComposerRef = useRef(false);
   const initializedRef = useRef(false);
   const previousVolumesRef = useRef({}); // Store previous volumes when muting individual sounds
   const previousGlobalVolumeRef = useRef(75); // Store previous global volume when muting master
@@ -282,25 +320,13 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const savedGlobalVolume = getItem('soundscape-global-volume');
-    setGlobalVolume(savedGlobalVolume ? parseInt(savedGlobalVolume) : 75);
-    if (pathname === '/focus') {
-      setSessionActive(true);
-      setIsPlaying(true);
-      setItem('soundscape-is-playing', 'true');
-    } else {
-      if (!getSessionActive()) {
-        setIsPlaying(false);
-      }
+    if (savedGlobalVolume) setGlobalVolume(parseInt(savedGlobalVolume, 10) || 75);
+    setIsPlaying(getItem('soundscape-is-playing') === 'true');
+    const persisted = loadPersistedActiveSounds();
+    if (persisted.length > 0) {
+      setActiveSounds(persisted);
     }
   }, [userId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (pathname !== '/focus') return;
-    setSessionActive(true);
-    setIsPlaying(true);
-    setItem('soundscape-is-playing', 'true');
-  }, [pathname, userId]);
 
   // Sound Library - only include sounds that exist in public/sounds
   const soundLibrary = {
@@ -319,10 +345,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     ],
   };
 
-  const getSoundNameById = (soundId) => {
-    const allSounds = Object.values(soundLibrary).flat();
-    return allSounds.find(sound => sound.id === soundId)?.name || soundId;
-  };
+  const getSoundNameById = (soundId) => getSoundscapeSoundName(soundId);
 
   const defaultRecipes = [
     { 
@@ -439,11 +462,12 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
           const rawSpaces = typeof data.spaces_volume === 'number' ? data.spaces_volume : getSpacesVolume();
           const baseSpacesVolume = rawSpaces > 0 ? rawSpaces : 50;
           setGlobalVolume(masterVolume);
-          setSpacesVolume(baseSpacesVolume);
+          setSpacesVolumeState(baseSpacesVolume);
+          persistSpacesVolume(baseSpacesVolume);
           setItem('soundscape-global-volume', masterVolume.toString());
           const savedSounds = Array.isArray(data.active_sounds) ? data.active_sounds : [];
           const normalizedSounds = savedSounds
-            .filter(sound => soundFileMap[sound.id])
+            .filter(sound => SOUNDSCAPE_SOUND_FILES[sound.id])
             .map(sound => ({
               id: sound.id,
               name: getSoundNameById(sound.id),
@@ -472,7 +496,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       const savedSounds = getJson('soundscape-active-sounds');
       if (Array.isArray(savedSounds) && savedSounds.length > 0) {
         const normalized = savedSounds
-          .filter((s) => soundFileMap[s.id])
+          .filter((s) => SOUNDSCAPE_SOUND_FILES[s.id])
           .map((s) => ({
             id: s.id,
             name: getSoundNameById(s.id),
@@ -485,24 +509,29 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       if (savedPlaying !== null) setIsPlaying(savedPlaying === 'true');
       const savedSpacesVol = getItem('focus-video-volume');
       if (savedSpacesVol !== null) {
-        const v = parseInt(savedSpacesVol, 10) || 0;
-        setSpacesVolume(v > 0 ? v : 50);
+        const v = parseInt(savedSpacesVol, 10);
+        const base = Number.isNaN(v) ? 50 : Math.max(0, Math.min(100, v));
+        setSpacesVolumeState(base);
+        if (focusContext?.volume !== base) {
+          persistSpacesVolume(base);
+        }
       }
     };
     window.addEventListener('user-preferences-hydrated', onHydrated);
     return () => window.removeEventListener('user-preferences-hydrated', onHydrated);
   }, [userId]);
 
-  // Sound file mapping - only sounds that exist
-  const soundFileMap = {
-    rain: '/sounds/rain.mp3',
-    binaural: '/sounds/binaural.mp3',
-    lofi: '/sounds/lofi.mp3',
-    fire: '/sounds/fire.mp3',
-    forest: '/sounds/forest.mp3',
-    synthwave: '/sounds/synthwave.mp3',
-    waterfall: '/sounds/waterfall.mp3',
-  };
+  // Reconnect module-level audio elements after hot reload / rare remounts
+  useEffect(() => {
+    activeSounds.forEach((sound) => {
+      const src = SOUNDSCAPE_SOUND_FILES[sound.id];
+      if (!src) return;
+      if (!audioRefs.current[sound.id]) {
+        const { audio } = getOrCreateSoundscapeAudio(sound.id, src);
+        audioRefs.current[sound.id] = audio;
+      }
+    });
+  }, []);
 
   // SoundIcon component
   const SoundIcon = ({ soundId, className = "w-6 h-6" }) => {
@@ -667,34 +696,21 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     }, 16); // ~60fps
   };
 
-  // Defer persistence until layout/context is ready — do not clear activeSounds (that races Supabase/localStorage after refresh).
+  // Defer hydration flag only — sounds load synchronously from localStorage on mount.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (initializedRef.current) return;
-
-    const timeoutId = setTimeout(() => {
-      if (initializedRef.current) return;
-      initializedRef.current = true;
-      setSpacesVolumeState(getSpacesVolume());
-    }, 100);
-
-    return () => clearTimeout(timeoutId);
+    initializedRef.current = true;
   }, []);
 
-  // Listen for volume changes from SpacesDrawer
+  // Listen for base volume changes from SpacesDrawer (ignore playback-only ducking events)
   useEffect(() => {
     const handleVolumeChange = (e) => {
-      // Ignore if we're the one who triggered this event
-      if (isUpdatingFromComposerRef.current) {
-        return;
-      }
-      
+      if (e.detail?.playbackOnly) return;
+      if (isUpdatingFromComposerRef.current) return;
+
       const newVolume = e.detail?.volume;
       if (newVolume !== undefined) {
-        const baseVolume = globalVolume > 0
-          ? Math.round(newVolume / (globalVolume / 100))
-          : 0;
-        setSpacesVolumeState(Math.max(0, Math.min(100, baseVolume)));
+        setSpacesVolumeState(Math.max(0, Math.min(100, newVolume)));
       }
     };
 
@@ -706,16 +722,13 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     }
   }, []);
 
+  // Duck Spaces video volume while soundscape plays — playback only, never persist to context
   useEffect(() => {
-    const currentVideoId = getBackgroundVideoId();
-    if (!currentVideoId) return;
-    if (isUpdatingFromComposerRef.current) return;
-    const effectiveVolume = getEffectiveSpacesVolume(spacesVolume);
-    isUpdatingFromComposerRef.current = true;
-    setSpacesVolume(effectiveVolume);
-    setTimeout(() => {
-      isUpdatingFromComposerRef.current = false;
-    }, 0);
+    if (!getBackgroundVideoId()) return;
+    const playbackVolume = getEffectiveSpacesVolume(spacesVolume);
+    if (lastPlaybackVolumeRef.current === playbackVolume) return;
+    lastPlaybackVolumeRef.current = playbackVolume;
+    dispatchSpacesPlaybackVolume(spacesVolume);
   }, [spacesVolume, globalVolume, isPlaying, soloSoundId]);
 
   // Save play/pause state to localStorage
@@ -760,16 +773,16 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     if (!canAutoplay && isPlaying) {
       return;
     }
-    
-    // Start playing active sounds (regardless of modal state)
+
     activeSounds.forEach((sound) => {
-      if (!audioRefs.current[sound.id] && soundFileMap[sound.id]) {
-        const audio = new Audio(soundFileMap[sound.id]);
-        audio.loop = true;
-        const targetVolume = (sound.volume / 100) * (globalVolume / 100);
+      const src = SOUNDSCAPE_SOUND_FILES[sound.id];
+      if (!src) return;
+
+      if (!audioRefs.current[sound.id]) {
+        const { audio, created } = getOrCreateSoundscapeAudio(sound.id, src);
         audioRefs.current[sound.id] = audio;
-        // Only fade in if playing
-        if (isPlaying) {
+        const targetVolume = (sound.volume / 100) * (globalVolume / 100);
+        if (created && isPlaying) {
           fadeInAudio(audio, targetVolume, 500);
         } else {
           audio.volume = targetVolume;
@@ -777,30 +790,26 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       }
     });
 
-    // Control play/pause for all audio
     Object.keys(audioRefs.current).forEach((soundId) => {
       const audio = audioRefs.current[soundId];
-      if (audio) {
-        if (isPlaying) {
-          if (audio.paused) {
-            audio.play().catch(() => {
-              // Auto-play might be blocked
-            });
-          }
-        } else {
-          audio.pause();
+      if (!audio) return;
+      if (isPlaying) {
+        if (audio.paused) {
+          audio.play().catch(() => {});
         }
+      } else {
+        audio.pause();
       }
     });
 
-    // Cleanup sounds that are no longer active (with fade out)
     Object.keys(audioRefs.current).forEach(async (soundId) => {
       if (!activeSounds.some((s) => s.id === soundId)) {
         const audio = audioRefs.current[soundId];
         if (audio) {
           await fadeOutAudio(audio, 500);
           delete audioRefs.current[soundId];
-          delete soundTimestampsRef.current[soundId];
+          delete soundscapeSoundTimestamps[soundId];
+          removeSoundscapeAudio(soundId);
         }
       }
     });
@@ -858,19 +867,21 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   const stopAllSoundscape = () => {
     setIsPlaying(false);
     setActiveSounds([]);
+    if (typeof window !== 'undefined') {
+      setItem('soundscape-is-playing', 'false');
+    }
     Object.keys(audioRefs.current).forEach((soundId) => {
       const audio = audioRefs.current[soundId];
       if (audio) {
         audio.pause();
-        audio.src = '';
       }
     });
     audioRefs.current = {};
     soundTimestampsRef.current = {};
     previousVolumesRef.current = {};
     previousGlobalVolumeRef.current = globalVolume || 75;
-    setSpacesVolumeState(0);
-    setSpacesVolume(0);
+    stopAllSoundscapeAudioElements();
+    dispatchSpacesPlaybackVolume(spacesVolume);
   };
 
   useEffect(() => {
@@ -886,12 +897,6 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
         window.removeEventListener('soundscape-stop-all', handleStop);
       };
     }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stopAllSoundscape();
-    };
   }, []);
 
   // Persist soundscape state to Supabase
@@ -955,9 +960,9 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
   // Sync Spaces volume when modal opens
   useEffect(() => {
     if (!isOpen) return;
-    if (isUpdatingFromComposerRef.current) return;
-    setSpacesVolumeState(getSpacesVolume());
-  }, [isOpen]);
+    const fromContext = getSpacesVolume();
+    setSpacesVolumeState((prev) => (prev === fromContext ? prev : fromContext));
+  }, [isOpen, focusContext?.volume]);
 
   // Handle body scroll lock
   useEffect(() => {
@@ -1058,12 +1063,16 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       });
       
       // Start playing the new sound immediately with fade in
-      if (soundFileMap[soundId]) {
-        const audio = new Audio(soundFileMap[soundId]);
-        audio.loop = true;
-        const targetVolume = (50 / 100) * (globalVolume / 100);
+      if (SOUNDSCAPE_SOUND_FILES[soundId]) {
+        const { audio, created } = getOrCreateSoundscapeAudio(
+          soundId,
+          SOUNDSCAPE_SOUND_FILES[soundId]
+        );
         audioRefs.current[soundId] = audio;
-        fadeInAudio(audio, targetVolume, 500);
+        const targetVolume = (50 / 100) * (globalVolume / 100);
+        if (created || audio.paused) {
+          fadeInAudio(audio, targetVolume, 500);
+        }
       }
       
       // Fade out removed sounds in background (non-blocking)
@@ -1277,7 +1286,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
     if (recipe && recipe.sounds) {
       // Load recipe sounds - filter out invalid sounds (Spaces handled separately)
       const newSounds = recipe.sounds
-        .filter(sound => soundFileMap[sound.id])
+        .filter(sound => SOUNDSCAPE_SOUND_FILES[sound.id])
         .map(sound => ({
           id: sound.id,
           name: soundLibrary[sound.category]?.find(s => s.id === sound.id)?.name || sound.id,
@@ -1290,7 +1299,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
       if (recipeHasSpaces && currentVideoId) {
         const recipeSpacesVolume = recipe.sounds.find(s => s.id === 'spaces')?.volume || 50;
         isUpdatingFromComposerRef.current = true;
-        setSpacesVolume(recipeSpacesVolume);
+        persistSpacesVolume(recipeSpacesVolume);
         setSpacesVolumeState(recipeSpacesVolume);
         setTimeout(() => {
           isUpdatingFromComposerRef.current = false;
@@ -1335,11 +1344,12 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
 
       // Start playing new sounds immediately with fade in
       finalSounds.forEach((sound) => {
-        if (soundFileMap[sound.id] && !audioRefs.current[sound.id]) {
-          const audio = new Audio(soundFileMap[sound.id]);
-          audio.loop = true;
-          const targetVolume = (sound.volume / 100) * (globalVolume / 100);
-          audioRefs.current[sound.id] = audio;
+        const src = SOUNDSCAPE_SOUND_FILES[sound.id];
+        if (!src || audioRefs.current[sound.id]) return;
+        const { audio, created } = getOrCreateSoundscapeAudio(sound.id, src);
+        audioRefs.current[sound.id] = audio;
+        const targetVolume = (sound.volume / 100) * (globalVolume / 100);
+        if (created || audio.paused) {
           fadeInAudio(audio, targetVolume, 500);
         }
       });
@@ -1939,11 +1949,7 @@ export default function SoundscapeComposer({ isOpen, onClose }) {
                       const newVolume = parseInt(e.target.value);
                       if (Number.isNaN(newVolume)) return;
                       setSpacesVolumeState(newVolume);
-                      isUpdatingFromComposerRef.current = true;
-                      setSpacesVolume(getEffectiveSpacesVolume(newVolume));
-                      setTimeout(() => {
-                        isUpdatingFromComposerRef.current = false;
-                      }, 0);
+                      persistSpacesVolume(newVolume);
                     }}
                     className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer slider-purple"
                     style={{

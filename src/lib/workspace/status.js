@@ -40,6 +40,8 @@ export async function getWorkspaceStatus(userId) {
       .from('workspace_notifications')
       .select('id, provider, source, subject, preview, received_at, is_read, link_url')
       .eq('user_id', userId)
+      .eq('is_read', false)
+      .gte('received_at', new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
       .order('received_at', { ascending: false })
       .limit(20),
   ]);

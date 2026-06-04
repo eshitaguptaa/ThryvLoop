@@ -389,7 +389,11 @@ export default function Dashboard() {
     items.sort((a, b) => {
       if (a.kind === 'meeting-now') return -1;
       if (b.kind === 'meeting-now') return 1;
-      return a.sortAt - b.sortAt;
+      if (a.kind === 'calendar' && b.kind === 'calendar') return a.sortAt - b.sortAt;
+      if (a.kind === 'gmail' && b.kind === 'gmail') return b.sortAt - a.sortAt;
+      if (a.kind === 'calendar' && b.kind === 'gmail') return -1;
+      if (a.kind === 'gmail' && b.kind === 'calendar') return 1;
+      return b.sortAt - a.sortAt;
     });
 
     return items.slice(0, 12);
@@ -470,7 +474,10 @@ export default function Dashboard() {
                       )}
                     </div>
                   ) : (
-                    workspaceNotifications.slice(0, 8).map((n) => (
+                    workspaceNotifications
+                      .filter((n) => !n.is_read)
+                      .slice(0, 8)
+                      .map((n) => (
                       <a
                         key={n.id}
                         href={n.link_url || '#'}
@@ -483,7 +490,9 @@ export default function Dashboard() {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-gray-900 truncate">{n.subject}</p>
                           <p className="text-xs text-gray-500 truncate">{n.preview}</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5 uppercase">{n.source} · {n.provider}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {formatWorkspaceWhen(n.received_at)} · Gmail
+                          </p>
                         </div>
                       </a>
                     ))

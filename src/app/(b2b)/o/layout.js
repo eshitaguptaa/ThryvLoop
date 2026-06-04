@@ -1,14 +1,6 @@
 'use client';
 
 import { ClerkLoading, RedirectToSignIn, SignedIn, SignedOut } from '@clerk/nextjs';
-import AuthenticatedAppShell from '@/components/AuthenticatedAppShell';
-import CelebrationModal from '@/components/CelebrationModal';
-import CelebrationToast from '@/components/CelebrationToast';
-import SupabaseAuthBridge from '@/components/SupabaseAuthBridge';
-import UserPreferencesHydrator from '@/components/UserPreferencesHydrator';
-import { CelebrationProvider } from '@/contexts/CelebrationContext';
-import { FocusProvider } from '@/contexts/FocusContext';
-import { TimerProvider } from '@/contexts/TimerContext';
 
 export default function OrgAreaLayout({ children }) {
   return (
@@ -21,19 +13,7 @@ export default function OrgAreaLayout({ children }) {
       <SignedOut>
         <RedirectToSignIn />
       </SignedOut>
-      <SignedIn>
-        <SupabaseAuthBridge />
-        <UserPreferencesHydrator />
-        <CelebrationProvider>
-          <CelebrationModal />
-          <CelebrationToast />
-          <FocusProvider>
-            <TimerProvider>
-              <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
-            </TimerProvider>
-          </FocusProvider>
-        </CelebrationProvider>
-      </SignedIn>
+      <SignedIn>{children}</SignedIn>
     </>
   );
 }

@@ -55,5 +55,9 @@ export function mapCalendarBlockForClient(block) {
     isOnlineMeeting: Boolean(block.is_online_meeting || meetUrl),
     canJoin: canJoinCalendarMeeting({ startsAt, endsAt, meetUrl }),
     showAs: block.show_as === 'free' ? 'free' : 'busy',
+    source: 'google',
+    editable: false,
+    description: null,
+    location: null,
   };
 }
