@@ -1,17 +1,36 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { parseCalendarDateTime, toIsoUtcString } from '@/lib/calendarDateUtils';
+import { parseCalendarDateTime, parseInstant, toIsoUtcString } from '@/lib/calendarDateUtils';
+import {
+  createGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
+  updateGoogleCalendarEvent,
+} from '@/lib/workspace/googleCalendarPush';
 
 const EVENT_SELECT =
-  'id, user_id, title, description, location, starts_at, ends_at, show_as, remind_before_minutes';
+  'id, user_id, title, description, location, starts_at, ends_at, show_as, remind_before_minutes, google_event_id';
 
 const EVENT_SELECT_BASE =
+  'id, user_id, title, description, location, starts_at, ends_at, show_as, google_event_id';
+
+const EVENT_SELECT_LEGACY =
   'id, user_id, title, description, location, starts_at, ends_at, show_as';
+
+const EVENT_SELECT_LEGACY_REMINDER =
+  'id, user_id, title, description, location, starts_at, ends_at, show_as, remind_before_minutes';
 
 /** @param {{ code?: string, message?: string } | null | undefined} error */
 function isMissingReminderColumnError(error) {
   return (
     error?.code === '42703' &&
     String(error?.message || '').includes('remind_before_minutes')
+  );
+}
+
+/** @param {{ code?: string, message?: string } | null | undefined} error */
+function isMissingGoogleEventIdColumnError(error) {
+  return (
+    error?.code === '42703' &&
+    String(error?.message || '').includes('google_event_id')
   );
 }
 
@@ -73,7 +92,7 @@ export function validateCalendarEventInput(body) {
   return { title, startsAt, endsAt, description, location, showAs, remindBeforeMinutes };
 }
 
-/** @param {{ id: string, user_id: string, title: string, description?: string | null, location?: string | null, starts_at: string, ends_at: string, show_as: string }} row */
+/** @param {{ id: string, user_id: string, title: string, description?: string | null, location?: string | null, starts_at: string, ends_at: string, show_as: string, google_event_id?: string | null }} row */
 export function mapUserCalendarEventForClient(row) {
   const startsAt = toIsoUtcString(row.starts_at);
   const endsAt = toIsoUtcString(row.ends_at);
@@ -89,9 +108,59 @@ export function mapUserCalendarEventForClient(row) {
     canJoin: false,
     showAs: row.show_as === 'free' ? 'free' : 'busy',
     remindBeforeMinutes: row.remind_before_minutes ?? null,
+    syncedToGoogle: Boolean(row.google_event_id),
     source: 'app',
     editable: true,
   };
+}
+
+/** @param {unknown} error */
+function selectFieldsForDbError(error) {
+  if (isMissingGoogleEventIdColumnError(error)) return EVENT_SELECT_LEGACY_REMINDER;
+  if (isMissingReminderColumnError(error)) return EVENT_SELECT_BASE;
+  return null;
+}
+
+/**
+ * @param {string} userId
+ * @param {string} eventId
+ * @param {string | null} googleEventId
+ */
+async function storeGoogleEventId(userId, eventId, googleEventId) {
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from('user_calendar_events')
+    .update({ google_event_id: googleEventId, updated_at: new Date().toISOString() })
+    .eq('id', eventId)
+    .eq('user_id', userId);
+  if (error && !isMissingGoogleEventIdColumnError(error)) throw error;
+}
+
+/**
+ * @param {string} userId
+ * @param {string} eventId
+ * @param {string | null} googleEventId
+ * @param {{
+ *   title: string;
+ *   startsAt: Date;
+ *   endsAt: Date;
+ *   description: string | null;
+ *   location: string | null;
+ *   showAs: string;
+ *   remindBeforeMinutes?: number | null;
+ * }} input
+ */
+async function syncEventToGoogle(userId, eventId, googleEventId, input) {
+  if (googleEventId) {
+    const result = await updateGoogleCalendarEvent(userId, googleEventId, input);
+    return result.ok ? { googleEventId, error: null } : { googleEventId, error: result.error };
+  }
+
+  const created = await createGoogleCalendarEvent(userId, input);
+  if (!created.ok) return { googleEventId: null, error: created.error };
+
+  await storeGoogleEventId(userId, eventId, created.googleEventId);
+  return { googleEventId: created.googleEventId, error: null };
 }
 
 /**
@@ -109,18 +178,68 @@ export async function getUserCalendarEventsInRange(userId, rangeStart, rangeEnd)
     .lt('starts_at', rangeEnd.toISOString())
     .order('starts_at', { ascending: true });
 
-  if (error && isMissingReminderColumnError(error)) {
-    ({ data, error } = await supabase
-      .from('user_calendar_events')
-      .select(EVENT_SELECT_BASE)
-      .eq('user_id', userId)
-      .gt('ends_at', rangeStart.toISOString())
-      .lt('starts_at', rangeEnd.toISOString())
-      .order('starts_at', { ascending: true }));
+  if (error) {
+    for (const fallbackSelect of [EVENT_SELECT_LEGACY_REMINDER, EVENT_SELECT_LEGACY]) {
+      ({ data, error } = await supabase
+        .from('user_calendar_events')
+        .select(fallbackSelect)
+        .eq('user_id', userId)
+        .gt('ends_at', rangeStart.toISOString())
+        .lt('starts_at', rangeEnd.toISOString())
+        .order('starts_at', { ascending: true }));
+      if (!error) break;
+      if (error.code !== '42703') break;
+    }
   }
 
   if (error) throw error;
   return (data || []).map(mapUserCalendarEventForClient);
+}
+
+/**
+ * Push ThryvLoop events that were created before Google write access was granted.
+ * @param {string} userId
+ * @param {number} [limit]
+ */
+export async function backfillUnsyncedCalendarEvents(userId, limit = 20) {
+  const supabase = createSupabaseAdmin();
+  let { data, error } = await supabase
+    .from('user_calendar_events')
+    .select(
+      'id, title, description, location, starts_at, ends_at, show_as, remind_before_minutes, google_event_id'
+    )
+    .eq('user_id', userId)
+    .is('google_event_id', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    if (isMissingGoogleEventIdColumnError(error)) return { synced: 0, errors: [] };
+    throw error;
+  }
+
+  let synced = 0;
+  const errors = [];
+  for (const row of data || []) {
+    const input = {
+      title: row.title,
+      description: row.description ?? null,
+      location: row.location ?? null,
+      startsAt: parseInstant(row.starts_at),
+      endsAt: parseInstant(row.ends_at),
+      showAs: row.show_as === 'free' ? 'free' : 'busy',
+      remindBeforeMinutes: row.remind_before_minutes ?? null,
+    };
+    const result = await syncEventToGoogle(userId, row.id, null, input);
+    if (result.googleEventId && !result.error) {
+      synced += 1;
+    } else if (result.error) {
+      errors.push(result.error);
+      break;
+    }
+  }
+
+  return { synced, errors: [...new Set(errors)] };
 }
 
 /**
@@ -155,16 +274,34 @@ export async function createUserCalendarEvent(userId, input) {
     .select(selectFields)
     .single();
 
-  if (error && isMissingReminderColumnError(error) && input.remindBeforeMinutes != null) {
-    ({ data, error } = await supabase
-      .from('user_calendar_events')
-      .insert(row)
-      .select(EVENT_SELECT_BASE)
-      .single());
+  if (error) {
+    const fallbackSelect = selectFieldsForDbError(error);
+    if (fallbackSelect) {
+      const fallbackRow =
+        fallbackSelect === EVENT_SELECT_LEGACY || fallbackSelect === EVENT_SELECT_LEGACY_REMINDER
+          ? row
+          : input.remindBeforeMinutes != null && fallbackSelect === EVENT_SELECT_BASE
+            ? row
+            : insertRow;
+      ({ data, error } = await supabase
+        .from('user_calendar_events')
+        .insert(fallbackRow)
+        .select(fallbackSelect)
+        .single());
+    }
   }
 
   if (error) throw new Error(formatDbError(error, 'Failed to create event'));
-  return mapUserCalendarEventForClient(data);
+
+  const googleSync = await syncEventToGoogle(userId, data.id, null, input);
+  if (googleSync.googleEventId) {
+    data = { ...data, google_event_id: googleSync.googleEventId };
+  }
+
+  return {
+    event: mapUserCalendarEventForClient(data),
+    googleSyncError: googleSync.error,
+  };
 }
 
 /**
@@ -200,24 +337,54 @@ export async function updateUserCalendarEvent(userId, eventId, input) {
     .select(selectFields)
     .single();
 
-  if (error && isMissingReminderColumnError(error) && input.remindBeforeMinutes !== undefined) {
-    ({ data, error } = await supabase
-      .from('user_calendar_events')
-      .update(row)
-      .eq('id', eventId)
-      .eq('user_id', userId)
-      .select(EVENT_SELECT_BASE)
-      .single());
+  if (error) {
+    const fallbackSelect = selectFieldsForDbError(error);
+    if (fallbackSelect) {
+      ({ data, error } = await supabase
+        .from('user_calendar_events')
+        .update(row)
+        .eq('id', eventId)
+        .eq('user_id', userId)
+        .select(fallbackSelect)
+        .single());
+    }
   }
 
   if (error) throw new Error(formatDbError(error, 'Failed to update event'));
   if (!data) throw new Error('Event not found');
-  return mapUserCalendarEventForClient(data);
+
+  const googleSync = await syncEventToGoogle(
+    userId,
+    eventId,
+    data.google_event_id ?? null,
+    input
+  );
+  if (googleSync.googleEventId) {
+    data = { ...data, google_event_id: googleSync.googleEventId };
+  }
+
+  return {
+    event: mapUserCalendarEventForClient(data),
+    googleSyncError: googleSync.error,
+  };
 }
 
 /** @param {string} userId @param {string} eventId */
 export async function deleteUserCalendarEvent(userId, eventId) {
   const supabase = createSupabaseAdmin();
+
+  let googleEventId = null;
+  const { data: existing, error: fetchError } = await supabase
+    .from('user_calendar_events')
+    .select('id, google_event_id')
+    .eq('id', eventId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (fetchError && !isMissingGoogleEventIdColumnError(fetchError)) throw fetchError;
+  if (!existing) throw new Error('Event not found');
+  googleEventId = existing.google_event_id ?? null;
+
   const { data, error } = await supabase
     .from('user_calendar_events')
     .delete()
@@ -227,4 +394,12 @@ export async function deleteUserCalendarEvent(userId, eventId) {
 
   if (error) throw error;
   if (!data?.length) throw new Error('Event not found');
+
+  let googleSyncError = null;
+  if (googleEventId) {
+    const removed = await deleteGoogleCalendarEvent(userId, googleEventId);
+    if (!removed.ok) googleSyncError = removed.error;
+  }
+
+  return { googleSyncError };
 }

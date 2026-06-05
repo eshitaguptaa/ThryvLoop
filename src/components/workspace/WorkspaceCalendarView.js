@@ -103,6 +103,7 @@ export default function WorkspaceCalendarView() {
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [events, setEvents] = useState([]);
   const [hasConnection, setHasConnection] = useState(false);
+  const [canPushToGoogle, setCanPushToGoogle] = useState(false);
   const [accountEmail, setAccountEmail] = useState(null);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -126,13 +127,13 @@ export default function WorkspaceCalendarView() {
     return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
   }, [selectedDay]);
 
-  const fetchCalendar = useCallback(async () => {
+  const fetchCalendar = useCallback(async ({ preserveError = false } = {}) => {
     if (!isLoaded || !isSignedIn) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    setError('');
+    if (!preserveError) setError('');
     const rangeStart = startOfDay(weekStart);
     const rangeEnd = addDays(startOfDay(weekStart), 7);
     try {
@@ -148,6 +149,7 @@ export default function WorkspaceCalendarView() {
       if (!res.ok) throw new Error(json.error || 'Failed to load calendar');
       setEvents(json.events || []);
       setHasConnection(Boolean(json.hasConnection));
+      setCanPushToGoogle(Boolean(json.canPushToGoogle));
       setAccountEmail(json.googleConnection?.account_email ?? null);
       setLastSyncedAt(json.googleConnection?.last_synced_at ?? null);
     } catch (e) {
@@ -214,7 +216,6 @@ export default function WorkspaceCalendarView() {
   const saveEvent = async (payload) => {
     setEventSaving(true);
     setModalSaveError('');
-    setError('');
     try {
       const isCreate = modalMode === 'create';
       const path = isCreate
@@ -234,6 +235,7 @@ export default function WorkspaceCalendarView() {
         setModalSaveError(json.error || 'Could not save this event. Check the details and try again.');
         return;
       }
+      const googleSyncError = json.googleSyncError || null;
       if (json.event) {
         setEvents((prev) => {
           const key = (e) => `${e.source}-${e.id}`;
@@ -247,7 +249,14 @@ export default function WorkspaceCalendarView() {
       setActiveEvent(null);
       setCreateSlotRange(null);
       setModalSaveError('');
-      await fetchCalendar();
+      if (googleSyncError) {
+        setError(
+          `Event saved in ThryvLoop, but Google Calendar sync failed: ${googleSyncError}`
+        );
+        await fetchCalendar({ preserveError: true });
+      } else {
+        await fetchCalendar();
+      }
     } catch {
       setModalSaveError('Could not save this event. Please try again.');
     } finally {
@@ -267,9 +276,15 @@ export default function WorkspaceCalendarView() {
       );
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to delete event');
+      const googleSyncError = json.googleSyncError || null;
       setModalOpen(false);
       setActiveEvent(null);
-      await fetchCalendar();
+      if (googleSyncError) {
+        setError(`Event removed in ThryvLoop, but Google Calendar sync failed: ${googleSyncError}`);
+        await fetchCalendar({ preserveError: true });
+      } else {
+        await fetchCalendar();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete event');
     } finally {
@@ -340,8 +355,8 @@ export default function WorkspaceCalendarView() {
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Calendar</h1>
             <p className="text-sm text-gray-500 mt-1 font-medium">
               {hasConnection && accountEmail
-                ? `ThryvLoop events + Google (${accountEmail})`
-                : 'Schedule in ThryvLoop — connect Google to sync external events'}
+                ? `ThryvLoop events sync to Google (${accountEmail})`
+                : 'Schedule in ThryvLoop — connect Google to push events and import meetings'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -409,20 +424,35 @@ export default function WorkspaceCalendarView() {
         ) : null}
 
         <p className="mb-4 text-xs text-gray-500 font-medium hidden sm:block">
-          Tip: click any empty time in the week view to schedule · ThryvLoop events are editable, Google events sync read-only
+          Tip: click any empty time in the week view to schedule · ThryvLoop events push to Google when connected
         </p>
 
         {!hasConnection && !loading ? (
           <div className="mb-5 rounded-xl border-2 border-indigo-100 bg-indigo-50/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-sm text-indigo-900/90">
               <span className="font-semibold">Google Calendar not connected.</span> You can still create events
-              here. Connect Google to import meetings and Meet links.
+              here. Connect Google to push events to your calendar and import meetings.
             </p>
             <Link
               href="/settings/integrations"
               className="shrink-0 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
             >
               Connect Google
+            </Link>
+          </div>
+        ) : null}
+
+        {hasConnection && !canPushToGoogle && !loading ? (
+          <div className="mb-5 rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-amber-950/90">
+              <span className="font-semibold">Google is read-only.</span> Events save in ThryvLoop but will not
+              appear in Google Calendar until you reconnect with write access.
+            </p>
+            <Link
+              href="/settings/integrations"
+              className="shrink-0 inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-700"
+            >
+              Reconnect Google
             </Link>
           </div>
         ) : null}
@@ -767,6 +797,7 @@ export default function WorkspaceCalendarView() {
           initialRange={modalMode === 'create' ? createSlotRange : null}
           saving={eventSaving}
           saveError={modalSaveError}
+          hasGoogleConnection={hasConnection && canPushToGoogle}
           existingEvents={events}
           onClearSaveError={() => setModalSaveError('')}
           onClose={closeModal}

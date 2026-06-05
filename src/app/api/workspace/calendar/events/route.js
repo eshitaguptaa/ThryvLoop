@@ -21,8 +21,8 @@ export async function POST(request) {
 
   try {
     const input = validateCalendarEventInput(body);
-    const event = await createUserCalendarEvent(userId, input);
-    return NextResponse.json({ event }, { status: 201 });
+    const { event, googleSyncError } = await createUserCalendarEvent(userId, input);
+    return NextResponse.json({ event, googleSyncError: googleSyncError ?? null }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create event';
     const status = message.includes('not found') ? 404 : 400;

@@ -27,8 +27,8 @@ export async function PATCH(request, context) {
 
   try {
     const input = validateCalendarEventInput(body);
-    const event = await updateUserCalendarEvent(userId, id, input);
-    return NextResponse.json({ event });
+    const { event, googleSyncError } = await updateUserCalendarEvent(userId, id, input);
+    return NextResponse.json({ event, googleSyncError: googleSyncError ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update event';
     const status = message.includes('not found') ? 404 : 400;
@@ -49,8 +49,8 @@ export async function DELETE(_request, context) {
   }
 
   try {
-    await deleteUserCalendarEvent(userId, id);
-    return NextResponse.json({ ok: true });
+    const { googleSyncError } = await deleteUserCalendarEvent(userId, id);
+    return NextResponse.json({ ok: true, googleSyncError: googleSyncError ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to delete event';
     const status = message.includes('not found') ? 404 : 400;

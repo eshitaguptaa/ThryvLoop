@@ -2,7 +2,7 @@
 
 ThryvLoop connects to Google accounts to:
 
-- Sync **Google Calendar** events (meetings, busy/free)
+- Sync **Google Calendar** events (meetings, busy/free) and **push ThryvLoop calendar events** to Google
 - Detect **in-meeting** status in real time
 - Pull **unread Gmail** into the dashboard notifications panel
 - Include **meeting minutes** in productive time (focus timer + meetings)
@@ -19,7 +19,7 @@ If users sign in with **Continue with Google** on Clerk, ThryvLoop can link Cale
 
 1. In [Clerk Dashboard](https://dashboard.clerk.com) → **Configure** → **SSO connections** → **Google** → enable **Use custom credentials** (same OAuth client as below is recommended).
 2. Under **Scopes**, add:
-   - `https://www.googleapis.com/auth/calendar.readonly`
+   - `https://www.googleapis.com/auth/calendar`
    - `https://www.googleapis.com/auth/gmail.readonly`
    - `https://www.googleapis.com/auth/userinfo.email`
 3. Save. Users who already signed in with Google must **sign out and sign in with Google again** (or revoke the app in Google Account → Security) so Google re-prompts for the new scopes.
@@ -43,7 +43,7 @@ NEXT_PUBLIC_GOOGLE_CLOUD_PROJECT_NUMBER=821180420723
    - [Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com)
    - [Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com)
 4. After enabling, wait 1–2 minutes, then use **Sync now** on the Integrations page.
-5. Scopes used: `calendar.readonly`, `gmail.readonly`, `userinfo.email`.
+5. Scopes used: `calendar` (read/write), `gmail.readonly`, `userinfo.email`.
 
 ## Environment variables
 
@@ -67,6 +67,10 @@ SUPABASE_SERVICE_ROLE_KEY=
 5. **Join Google Meet** from the dashboard (`/meet/{eventId}`) for synced events that include a Meet link (re-sync calendar after enabling Meet on events).
 
 Run `supabase/migrations/20250520110000_workspace_calendar_meet_url.sql` after the base workspace migration.
+
+Run `supabase/migrations/20250605120000_user_calendar_google_sync.sql` to link ThryvLoop calendar events with Google Calendar.
+
+**Note:** Existing Google connections only had calendar read access. Users must **disconnect and reconnect** Google (or sign in with Google again via Clerk) to grant write access for pushing events.
 
 ## API routes
 

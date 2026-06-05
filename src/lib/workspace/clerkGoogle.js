@@ -88,7 +88,7 @@ export async function linkGoogleWorkspaceFromClerk(userId) {
     return {
       status: 'needs_clerk_scopes',
       hint:
-        'Add Calendar and Gmail readonly scopes to the Google provider in Clerk Dashboard, then sign in with Google again.',
+        'Add Calendar (read/write) and Gmail readonly scopes to the Google provider in Clerk Dashboard, then sign in with Google again.',
     };
   }
 

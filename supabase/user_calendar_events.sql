@@ -9,6 +9,7 @@ create table if not exists public.user_calendar_events (
   starts_at timestamptz not null,
   ends_at timestamptz not null,
   show_as text not null default 'busy' check (show_as in ('busy', 'free')),
+  google_event_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (ends_at > starts_at)

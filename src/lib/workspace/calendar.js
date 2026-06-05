@@ -1,6 +1,10 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { mapCalendarBlockForClient } from '@/lib/workspace/meetUrl';
-import { getUserCalendarEventsInRange } from '@/lib/workspace/userCalendarEvents';
+import { hasGoogleCalendarWriteScope } from '@/lib/workspace/oauth';
+import {
+  backfillUnsyncedCalendarEvents,
+  getUserCalendarEventsInRange,
+} from '@/lib/workspace/userCalendarEvents';
 
 /**
  * Calendar events overlapping [rangeStart, rangeEnd].
@@ -11,27 +15,49 @@ import { getUserCalendarEventsInRange } from '@/lib/workspace/userCalendarEvents
 export async function getWorkspaceCalendarEvents(userId, rangeStart, rangeEnd) {
   const supabase = createSupabaseAdmin();
 
-  const [connectionsRes, eventsRes] = await Promise.all([
+  const [connectionsRes, eventsRes, linkedGoogleRes] = await Promise.all([
     supabase
       .from('workspace_connections')
-      .select('provider, account_email, last_synced_at, sync_error')
+      .select('provider, account_email, last_synced_at, sync_error, scopes')
       .eq('user_id', userId),
     supabase
       .from('workspace_calendar_blocks')
-      .select('id, provider, title, starts_at, ends_at, is_online_meeting, meet_url, show_as')
+      .select('id, provider, external_id, title, starts_at, ends_at, is_online_meeting, meet_url, show_as')
       .eq('user_id', userId)
       .gt('ends_at', rangeStart.toISOString())
       .lt('starts_at', rangeEnd.toISOString())
       .order('starts_at', { ascending: true }),
+    supabase
+      .from('user_calendar_events')
+      .select('google_event_id')
+      .eq('user_id', userId)
+      .not('google_event_id', 'is', null),
   ]);
 
   const connections = connectionsRes.data || [];
   const google = connections.find((c) => c.provider === 'google') ?? null;
+  const canPushToGoogle = hasGoogleCalendarWriteScope(google?.scopes);
 
-  const googleEvents = (eventsRes.data || []).map((block) => ({
-    ...mapCalendarBlockForClient(block),
-    provider: block.provider,
-  }));
+  if (canPushToGoogle) {
+    try {
+      await backfillUnsyncedCalendarEvents(userId, 20);
+    } catch (err) {
+      console.error('Failed to backfill unsynced calendar events:', err);
+    }
+  }
+
+  const linkedGoogleIds = new Set(
+    linkedGoogleRes.error
+      ? []
+      : (linkedGoogleRes.data || []).map((row) => row.google_event_id).filter(Boolean)
+  );
+
+  const googleEvents = (eventsRes.data || [])
+    .filter((block) => !linkedGoogleIds.has(block.external_id))
+    .map((block) => ({
+      ...mapCalendarBlockForClient(block),
+      provider: block.provider,
+    }));
 
   let appEvents = [];
   try {
@@ -49,6 +75,7 @@ export async function getWorkspaceCalendarEvents(userId, rangeStart, rangeEnd) {
     connections,
     googleConnection: google,
     hasConnection: connections.length > 0,
+    canPushToGoogle,
     range: {
       start: rangeStart.toISOString(),
       end: rangeEnd.toISOString(),

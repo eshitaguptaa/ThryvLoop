@@ -52,6 +52,7 @@ function formatEventWhen(startsAt, endsAt) {
  *   initialRange?: { start: Date; end: Date } | null;
  *   saving?: boolean;
  *   saveError?: string;
+ *   hasGoogleConnection?: boolean;
  *   existingEvents?: Array<{ id?: string, title?: string, startsAt: string, endsAt: string }>;
  *   onClearSaveError?: () => void;
  *   onClose: () => void;
@@ -67,6 +68,7 @@ export default function CalendarEventModal({
   initialRange = null,
   saving = false,
   saveError = '',
+  hasGoogleConnection = false,
   existingEvents = [],
   onClearSaveError,
   onClose,
@@ -239,10 +241,14 @@ export default function CalendarEventModal({
 
   const modalSubtitle =
     mode === 'create'
-      ? 'Schedule on your ThryvLoop calendar'
+      ? hasGoogleConnection
+        ? 'Creates in ThryvLoop and pushes to Google Calendar'
+        : 'Schedule on your ThryvLoop calendar'
       : event?.source === 'google'
         ? 'Synced from Google Calendar'
-        : 'Update this event';
+        : event?.syncedToGoogle
+          ? 'Updates ThryvLoop and Google Calendar'
+          : 'Update this event';
 
   return (
     <div

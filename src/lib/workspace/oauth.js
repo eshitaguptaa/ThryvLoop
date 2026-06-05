@@ -1,10 +1,27 @@
 import { createHmac, randomBytes } from 'crypto';
 
+export const GOOGLE_CALENDAR_WRITE_SCOPE = 'https://www.googleapis.com/auth/calendar';
+export const GOOGLE_CALENDAR_EVENTS_WRITE_SCOPE =
+  'https://www.googleapis.com/auth/calendar.events';
+
 export const GOOGLE_SCOPES = [
-  'https://www.googleapis.com/auth/calendar.readonly',
+  GOOGLE_CALENDAR_WRITE_SCOPE,
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/userinfo.email',
 ].join(' ');
+
+const CALENDAR_WRITE_SCOPES = new Set([
+  GOOGLE_CALENDAR_WRITE_SCOPE,
+  GOOGLE_CALENDAR_EVENTS_WRITE_SCOPE,
+]);
+
+/** @param {string[] | null | undefined} scopes */
+export function hasGoogleCalendarWriteScope(scopes) {
+  return (scopes || []).some((scope) => CALENDAR_WRITE_SCOPES.has(scope));
+}
+
+export const GOOGLE_CALENDAR_WRITE_REQUIRED_MESSAGE =
+  'Google Calendar is connected with read-only access. Open Settings → Integrations, disconnect Google, then connect again and approve calendar write access.';
 
 export function getOAuthSecret() {
   const raw =
