@@ -1,4 +1,13 @@
 import React from 'react';
+import WorkspacesShowcase from '@/components/landing_sections/WorkspacesShowcase';
+import SoundscapeComposerShowcase from '@/components/landing_sections/SoundscapeComposerShowcase';
+import TasksShowcase from '@/components/landing_sections/TasksShowcase';
+import AnalysisTrackerShowcase from '@/components/landing_sections/AnalysisTrackerShowcase';
+import GmailCalendarShowcase from '@/components/landing_sections/GmailCalendarShowcase';
+import SpacesCrossfadeBackground from '@/components/landing_sections/SpacesCrossfadeBackground';
+import ForestRainControls from '@/components/landing_sections/ForestRainControls';
+import FeatureCardIcon from '@/components/landing_sections/FeatureCardIcon';
+import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
 
 // ====================================================================
 // 1. Icon Components for React/Next.js
@@ -48,7 +57,6 @@ export default function Features() {
       */}
       <style jsx global>{`
         /* Import Fonts - These should ideally be in _document.js or layout */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
         /* Material Symbols style override */
@@ -99,16 +107,16 @@ export default function Features() {
         }
       `}</style>
 
-       <div className="light bg-gray-100 dark:bg-background-dark font-display text-[#0f0e1b] dark:text-white antialiased selection:bg-primary/30 selection:text-primary min-h-screen">
+       <div className="light bg-gray-100 dark:bg-background-dark text-neutral-900 dark:text-white antialiased selection:bg-primary/30 selection:text-primary min-h-screen">
          <div className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden bg-gray-100">
-           <main className="flex-grow flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 relative bg-gray-100">
+           <main id="features" className="flex-grow flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 relative bg-gray-100">
             {/* Background Gradient Blobs */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[600px] bg-primary/10 blur-[120px] rounded-full pointer-events-none -z-10 dark:opacity-40"></div>
             <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-accent-purple/10 blur-[100px] rounded-full pointer-events-none -z-10 dark:opacity-30"></div>
             
             <div className="w-full max-w-[1280px] flex flex-col gap-20">
               {/* Header Section */}
-               <div className="relative flex flex-col items-center text-center gap-6 max-w-4xl mx-auto py-12">
+               <ScrollReveal className="relative flex flex-col items-center text-center gap-6 max-w-4xl mx-auto py-12">
                  {/* Purple glow effect around heading */}
                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-gradient-to-r from-[#5b4ded]/8 via-[#7c3aed]/10 to-[#8b5cf6]/8 blur-[100px] rounded-full pointer-events-none z-0"></div>
                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-[#5b4ded]/5 blur-[80px] rounded-full pointer-events-none z-0"></div>
@@ -119,34 +127,29 @@ export default function Features() {
                    </span>
                    Productivity Reimagined
                  </div>
-                <h1 className="relative z-20 text-[#0e0d1a] text-4xl sm:text-6xl font-black leading-[1.05] tracking-tight">
+                <h1 className="relative z-20 landing-display text-4xl sm:text-[3.25rem] max-w-3xl">
                   Built for <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5b4ded] to-[#8b5cf6]">Deep Work</span> & Flow
                 </h1>
-                <p className="relative z-20 text-[#4b4b6b] text-lg sm:text-xl font-normal leading-relaxed max-w-3xl">
+                <p className="relative z-20 landing-body text-lg sm:text-xl max-w-2xl">
                   Experience a workspace that adapts to your energy. ThryvLoop orchestrates your day, silences the noise, and keeps you in the zone.
                 </p>
-               </div>
+               </ScrollReveal>
 
               {/* Features Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
+              <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr" stagger={0.09}>
 
                 {/* Feature Card 1: Ambience & Pomodoro (Large Card) */}
-                <div className="group relative col-span-1 md:col-span-2 lg:row-span-2 overflow-hidden rounded-3xl bg-[#2f1952] border border-gray-100 shadow-2xl shadow-gray-900/20 hover:shadow-primary/10 transition-all duration-500">
+                <ScrollItem className="col-span-1 md:col-span-2 lg:row-span-2">
+                <div className="group relative h-full overflow-hidden rounded-3xl bg-[#2f1952] border border-gray-100 shadow-2xl shadow-gray-900/20 hover:shadow-primary/10 transition-all duration-500">
                   <div className="absolute inset-0 z-0 overflow-hidden rounded-3xl">
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#000000]/90 via-[#392f55]/70 to-[#867a9e]/50 z-10"></div>
-                    <div className="absolute inset-0 bg-transparent z-10 pointer-events-none"></div>
-
-
-
-                    <img alt="Interactive Nature Scene" className="w-full h-full object-cover transform scale-105 group-hover:scale-100 transition-transform duration-[5s] ease-in-out" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAq8WwwvwCOWTLhUqtA-iLWr0mRv6GYzHADObkJNNQ2FHWcbwG6rsmlbCfJVcHr4L4F2u2CIJFaWovTVOYfcxD-mzjRg5XWC88Pq_y2cZ5TXe0m9hmkdBk7vpE24tdHY_OFTtwAwEtGKfAO74CZNpV3TmauT3qzWfp2JL6E7OxidXeHYBowStNoza1DG1h9AaXb9-lNwbbgmk0hKjZ22q1x2Gz8rPSi1be5DE5cgr5vUKB8tyYoSTOs3O4kvM1DzYxgVMd498kFh9A" />
-                    <div className="absolute inset-0 z-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] animate-pulse"></div>
+                    <SpacesCrossfadeBackground />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#000000]/90 via-[#392f55]/70 to-[#867a9e]/50 z-10" />
+                    <div className="absolute inset-0 bg-transparent z-10 pointer-events-none" />
                   </div>
                   <div className="flex flex-col h-full relative z-20 p-8 sm:p-10 text-white justify-between">
                     <div className="flex items-start justify-between">
                       <div className="space-y-3 max-w-lg z-30 relative">
-                        <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 backdrop-blur-xl ring-1 ring-white/20 shadow-[0_0_15px_rgba(255,255,255,0.1)] text-2xl mb-1">
-                          🍅
-                        </div>
+                        <FeatureCardIcon icon="timer" tone="dark" className="mb-1" fill={1} />
                         <h3 className="text-4xl font-black tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                           Ambience & Pomodoro
                         </h3>
@@ -156,28 +159,27 @@ export default function Features() {
                       </div>
                       <div className="hidden sm:flex px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-xl border border-white/10 items-center gap-2 shadow-lg">
                         <span className="relative flex h-2.5 w-2.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
                         </span>
                         <span className="text-xs font-bold tracking-wide uppercase text-white/90">Focus Mode Active</span>
                       </div>
                     </div>
                     <div className="flex-grow flex items-center justify-center mt-8 mb-4">
                       <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-                        {/* Pomodoro Timer */}
                         <div className="relative flex justify-center py-6">
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-72 h-72 border border-white/5 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite]"></div>
-                            <div className="absolute w-64 h-64 border border-white/10 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite_0.5s]"></div>
+                            <div className="w-72 h-72 border border-white/5 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite]" />
+                            <div className="absolute w-64 h-64 border border-white/10 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite_0.5s]" />
                           </div>
                           <div className="relative w-72 h-72 backdrop-blur-2xl bg-black/30 rounded-full border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex items-center justify-center z-10 group-hover:scale-105 transition-transform duration-500 ring-1 ring-white/20">
                             <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-3">
-                              <circle className="text-white/5" cx="50%" cy="50%" fill="transparent" r="46%" stroke="currentColor" strokeLinecap="round" strokeWidth="4"></circle>
-                              <circle className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.6)] transition-all duration-1000" cx="50%" cy="50%" fill="transparent" r="46%" stroke="currentColor" strokeDasharray="800" strokeDashoffset="200" strokeLinecap="round" strokeWidth="6"></circle>
+                              <circle className="text-white/5" cx="50%" cy="50%" fill="transparent" r="46%" stroke="currentColor" strokeLinecap="round" strokeWidth="4" />
+                              <circle className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.6)] transition-all duration-1000" cx="50%" cy="50%" fill="transparent" r="46%" stroke="currentColor" strokeDasharray="800" strokeDashoffset="200" strokeLinecap="round" strokeWidth="6" />
                             </svg>
                             <div className="flex flex-col items-center justify-center z-20 text-center space-y-2">
                               <div className="text-[10px] font-bold tracking-[0.4em] uppercase text-white/60">Time Left</div>
-                              <div className="text-7xl font-black text-white tracking-tighter tabular-nums drop-shadow-2xl leading-none font-display">25:00</div>
+                              <div className="text-7xl font-semibold text-white tracking-tighter tabular-nums drop-shadow-2xl leading-none">25:00</div>
                               <div className="flex items-center gap-2 mt-2 px-3 py-1 rounded-full bg-white/10 border border-white/5">
                                 <MaterialSymbol icon="laptop_chromebook" className="text-[16px] text-white/80" />
                                 <span className="text-xs font-semibold text-white/80">Deep Work</span>
@@ -185,424 +187,44 @@ export default function Features() {
                             </div>
                           </div>
                         </div>
-                        {/* Ambience Controls (uses .glass-panel and .sound-wave-bar from embedded styles) */}
-                        <div className="glass-panel p-6 rounded-3xl shadow-2xl relative overflow-hidden group/controls">
-  <div className="absolute top-0 right-0 p-10 opacity-30 group-hover/controls:opacity-50 transition-opacity">
-    <MaterialSymbol 
-      icon="graphic_eq" 
-      className="text-[300px] text-white opacity-80 scale-[2.5]" 
-      fill={0} 
-    />
-  </div>
-
-                          <div className="flex flex-col gap-6 relative z-10">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-4">
-                                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-600/20 backdrop-blur-md flex items-center justify-center text-white ring-1 ring-white/30 shadow-lg">
-                                  <MaterialSymbol icon="forest" className="text-2xl" />
-                                </div>
-                                <div>
-                                  <div className="text-lg font-bold text-white leading-tight">Forest Rain</div>
-                                  <div className="text-xs text-white/60 font-medium">Binaural Beats • 40Hz</div>
-                                </div>
-                              </div>
-                           <div className="flex gap-1.5 items-center h-10 px-2">
-  <div className="w-1.5 bg-white/90 rounded-full sound-wave-bar h-3 shadow-[0_0_10px_white]"></div>
-  <div className="w-1.5 bg-white/90 rounded-full sound-wave-bar h-6 shadow-[0_0_10px_white]"></div>
-  <div className="w-1.5 bg-white/90 rounded-full sound-wave-bar h-4 shadow-[0_0_10px_white]"></div>
-  <div className="w-1.5 bg-white/90 rounded-full sound-wave-bar h-8 shadow-[0_0_10px_white]"></div>
-  <div className="w-1.5 bg-white/90 rounded-full sound-wave-bar h-3 shadow-[0_0_10px_white]"></div>
-</div>
-
-
-
-
-
-
-
-                            </div>
-                            <div className="space-y-5">
-                              <div className="space-y-2">
-                                <div className="flex justify-between text-xs text-white/70 font-semibold tracking-wide">
-                                  <span>INTENSITY</span>
-                                  <span>65%</span>
-                                </div>
-                                <div className="relative w-full h-8 bg-black/40 rounded-full flex items-center px-1.5 group/slider cursor-pointer border border-white/5 hover:border-white/20 transition-colors shadow-inner">
-                                  <div className="absolute left-1 right-1 top-1/2 -translate-y-1/2 h-1.5 bg-white/10 rounded-full"></div>
-                                  <div className="absolute left-1 top-1/2 -translate-y-1/2 h-1.5 w-[65%] bg-gradient-to-r from-purple-400 to-purple-600 rounded-full shadow-[0_0_12px_rgba(168,85,247,0.8)]"></div>
-
-                                  <div className="absolute left-[65%] top-1/2 -translate-y-1/2 w-5 h-5 bg-white rounded-full shadow-[0_0_20px_rgba(168,85,247,0.8)] border-4 border-purple cursor-grab active:cursor-grabbing hover:scale-110 transition-transform z-10"></div>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-3 gap-3">
-                                <button className="h-12 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white transition-all backdrop-blur-sm group/btn">
-                                  <MaterialSymbol icon="skip_previous" className="group-hover/btn:-translate-x-0.5 transition-transform" fill={0} />
-                                </button>
-                                <button className="h-12 rounded-xl bg-white text-black flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.4)] transition-transform hover:scale-105 active:scale-95">
-                                  <MaterialSymbol icon="pause" className="text-3xl" />
-                                </button>
-                                <button className="h-12 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white transition-all backdrop-blur-sm group/btn">
-                                  <MaterialSymbol icon="skip_next" className="group-hover/btn:translate-x-0.5 transition-transform" fill={0} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                        <ForestRainControls />
                       </div>
                     </div>
                   </div>
                 </div>
+                </ScrollItem>
 
-                {/* Feature Card 2: Task Reminders */}
-                <div className="group relative flex flex-col overflow-hidden rounded-3xl bg-white border border-gray-200 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-yellow-500/10 hover:-translate-y-1 transition-all duration-300 h-full">
-                  <div className="absolute -top-10 -right-10 w-40 h-40 bg-yellow-400/30 rounded-full blur-3xl pointer-events-none group-hover:bg-yellow-400/40 transition-colors"></div>
-                  <div className="p-6 pb-2 relative z-10 flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-400/40 to-orange-500/40 text-xl shadow-md">
-                        🔔
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900 leading-tight">Task Reminders</h3>
-                        <p className="text-[#534f96] text-[10px] font-bold uppercase tracking-wider mt-0.5">Today's Focus</p>
-                      </div>
-                    </div>
-                    <div className="relative h-12 w-12 flex items-center justify-center">
-                      <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 36 36">
-                        <path className="text-gray-100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3"></path>
-                        <path className="text-yellow-500" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeDasharray="70, 100" strokeLinecap="round" strokeWidth="3"></path>
-                      </svg>
-                      <div className="absolute flex flex-col items-center justify-center leading-none">
-                        <span className="text-[10px] font-black text-gray-900">5/7</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-6 py-3 relative z-10">
-                    <div className="flex justify-between items-stretch gap-2">
-                      <div className="flex-1 flex flex-col items-center justify-center gap-0.5 bg-yellow-500 text-white shadow-md rounded-lg py-2 cursor-pointer">
-                        <span className="text-[8px] font-bold uppercase tracking-wider">Today</span>
-                        <span className="text-sm font-black">12</span>
-                      </div>
-                      <div className="flex-1 flex flex-col items-center justify-center gap-0.5 bg-gray-50 border border-gray-200 rounded-lg py-2 cursor-pointer hover:bg-gray-100 transition-colors group/day">
-                        <span className="text-[8px] font-bold uppercase text-gray-500 group-hover/day:text-gray-700">Wed</span>
-                        <span className="text-xs font-bold text-gray-700">13</span>
-                      </div>
-                      <div className="flex-1 flex flex-col items-center justify-center gap-0.5 bg-gray-50 border border-gray-200 rounded-lg py-2 cursor-pointer hover:bg-gray-100 transition-colors group/day">
-                        <span className="text-[8px] font-bold uppercase text-gray-500 group-hover/day:text-gray-700">Thu</span>
-                        <span className="text-xs font-bold text-gray-700">14</span>
-                      </div>
-                      <div className="flex-1 flex flex-col items-center justify-center gap-0.5 bg-gray-50 border border-gray-200 rounded-lg py-2 cursor-pointer hover:bg-gray-100 transition-colors group/day">
-                        <span className="text-[8px] font-bold uppercase text-gray-500 group-hover/day:text-gray-700">Fri</span>
-                        <span className="text-xs font-bold text-gray-700">15</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-6 flex-grow flex flex-col gap-3 relative z-10 overflow-hidden">
-                    {/* Task 1 */}
-                    <div className="relative group/task cursor-pointer">
-                      <div className="relative bg-white p-3 rounded-xl border-l-[3px] border-l-red-500 border-y border-r border-gray-200 shadow-sm">
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 h-4 w-4 rounded-full border-2 border-gray-300 flex items-center justify-center">
-                          </div>
-                          <div className="flex-grow min-w-0">
-                            <div className="flex justify-between items-start">
-                              <span className="text-xs font-bold text-gray-800 truncate pr-2">Launch Review</span>
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white whitespace-nowrap">URGENT</span>
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <div className="flex items-center gap-1.5 text-[10px] text-red-500 font-medium">
-                                <MaterialSymbol icon="timer" className="text-[12px]" fill={0} />
-                                <span>Due in 2h</span>
-                              </div>
-                              <div className="flex -space-x-1.5">
-                                <img alt="User" className="w-4 h-4 rounded-full border-2 border-white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAseiFl0rSt5HMITynLYhO0Ombv-FcnLQzh_FiYrY7VloTeq2sRz5lMMiEhpu4U9vdE9HWcSn1167d13uHLffdrGfZuL-pnrTip0JhuKwkuZEzYqtlcM5PFgnLyEgN-aod9F-YK569KsfnftAiVGvB099w_SQn967aAgY6SSwRoiXQJnsSAu3f6TyyQZrLr03V_nKOWa9NRVquX_W_3HDt5bdI13bNzF74zQOPFs0hQFkzZW0RrAIdTlv5q3hDuWa0N90bg_Im4gmU" />
-                                <img alt="User" className="w-4 h-4 rounded-full border-2 border-white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNmdYyH1_WPqA_X7UXNAXEZ9cBL9_WPv9ofLATXvfI-At0TcqHdHfANnSg_PYCt1D9Gs0tsh_15G6ZjHEWPV_l4vYUUbW7Z4J32pXhsICvT3a24DWjqJY4PI020QOXPN8iSjB_xcoN6DnUJ6Ve7hl4py3Qyrqlcus97KKfOGbP_r1vyguyI6bvlOnt6xv7MFSBXr2EogyTomXDjnkBRBGwtJ_t8jY3I4cCdz3T9UVm2NHTcYa76491T1pzikkjDFrtvmuEucTTNPY" />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Task 2 */}
-                    <div className="relative group/task cursor-pointer">
-                      <div className="relative bg-gray-50 p-3 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="h-4 w-4 rounded-full border-2 border-gray-300 group-hover/task:border-yellow-500 transition-colors"></div>
-                          <div className="flex-grow min-w-0">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-semibold text-gray-500 line-through decoration-gray-400 decoration-2 group-hover/task:no-underline group-hover/task:text-gray-700 transition-all">Quarterly Report</span>
-                            </div>
-                          </div>
-                          <div className="text-[10px] text-gray-500 font-medium flex items-center gap-1">
-                            <MaterialSymbol icon="event" className="text-[12px]" fill={0} /> 4:30 PM
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Task 3 */}
-                    <div className="relative group/task cursor-pointer">
-                      <div className="relative bg-gray-50 p-3 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="h-4 w-4 rounded-full border-2 border-gray-300 group-hover/task:border-blue-500 transition-colors"></div>
-                          <div className="flex-grow min-w-0">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-semibold text-gray-700">Client Call</span>
-                            </div>
-                          </div>
-                          <div className="text-[10px] text-gray-500 font-medium flex items-center gap-1">
-                            <MaterialSymbol icon="videocam" className="text-[12px]" fill={0} /> 5:00 PM
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-6 pt-3 mt-auto relative z-10">
-                    <div className="relative flex items-center gap-2">
-                      <div className="relative flex-grow">
-                        <input className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 pl-3 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500 text-gray-800 placeholder-gray-400 transition-shadow" placeholder="+ Add task..." type="text" />
-                      </div>
-                      <button className="h-8 w-8 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg flex items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95">
-                        <MaterialSymbol icon="arrow_upward" className="text-[16px]" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                {/* Feature Card 2: Task Reminders (interactive) */}
+                <ScrollItem className="h-full">
+                <TasksShowcase />
+                </ScrollItem>
 
-                {/* Feature Card 3: Analysis Tracker */}
-              <div className="group relative overflow-hidden rounded-3xl bg-white border border-gray-200 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-1 transition-all duration-300 flex flex-col">
-                <div className="p-8 pb-2 relative z-10">
-                  <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-2xl shadow-sm">
-                    📊
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-1">Analysis Tracker</h3>
-                  <p className="text-[#534f96] text-sm font-medium">
-                    Visualize trends & optimize.
-                  </p>
-                </div>
-                <div className="flex-grow p-6 pt-2 relative z-10">
-                  <div className="bg-gray-50 rounded-2xl border border-gray-200 p-5 h-full flex flex-col relative overflow-hidden shadow-inner">
-                    <div className="flex justify-between items-end mb-6">
-                      <div>
-                        <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Productivity Score</div>
-                        <div className="text-3xl font-black text-gray-900">94%</div>
-                      </div>
-                      <div className="px-2 py-1 rounded-lg bg-green-100 border border-green-200 text-green-700 text-xs font-bold flex items-center gap-1">
-                        <MaterialSymbol icon="trending_up" className="text-sm" fill={0} /> +12%
-                      </div>
-                    </div>
-
-                    <div className="flex items-end justify-between gap-2 h-24 sm:h-28 md:h-36 w-full mt-auto">
-                      <div className="w-full bg-gradient-to-t from-purple-100 to-purple-200 rounded-t-md h-[30%] relative group/bar hover:h-[35%] transition-all duration-300" />
-                      <div className="w-full bg-gradient-to-t from-purple-100 to-purple-300 rounded-t-md h-[50%] relative group/bar hover:h-[55%] transition-all duration-300 delay-75" />
-                      <div className="w-full bg-gradient-to-t from-purple-200 to-purple-300 rounded-t-md h-[40%] relative group/bar hover:h-[45%] transition-all duration-300 delay-100" />
-
-                    {/* Peak bar (tooltip appears only when hovering this bar; top less rounded) */}
-                    <div className="w-full relative flex items-end justify-center">
-                      <div className="relative w-full max-w-xs flex flex-col items-center">
-                        {/* Peak bar button MUST come before the tooltip so peer-* works on the tooltip */}
-                        <button
-                          className="peer w-full h-24 sm:h-28 md:h-32 rounded-t-md bg-gradient-to-b from-purple-500 to-indigo-500 transition-all duration-300 hover:h-28 sm:hover:h-32 md:hover:h-36 shadow-md focus:outline-none focus:ring-4 focus:ring-violet-200/40"
-                          aria-label="Peak performance bar"
-                        />
-
-                        {/* Tooltip shown only when the button (peer) is hovered or focused */}
-                        <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 flex flex-col items-center opacity-0 pointer-events-none transition-opacity duration-200 peer-hover:opacity-100 peer-focus:opacity-100">
-                          {/* smaller glow behind bubble */}
-                          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-20 sm:w-24 md:w-28 h-6 sm:h-7 rounded-xl bg-gradient-to-r from-violet-400/24 to-indigo-500/18 blur-lg opacity-0 peer-hover:opacity-100 peer-focus:opacity-100" />
-                          <div className="relative z-10">
-                            <div className="bg-gray-900 text-white font-semibold text-xs sm:text-sm px-2 py-1 rounded-md shadow-lg">
-                              Peak Performance
-                            </div>
-                            <svg className="mx-auto mt-1" width="16" height="8" viewBox="0 0 20 10" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                              <path d="M10 10L0 0H20L10 10Z" fill="#111827" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                      <div className="w-full bg-gradient-to-t from-purple-200 to-purple-300 rounded-t-md h-[60%] relative group/bar hover:h-[65%] transition-all duration-300 delay-150" />
-                      <div className="w-full bg-gradient-to-t from-purple-250 to-purple-300 rounded-t-md h-[20%] relative group/bar hover:h-[25%] transition-all duration-300 delay-200" />
-                    </div>
-                  </div>
-                </div>
-              </div>
+                {/* Feature Card 3: Analysis Tracker (interactive) */}
+                <ScrollItem className="h-full">
+                <AnalysisTrackerShowcase />
+                </ScrollItem>
 
 
 
-               {/* Feature Card 4: Eraser.io Editor (color tuned) */}
-                <div className="group relative overflow-hidden rounded-3xl bg-white border border-gray-100 shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:shadow-orange-400/10 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
-                  <div className="p-8 pb-4 relative z-10">
-                    <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-100 to-orange-50 text-2xl ring-1 ring-orange-200 shadow-sm">
-                      ✏️
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-1">Eraser.io Editor</h3>
-                    <p className="text-[#6b5aa3] text-sm font-medium">Seamless whiteboard & brainstorming.</p>
-                  </div>
-
-                  <div className="flex-grow p-6 pt-0 relative z-10">
-                    <div className="w-full h-full bg-white rounded-2xl border border-gray-100 relative overflow-hidden group-hover:border-orange-300 transition-colors shadow-inner grid-bg">
-                      <div className="absolute inset-0 p-4 opacity-80 group-hover:opacity-100 transition-opacity duration-500">
-                        <div className="absolute top-8 left-8 w-20 h-12 border-2 border-gray-200 rounded-lg flex items-center justify-center bg-white shadow-sm transform -rotate-2">
-                          <div className="h-2 w-12 bg-gray-100 rounded-full"></div>
-                        </div>
-
-                        <svg className="absolute top-14 left-28 w-16 h-12 text-gray-200" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M0,0 C20,0 20,40 60,40" strokeDasharray="4 4"></path>
-                          <path d="M55,35 L60,40 L55,45" strokeLinecap="round" strokeLinejoin="round"></path>
-                        </svg>
-
-                        <div className="absolute top-24 left-40 w-24 h-16 border-2 border-orange-300 rounded-lg flex flex-col gap-2 items-center justify-center bg-orange-50 shadow-sm transform rotate-1">
-                          <div className="h-2 w-16 bg-orange-200 rounded-full"></div>
-                          <div className="h-2 w-10 bg-orange-100 rounded-full"></div>
-                        </div>
-
-                        <div className="absolute top-1/2 left-1/2 transform translate-x-4 translate-y-8 z-20 transition-transform duration-1000 group-hover:translate-x-12 group-hover:translate-y-2">
-                          <svg className="w-6 h-6 text-orange-500 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24"><path d="M5.5 3.21l12.32 10.74-5.26 1.18 3.54 6.94-2.22 1.12-3.56-6.94-3.72 4.48V3.21z"></path></svg>
-                          <div className="absolute left-4 top-4 bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap shadow-md">Sarah</div>
-                        </div>
-
-                        <div className="absolute bottom-4 right-4 w-16 h-16 bg-yellow-100 border border-yellow-200 shadow-md transform rotate-3 flex items-center justify-center">
-                          <MaterialSymbol icon="lightbulb" className="text-yellow-600 text-xl" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-               {/* Feature Card 5: Music Integration — slightly smaller height */}
-                <div className="group relative overflow-hidden rounded-3xl bg-white border border-gray-100 shadow-xl hover:shadow-2xl hover:shadow-pink-500/10 hover:-translate-y-1 transition-all duration-300 flex flex-col">
-                  
-                  {/* Header */}
-                  <div className="p-8 pb-4 relative z-10">
-                    <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-50 text-2xl ring-1 ring-pink-100">
-                      🎵
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-1">Music Integration</h3>
-                    <p className="text-[#6b5aa3] text-sm font-medium">Sync playlists without breaking flow.</p>
-                  </div>
-
-                  {/* Purple Player */}
-                  <div className="flex-grow px-6 pb-6 pt-0 relative z-10">
-                    <div
-                      className="rounded-2xl p-5 text-white relative overflow-hidden shadow-2xl border border-gray-800 h-full min-h-[270px] sm:min-h-[295px] md:min-h-[315px] flex flex-col justify-center"
-                      style={{ background: "linear-gradient(180deg,#4c1053 0%,#1b0737 100%)" }}
-                    >
-
-                      {/* Glow */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-pink-600 to-purple-900 opacity-30 pointer-events-none"></div>
-
-                      {/* blob */}
-                      <div className="absolute -right-10 -top-10 w-32 h-32 bg-pink-500 rounded-full blur-[40px] opacity-40 pointer-events-none"></div>
-
-                      {/* Content */}
-                      <div className="relative z-10 flex flex-col gap-4">
-
-                        {/* Album Row */}
-                        <div className="flex items-center gap-4">
-                          <div className="h-14 w-14 rounded-lg bg-gray-800 shadow-lg relative overflow-hidden group/album">
-                            <img
-                              alt="Album"
-                              className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover/album:scale-110"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDD-qlvELW4gCkYdA3cbPq8oF2HU57LjttnWCeQCBtWmirWDq_u3oFYTBsy7SdsYlNQ8aOVrMlZLqUqPfoBJkw9E4vydSU9GFnuOviFksH25Ens5PHlBljZ-hK1jtRvhYzNJcdhxfH1lCExSL6Xrd_vFPvW4hMMifeufdHt8ID-dH-4yUnJwojai6ppbPSgf5SgqgpBspOlr9nOOF5geiCn4a3qKh9IHabWAyJROGAWsErC3mXC5fIu0Y2H7LmHl-P6UdwNnp8TfDY"
-                            />
-                          </div>
-
-                          <div className="flex flex-col min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold truncate">Deep Focus Mix</span>
-                              <MaterialSymbol icon="verified" className="text-xs text-green-400" />
-                            </div>
-                            <span className="text-[11px] text-gray-300 truncate">Lofi Girl • Spotify</span>
-                          </div>
-                        </div>
-
-                        {/* Progress bar */}
-                        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full w-1/3 bg-white rounded-full relative overflow-hidden transition-all duration-[2500ms] ease-linear group-hover:w-1/2">
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-pulse"></div>
-                          </div>
-                        </div>
-
-                        {/* Controls */}
-                        <div className="flex items-center justify-between text-white pt-1">
-                          <MaterialSymbol icon="shuffle" className="text-xl cursor-pointer hover:scale-110 transition-transform" />
-
-                          <div className="flex items-center gap-4">
-                            <MaterialSymbol icon="skip_previous" className="text-2xl cursor-pointer hover:-translate-x-1 transition-transform" />
-
-                            <div className="h-10 w-10 rounded-full bg-white text-black flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-white/30 shadow-lg">
-                              <MaterialSymbol icon="pause" className="text-2xl" />
-                            </div>
-
-                            <MaterialSymbol icon="skip_next" className="text-2xl cursor-pointer hover:translate-x-1 transition-transform" />
-                          </div>
-
-                          <MaterialSymbol icon="repeat" className="text-xl cursor-pointer hover:scale-110 transition-transform" />
-                        </div>
-
-                      </div>
-                    </div>
-                  </div>
-                </div>
+               {/* Feature Card 4: Team Workspaces (interactive) */}
+                <ScrollItem className="h-full">
+                <WorkspacesShowcase />
+                </ScrollItem>
+               {/* Feature Card 5: Soundscape Composer */}
+                <ScrollItem className="h-full">
+                <SoundscapeComposerShowcase />
+                </ScrollItem>
 
 
 
-                {/* Feature Card 6: Gmail & Calendar (color tuned) */}
-                <div className="group relative overflow-hidden rounded-3xl bg-white border border-gray-100 shadow-xl shadow-gray-100/50 hover:shadow-2xl hover:shadow-blue-400/10 hover:-translate-y-1 transition-all duration-300 flex flex-col">
-                  <div className="p-8 pb-4 relative z-10">
-                    <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-cyan-50 text-2xl ring-1 ring-blue-100 shadow-sm">
-                      📅
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-1">Gmail & Calendar</h3>
-                    <p className="text-[#6b5aa3] text-sm font-medium">Unified inbox & schedule view.</p>
-                  </div>
-
-                  <div className="flex-grow px-6 pb-6 pt-0 relative z-10">
-                    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col shadow-sm group-hover:shadow-lg transition-shadow h-full">
-                      <div className="h-9 bg-gray-50 border-b border-gray-100 flex items-center px-4 gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-red-400"></div>
-                        <div className="h-2.5 w-2.5 rounded-full bg-yellow-400"></div>
-                        <div className="h-2.5 w-2.5 rounded-full bg-green-400"></div>
-                        <div className="ml-auto w-24 h-4 bg-gray-200 rounded-full"></div>
-                      </div>
-
-                      <div className="p-4 space-y-4 relative">
-                        <div className="absolute left-7 top-4 bottom-4 w-0.5 bg-gray-100 z-0"></div>
-
-                        <div className="flex items-start gap-3 relative z-10">
-                          <div className="h-8 w-8 rounded-lg bg-blue-50 flex-shrink-0 flex items-center justify-center text-blue-600 border border-blue-100 shadow-sm">
-                            <MaterialSymbol icon="calendar_month" className="text-xs" />
-                          </div>
-                          <div className="flex-grow bg-blue-50/50 p-2.5 rounded-lg border border-blue-100">
-                            <div className="flex justify-between">
-                              <div className="h-2 w-20 bg-gray-300 rounded mb-1.5"></div>
-                              <span className="text-[10px] text-blue-500 font-bold">NOW</span>
-                            </div>
-                            <div className="h-1.5 w-12 bg-blue-200 rounded"></div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-3 relative z-10">
-                          <div className="h-8 w-8 rounded-lg bg-red-50 flex-shrink-0 flex items-center justify-center text-red-600 border border-red-100 shadow-sm">
-                            <div className="relative">
-                              <MaterialSymbol icon="mail" className="text-xs" />
-                              <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full border border-white"></span>
-                            </div>
-                          </div>
-                          <div className="flex-grow bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm group-hover:translate-x-1 transition-transform">
-                            <div className="flex justify-between items-center mb-1.5">
-                              <div className="h-2 w-16 bg-gray-800 rounded"></div>
-                              <div className="text-[9px] text-gray-400">10m ago</div>
-                            </div>
-                            <div className="h-1.5 w-full bg-gray-100 rounded mb-1"></div>
-                            <div className="h-1.5 w-2/3 bg-gray-100 rounded"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                {/* Feature Card 6: Gmail & Calendar (interactive) */}
+                <ScrollItem className="h-full">
+                <GmailCalendarShowcase />
+                </ScrollItem>
 
                {/* Feature Card 7: AI Chatbot Assistant (Wide Card) */}
-<div className="group relative col-span-1 md:col-span-2 lg:col-span-3 overflow-hidden rounded-3xl bg-gradient-to-r from-white to-[#fbf8ff] border border-gray-100 shadow-2xl shadow-gray-200/50 hover:shadow-[0_20px_60px_-15px_rgba(99,72,193,0.15)] transition-all duration-300 p-8 sm:p-12 flex flex-col md:flex-row items-center gap-10">
+                <ScrollItem className="col-span-1 md:col-span-2 lg:col-span-3">
+<div className="group relative overflow-hidden rounded-3xl bg-gradient-to-r from-white to-[#fbf8ff] border border-gray-100 shadow-2xl shadow-gray-200/50 hover:shadow-[0_20px_60px_-15px_rgba(99,72,193,0.15)] transition-all duration-300 p-8 sm:p-12 flex flex-col md:flex-row items-center gap-10">
 
   {/* subtle grid + mask (keeps same behavior) */}
   <div
@@ -613,15 +235,13 @@ export default function Features() {
   {/* Left content */}
   <div className="flex-1 space-y-8 relative z-10 max-w-xl">
     <div>
-      <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-3xl ring-1 ring-indigo-500/30 shadow-lg mb-6">
-        🤖
-      </div>
-      <h3 className="text-3xl md:text-4xl font-bold text-[#0f0e1b] leading-tight">
-        AI Chatbot <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">Assistant</span>
+      <FeatureCardIcon icon="smart_toy" tone="indigo" className="mb-6" fill={1} />
+      <h3 className="landing-display text-3xl md:text-4xl">
+        AI Chatbot <span className="text-neutral-700">Assistant</span>
       </h3>
     </div>
 
-    <p className="text-[#5f5590] text-lg leading-relaxed">
+    <p className="landing-body text-lg">
       Your personal productivity concierge. Start your day with clarity as our AI summarizes your agenda, prioritizes tasks, and handles quick queries instantly.
     </p>
 
@@ -713,17 +333,18 @@ export default function Features() {
     </div>
   </div>
 </div>
+                </ScrollItem>
 
 
-              </div>
+              </ScrollStagger>
 
-              <div className="flex justify-center mt-12">
+              <ScrollReveal className="flex justify-center mt-12" variant="fadeUpSoft" delay={0.1}>
                 <button className="group relative flex min-w-[240px] cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-full h-16 px-10 bg-[#0f0e1b] dark:bg-white text-white dark:text-[#0f0e1b] text-lg font-bold leading-normal tracking-wide transition-all hover:scale-105 hover:shadow-2xl hover:shadow-primary/30">
                   <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></span>
                   <span className="truncate">Explore all features</span>
                   <MaterialSymbol icon="arrow_forward" className="text-lg transition-transform group-hover:translate-x-1" />
                 </button>
-          </div>
+          </ScrollReveal>
           </div>
            </main>
         </div>

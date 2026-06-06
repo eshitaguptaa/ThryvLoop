@@ -26,6 +26,7 @@ import {
   getFocusTimerRecipesFromSupabase,
   setFocusTimerRecipesToSupabase,
 } from '@/utils/userStorage';
+import { DEFAULT_SPACES_VIDEO_ID } from '@/lib/spacesConstants';
 import WorkspaceIntegrations from '@/components/workspace/WorkspaceIntegrations';
 
 export default function SoundscapeComposer({
@@ -63,9 +64,9 @@ export default function SoundscapeComposer({
       return focusContext.backgroundVideoId;
     }
     if (typeof window !== 'undefined') {
-      return getItem('focus-background-video-id') || null;
+      return getItem('focus-background-video-id') || DEFAULT_SPACES_VIDEO_ID;
     }
-    return null;
+    return DEFAULT_SPACES_VIDEO_ID;
   };
 
   const getSpacesVolume = () => {
@@ -89,22 +90,18 @@ export default function SoundscapeComposer({
     return getItem('focus-spaces-paused') === 'true';
   };
 
+  const isSpacesPlaybackActive = () => {
+    if (typeof window === 'undefined') return false;
+    return getItem('focus-spaces-paused') === 'false';
+  };
+
   const getEffectiveSpacesVolume = (baseVolume) => {
-    if (isSpacesPausedByUser()) return 0;
-
-    const onFocus = pathname?.startsWith('/focus');
-
-    if (onFocus) {
-      if (soloSoundId !== null) return 0;
-      if (isPlaying && activeSounds.length > 0) {
-        return Math.round(baseVolume * (globalVolume / 100));
-      }
-      return baseVolume;
-    }
-
-    if (!isPlaying) return 0;
+    if (isSpacesPausedByUser() || !isSpacesPlaybackActive()) return 0;
     if (soloSoundId !== null) return 0;
-    return Math.round(baseVolume * (globalVolume / 100));
+    if (isPlaying && activeSounds.length > 0) {
+      return Math.round(baseVolume * (globalVolume / 100));
+    }
+    return baseVolume;
   };
 
   /** Persist the user's Spaces volume preference (base level). */
@@ -183,7 +180,7 @@ export default function SoundscapeComposer({
     const sessionActive = getItem('soundscape-session-active') === 'true';
     const savedPlaying = getItem('soundscape-is-playing') === 'true';
     setIsPlaying(sessionActive && savedPlaying);
-    setSpacesMuted(getItem('focus-spaces-paused') === 'true' || !(sessionActive && savedPlaying));
+    setSpacesMuted(getItem('focus-spaces-paused') !== 'false');
   }, [isOpen, initialPanel, userId]);
 
   useEffect(() => {
@@ -191,10 +188,8 @@ export default function SoundscapeComposer({
     const syncPlaybackUi = (e) => {
       if (e?.detail?.isPlaying !== undefined) {
         setIsPlaying(e.detail.isPlaying);
-        setSpacesMuted(!e.detail.isPlaying);
-        return;
       }
-      setSpacesMuted(isSpacesPausedByUser());
+      setSpacesMuted(getItem('focus-spaces-paused') !== 'false');
     };
     window.addEventListener('soundscape-play-pause-changed', syncPlaybackUi);
     return () => window.removeEventListener('soundscape-play-pause-changed', syncPlaybackUi);
@@ -375,7 +370,6 @@ export default function SoundscapeComposer({
     setIsPlaying(false);
     setItem('soundscape-is-playing', 'false');
     setItem('soundscape-session-active', 'false');
-    setItem('focus-spaces-paused', 'true');
     lastPlaybackVolumeRef.current = 0;
     Object.values(audioRefs.current).forEach((audio) => {
       if (audio) audio.pause();
@@ -384,9 +378,10 @@ export default function SoundscapeComposer({
       window.dispatchEvent(
         new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: false } })
       );
-      window.dispatchEvent(
-        new CustomEvent('focus-volume-changed', { detail: { volume: 0, playbackOnly: true } })
-      );
+      if (getItem('focus-spaces-paused') === 'false') {
+        lastPlaybackVolumeRef.current = null;
+        window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
+      }
     }
   }, [userId]);
 
@@ -398,6 +393,21 @@ export default function SoundscapeComposer({
       })
     );
   }, []);
+
+  const bootstrapSpacesPlayback = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!getBackgroundVideoId()) return;
+    const vol = getSpacesVolume();
+    if (vol <= 0) return;
+    if (isSpacesPausedByUser()) return;
+
+    setItem('focus-spaces-paused', 'false');
+    setSpacesMuted(false);
+    lastPlaybackVolumeRef.current = null;
+    window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
+    dispatchSpacesPlaybackVolume(vol);
+    window.dispatchEvent(new CustomEvent('soundscape-state-changed'));
+  }, [userId, spacesVolume, globalVolume, isPlaying, soloSoundId]);
 
   const isMixAudible = useCallback((
     sounds,
@@ -499,6 +509,11 @@ export default function SoundscapeComposer({
     hasStartedPlaybackRef.current = true;
     setIsPlaying(true);
     setSpacesMuted(false);
+    if (getBackgroundVideoId() && getSpacesVolume() > 0) {
+      window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
+      lastPlaybackVolumeRef.current = null;
+      dispatchSpacesPlaybackVolume(getSpacesVolume());
+    }
     window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
       detail: { isPlaying: true },
     }));
@@ -712,7 +727,7 @@ export default function SoundscapeComposer({
     };
     window.addEventListener('user-preferences-hydrated', onHydrated);
     return () => window.removeEventListener('user-preferences-hydrated', onHydrated);
-  }, [userId]);
+  }, [userId, restorePersistedPlayback]);
 
   // Reconnect module-level audio elements after hot reload / rare remounts
   useEffect(() => {
@@ -923,63 +938,41 @@ export default function SoundscapeComposer({
     dispatchSpacesPlaybackVolume(spacesVolume);
   }, [spacesVolume, globalVolume, isPlaying, soloSoundId, pathname]);
 
-  // Duck Spaces video volume while soundscape plays — playback only, never persist to context
+  // Keep Spaces playback volume in sync (ducking while soundscape layers play)
   useEffect(() => {
-    const enteredFocus =
-      pathname?.startsWith('/focus') && !prevPathnameRef.current?.startsWith('/focus');
+    const onFocus = pathname?.startsWith('/focus');
     prevPathnameRef.current = pathname;
     if (!getBackgroundVideoId()) return;
-    const onFocus = pathname?.startsWith('/focus');
+
     if (onFocus && !isSpacesPausedByUser()) {
-      if (enteredFocus) {
-        setItem('focus-spaces-paused', 'false');
-        window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
-      }
-      lastPlaybackVolumeRef.current = null;
-      const playbackVolume = getEffectiveSpacesVolume(spacesVolume);
-      lastPlaybackVolumeRef.current = playbackVolume;
-      dispatchSpacesPlaybackVolume(spacesVolume);
+      bootstrapSpacesPlayback();
       return;
     }
+
+    if (!isSpacesPlaybackActive()) return;
+
     const playbackVolume = getEffectiveSpacesVolume(spacesVolume);
     if (lastPlaybackVolumeRef.current === playbackVolume) return;
     lastPlaybackVolumeRef.current = playbackVolume;
     dispatchSpacesPlaybackVolume(spacesVolume);
-  }, [spacesVolume, globalVolume, isPlaying, soloSoundId, pathname]);
+  }, [spacesVolume, globalVolume, isPlaying, soloSoundId, pathname, bootstrapSpacesPlayback]);
 
   useEffect(() => {
     const handleSpacesResume = () => {
-      if (!getBackgroundVideoId()) return;
-      setItem('focus-spaces-paused', 'false');
-      lastPlaybackVolumeRef.current = null;
-      const playbackVolume = getEffectiveSpacesVolume(spacesVolume);
-      lastPlaybackVolumeRef.current = playbackVolume;
-      window.dispatchEvent(
-        new CustomEvent('focus-volume-changed', {
-          detail: { volume: playbackVolume, playbackOnly: true },
-        })
-      );
+      bootstrapSpacesPlayback();
     };
     window.addEventListener('focus-spaces-resume', handleSpacesResume);
     return () => window.removeEventListener('focus-spaces-resume', handleSpacesResume);
-  }, [spacesVolume, globalVolume, isPlaying, soloSoundId, pathname, activeSounds.length]);
+  }, [bootstrapSpacesPlayback]);
 
-  // Re-sync when Spaces player mounts after navigating to Focus
   useEffect(() => {
     const handlePlayerReady = () => {
-      if (!getBackgroundVideoId()) return;
-      if (pathname?.startsWith('/focus') && isSpacesPausedByUser()) return;
-      const playbackVolume = getEffectiveSpacesVolume(spacesVolume);
-      lastPlaybackVolumeRef.current = playbackVolume;
-      window.dispatchEvent(
-        new CustomEvent('focus-volume-changed', {
-          detail: { volume: playbackVolume, playbackOnly: true },
-        })
-      );
+      if (!isSpacesPlaybackActive()) return;
+      bootstrapSpacesPlayback();
     };
     window.addEventListener('focus-spaces-player-ready', handlePlayerReady);
     return () => window.removeEventListener('focus-spaces-player-ready', handlePlayerReady);
-  }, [spacesVolume, globalVolume, isPlaying, soloSoundId, pathname]);
+  }, [bootstrapSpacesPlayback, userId]);
 
   // Save play/pause state to localStorage
   useEffect(() => {
@@ -999,8 +992,10 @@ export default function SoundscapeComposer({
         if (nextPlaying) {
           hasStartedPlaybackRef.current = true;
           setSessionActive(true);
-          setItem('focus-spaces-paused', 'false');
-          setSpacesMuted(false);
+          if (e.detail.bootstrapSpaces) {
+            setItem('focus-spaces-paused', 'false');
+            setSpacesMuted(false);
+          }
           if (e.detail.bootstrapSpaces) {
             bootstrapSpacesAudioIfEmpty();
           }
@@ -1008,14 +1003,10 @@ export default function SoundscapeComposer({
         } else {
           setSessionActive(false);
           setIsPlaying(false);
-          setItem('focus-spaces-paused', 'true');
-          setSpacesMuted(true);
-          lastPlaybackVolumeRef.current = 0;
-          window.dispatchEvent(
-            new CustomEvent('focus-volume-changed', {
-              detail: { volume: 0, playbackOnly: true },
-            })
-          );
+          if (getItem('focus-spaces-paused') === 'false') {
+            lastPlaybackVolumeRef.current = null;
+            window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
+          }
         }
       }
     };
@@ -1025,7 +1016,7 @@ export default function SoundscapeComposer({
     return () => {
       window.removeEventListener('soundscape-play-pause-changed', handlePlayPauseChange);
     };
-  }, []);
+  }, [userId]);
 
   // Initialize and manage audio - keep playing even when modal is closed
   useEffect(() => {
@@ -1156,7 +1147,6 @@ export default function SoundscapeComposer({
       setSpacesMuted(true);
       setItem('soundscape-is-playing', 'false');
       setItem('soundscape-session-active', 'false');
-      setItem('focus-spaces-paused', 'true');
       window.dispatchEvent(
         new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: false } })
       );
@@ -1167,7 +1157,7 @@ export default function SoundscapeComposer({
         window.removeEventListener('soundscape-stop-all', handleStop);
       };
     }
-  }, []);
+  }, [userId]);
 
   // Persist soundscape state to Supabase
   useEffect(() => {

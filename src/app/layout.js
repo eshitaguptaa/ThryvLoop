@@ -12,7 +12,12 @@ const poppins = Poppins({
 
 export const metadata = {
   title: 'ThryvLoop - Your Personal Productivity Hub',
-  description: 'Transform your workspace with immersive ambience, intelligent task management, seamless integrations, and powerful analytics.'
+  description: 'Transform your workspace with immersive ambience, intelligent task management, seamless integrations, and powerful analytics.',
+  icons: {
+    icon: '/LandingPageImages/logo.png',
+    shortcut: '/LandingPageImages/logo.png',
+    apple: '/LandingPageImages/logo.png',
+  },
 };
 
 export default function RootLayout({ children }) {

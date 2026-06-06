@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
 
 // Define the custom structural classes, now relying on CSS variables for color values
 const cardClasses = "relative overflow-hidden bg-[var(--white)] border border-[var(--light)] rounded-4xl transition-all duration-300 ease-out hover:border-[var(--secondary)] hover:shadow-2xl hover:shadow-[var(--secondary)]/30 hover:-translate-y-2";
@@ -7,7 +8,7 @@ const iconBtnClasses = "flex items-center justify-center w-10 h-10 rounded-full 
 export default function Resources() {
   return (
     // Base colors using variables
-    <div className="relative min-h-screen w-full font-display bg-[var(--white)] text-[var(--gray)] antialiased">
+    <div className="relative min-h-screen w-full bg-[var(--white)] text-[var(--gray)] antialiased">
       {/* Background Glows (Emphasizing Purple/Secondary) */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
         {/* Glow 1: Primary (Purple) */}
@@ -18,7 +19,7 @@ export default function Resources() {
 
       <main className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
         {/* Header */}
-        <header className="text-center max-w-4xl mx-auto mb-20">
+        <ScrollReveal as="header" className="text-center max-w-4xl mx-auto mb-20">
           {/* UPDATED: LEARN & GET STARTED BADGE 
             The structure is replicated, using --primary for accent color and --light for borders/rings.
           */}
@@ -33,20 +34,20 @@ export default function Resources() {
           </div>
           
           {/* Header Gradient: Primary Dark via Secondary back to Primary Dark */}
-          <h1 className="mt-4 text-5xl sm:text-7xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-dark)] via-[var(--secondary)] to-[var(--primary-dark)]">
+          <h1 className="mt-4 landing-display text-5xl sm:text-[3.5rem] text-neutral-900">
             Unlock Your Potential
           </h1>
-          {/* Secondary text color: --gray */}
-          <p className="mt-6 text-lg sm:text-xl text-[var(--gray)] max-w-2xl mx-auto">
+          <p className="mt-6 landing-body text-lg sm:text-xl max-w-2xl mx-auto">
             Dive into our curated resources. Everything you need to master your
             workflow and accelerate your journey from novice to expert.
           </p>
-        </header>
+        </ScrollReveal>
 
         {/* Main grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" stagger={0.12}>
           {/* Help Center Card */}
-          <div className={`group md:col-span-2 lg:col-span-2 ${cardClasses} p-8 md:p-10 flex flex-col`}>
+          <ScrollItem className="md:col-span-2 lg:col-span-2">
+          <div className={`group h-full ${cardClasses} p-8 md:p-10 flex flex-col`}>
             <div className="flex items-center gap-4">
               {/* Icon Circle: Background --light, Text --primary */}
               <div className="flex-shrink-0 flex items-center justify-center w-16 h-16 rounded-full bg-[var(--light)] text-[var(--primary)]">
@@ -133,9 +134,11 @@ export default function Resources() {
               </Link>
             </div>
           </div>
+          </ScrollItem>
 
           {/* Right column: Video Tutorials & Productivity Tips */}
-          <div className="grid grid-cols-1 gap-8 lg:col-start-3">
+          <ScrollItem className="lg:col-start-3">
+          <div className="grid grid-cols-1 gap-8 h-full">
             {/* Video Tutorials */}
             <div className={`group ${cardClasses} flex flex-col p-0`}>
               {/* Background gradient: Primary Dark via Secondary to Primary Dark (More Purple) */}
@@ -267,7 +270,8 @@ export default function Resources() {
               </div>
             </div>
           </div>
-        </div>
+          </ScrollItem>
+        </ScrollStagger>
       </main>
     </div>
   );

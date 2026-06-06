@@ -75,8 +75,9 @@ export default function MusicWidget() {
         const paused =
           getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
         setSpacesPaused(paused);
-        const onFocus = pathname?.startsWith('/focus');
-        const spacesAuto = onFocus && checkSpacesPlaying() && !paused;
+        const spacesPlaying =
+          getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'false';
+        const spacesAuto = spacesPlaying && checkSpacesPlaying();
         const spacesInMix = (savedPlaying && checkSpacesPlaying()) || spacesAuto;
         const hasSpaces = filteredSounds.some((s) => s.id === 'spaces');
         if (spacesInMix && !hasSpaces) {
@@ -254,7 +255,7 @@ export default function MusicWidget() {
 
     const paused =
       getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
-    const spacesAuto = isOnFocus && checkSpacesPlaying() && !paused;
+    const spacesAuto = checkSpacesPlaying() && !paused;
     const currentlyPlaying = isPlaying || spacesAuto;
     const next = !currentlyPlaying;
 
@@ -267,6 +268,9 @@ export default function MusicWidget() {
       setUserStorageItem(userId, 'soundscape-session-active', 'false');
       window.dispatchEvent(
         new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: false } })
+      );
+      window.dispatchEvent(
+        new CustomEvent('focus-volume-changed', { detail: { volume: 0, playbackOnly: true } })
       );
       return;
     }
@@ -285,7 +289,7 @@ export default function MusicWidget() {
       return;
     }
 
-    if (isOnFocus && checkSpacesPlaying()) {
+    if (checkSpacesPlaying()) {
       window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
     }
   };
@@ -305,7 +309,11 @@ export default function MusicWidget() {
     : null;
 
   const isOnFocus = pathname?.startsWith('/focus');
-  const spacesAutoPlaying = isOnFocus && checkSpacesPlaying() && !spacesPaused;
+  const spacesPlaying =
+    typeof window !== 'undefined' &&
+    userId &&
+    getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'false';
+  const spacesAutoPlaying = spacesPlaying && checkSpacesPlaying();
   const showAsPlaying = isPlaying || spacesAutoPlaying;
 
   if (!position) return null;

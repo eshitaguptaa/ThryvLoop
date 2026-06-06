@@ -1,12 +1,15 @@
 import Link from "next/link";
+import { SPACES_CATALOG } from '@/lib/spacesCatalog';
+import TeamsNotifyForm from '@/components/landing_sections/TeamsNotifyForm';
+import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
 
 export default function Solutions() {
   const featuresLeft = [
-    "50+ immersive 4K environments",
-    "Spotify & YouTube integration",
-    "Collaborative document editor",
+    `${SPACES_CATALOG.length} immersive 4K Focus Spaces`,
+    "Custom soundscape composer",
     "Smart task management",
     "Distraction-free interface",
+    "Layered ambient sound mixer",
   ];
 
   const featuresRight = [
@@ -14,7 +17,7 @@ export default function Solutions() {
     "Comprehensive analysis tracker",
     "Gmail & Calendar integrations",
     "AI chatbot assistant",
-    "Cross-platform sync",
+    "Personalized focus dashboard",
   ];
 
   // Helper function to set styles on hover for feature items
@@ -71,7 +74,7 @@ export default function Solutions() {
 />
 
 
-  <div className="relative max-w-4xl mx-auto">
+  <ScrollReveal className="relative max-w-4xl mx-auto">
 
     {/* BADGE */}
     <div className="relative z-20 inline-flex items-center gap-2 rounded-full bg-[var(--white)]/70 px-4 py-1.5 text-xs font-semibold text-[var(--primary)] ring-1 ring-inset ring-[var(--light)] shadow-sm uppercase">
@@ -115,11 +118,12 @@ export default function Solutions() {
       unified workspace.
     </p>
 
-  </div>
+  </ScrollReveal>
 </section>
 
       {/* ================= CARD ================= */}
       <section className="px-6 pb-32">
+        <ScrollReveal variant="scaleIn">
         <div
           className="max-w-6xl mx-auto rounded-3xl shadow-xl"
           style={{
@@ -127,9 +131,9 @@ export default function Solutions() {
             border: "1px solid rgba(99,102,241,0.15)",
           }}
         >
-          <div className="p-10 md:p-14 grid grid-cols-1 lg:grid-cols-2 gap-16">
-
+          <ScrollStagger className="p-10 md:p-14 grid grid-cols-1 lg:grid-cols-2 gap-16" stagger={0.14}>
             {/* LEFT */}
+            <ScrollItem>
             <div>
               <span
                 className="inline-block px-4 py-1.5 rounded-md text-sm font-semibold mb-6"
@@ -160,7 +164,7 @@ export default function Solutions() {
 
               {/* UPDATED BUTTON WITH HOVER EFFECT */}
               <Link
-                href="#"
+                href="/signup?plan=monthly"
                 className="relative inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold transition-all duration-300"
                 style={{
                   backgroundColor: "var(--secondary)",
@@ -185,8 +189,10 @@ export default function Solutions() {
                 No credit card required
               </p>
             </div>
+            </ScrollItem>
 
             {/* RIGHT - UPDATED LIST ITEMS WITH HOVER EFFECT */}
+            <ScrollItem>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-4">
               {[...featuresLeft, ...featuresRight].map((item, i) => (
                 <div 
@@ -201,8 +207,6 @@ export default function Solutions() {
                     style={{ 
                         color: "var(--primary)", 
                         transition: "all 0.3s ease",
-                        // The original component only uses a '✓' which is less expressive than the reference's icon.
-                        // I'm simulating the effect by having the checkmark itself scale and change color.
                     }}
                   >
                       ✓
@@ -217,9 +221,10 @@ export default function Solutions() {
                 </div>
               ))}
             </div>
-
-          </div>
+            </ScrollItem>
+          </ScrollStagger>
         </div>
+        </ScrollReveal>
       </section>
 
       {/* ================= TEAMS ================= */}
@@ -246,7 +251,7 @@ export default function Solutions() {
     }}
   />
 
-  <div className="relative max-w-3xl mx-auto">
+  <ScrollReveal className="relative max-w-3xl mx-auto">
 
     {/* BADGE */}
     <span
@@ -286,38 +291,8 @@ export default function Solutions() {
       are on the way to supercharge your team's productivity.
     </p>
 
-    {/* EMAIL CTA - ADDING SIMPLE HOVER TO BUTTON */}
-    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-      <input
-        type="email"
-        placeholder="Enter your email"
-        className="px-5 py-4 rounded-xl w-full sm:w-80 outline-none"
-        style={{
-          backgroundColor: "var(--white)",
-          border: "1px solid rgba(15,23,42,0.15)",
-          color: "var(--dark)",
-        }}
-      />
-
-      <button
-        className="px-7 py-4 rounded-xl font-semibold flex items-center gap-2 justify-center transition-colors duration-300"
-        style={{
-          backgroundColor: "var(--dark)",
-          color: "var(--white)",
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            "var(--primary)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor =
-            "var(--dark)")
-        }
-      >
-        🔔 Notify Me
-      </button>
-    </div>
-  </div>
+    <TeamsNotifyForm />
+  </ScrollReveal>
 </section>
 
     </main>

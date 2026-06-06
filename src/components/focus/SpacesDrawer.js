@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
 import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 import { DEFAULT_SPACES_VIDEO_ID } from '@/lib/spacesConstants';
+import { SPACES_CATEGORIES, SPACES_CATALOG, filterSpacesByCategory } from '@/lib/spacesCatalog';
 
 export default function SpacesDrawer({ isOpen, onClose }) {
   const { user } = useUser();
@@ -173,168 +174,12 @@ export default function SpacesDrawer({ isOpen, onClose }) {
     };
   }, [isOpen]);
 
-  const categories = [
-    { id: 'all', name: 'All', icon: null },
-    { id: 'nature', name: 'Nature', icon: '🏔️' },
-    { id: 'cafe', name: 'Cafe', icon: '☕' },
-    { id: 'urban', name: 'Urban', icon: '🪟' },
-    { id: 'floral', name: 'Floral', icon: '🌸' },
-    { id: 'vintage', name: 'Vintage', icon: '📷' },
-  ];
-
-  // YouTube video IDs for 4K ambient/study videos
-  // 
-  // HOW TO ADD YOUR OWN VIDEOS:
-  // 1. Get your YouTube video ID from the URL:
-  //    - Full URL: https://www.youtube.com/watch?v=VIDEO_ID_HERE
-  //    - Short URL: https://youtu.be/VIDEO_ID_HERE
-  //    - Extract the VIDEO_ID_HERE part
-  //
-  // 2. Get a thumbnail image:
-  //    - Option A: Use YouTube thumbnail: https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg
-  //    - Option B: Use any image URL (e.g., from Unsplash)
-  //
-  // 3. Add a new object to the allSpaces array below with:
-  //    - id: Next available number (currently highest is 15)
-  //    - name: Display name for your video
-  //    - image: Thumbnail image URL
-  //    - videoId: Your YouTube video ID
-  //    - badge: Optional badge text (e.g., '4K ULTRA HD') or null
-  //    - category: One of: 'nature', 'cafe', 'urban', 'floral', 'vintage'
-  //
-  const allSpaces = [
-    // Nature
-    { 
-      id: 1, 
-      name: 'Peaceful World Landscapes', 
-      image: 'https://img.youtube.com/vi/lIU4vtkLnDc/maxresdefault.jpg', 
-      videoId: 'lIU4vtkLnDc', // Mount Shuksan & Global Nature
-      badge: '4K ULTRA HD',
-      category: 'nature'
-    },
-    { 
-      id: 2, 
-      name: 'Moraine Lake Relaxation', 
-      image: 'https://img.youtube.com/vi/Se5NjX-cM5I/maxresdefault.jpg', 
-      videoId: 'Se5NjX-cM5I', // Moraine Lake 4K
-      badge: '4K ULTRA HD',
-      category: 'nature'
-    },
-    { 
-      id: 3, 
-      name: 'Tropical Waterfall', 
-      image: 'https://img.youtube.com/vi/JdlTsEoJtLA/maxresdefault.jpg', 
-      videoId: 'JdlTsEoJtLA', // Tropical Waterfall 4K HDR
-      badge: '4K HDR',
-      category: 'nature'
-    },
-    { 
-      id: 4, 
-      name: 'Clearwater Mountain Lake', 
-      image: 'https://img.youtube.com/vi/80tY1jKlH9o/maxresdefault.jpg', 
-      videoId: '80tY1jKlH9o', // Clearwater Lake 4K
-      badge: '4K ULTRA HD',
-      category: 'nature'
-    },
-    { 
-      id: 5, 
-      name: 'Forest Rain Ambience', 
-      image: 'https://img.youtube.com/vi/mpRv4Ar-TTI/maxresdefault.jpg', 
-      videoId: 'mpRv4Ar-TTI', // Gentle Rain on Leaves
-      badge: '4K ULTRA HD',
-      category: 'nature'
-    },
-    { 
-      id: 6, 
-      name: 'Ocean Waves', 
-      image: 'https://img.youtube.com/vi/y6ZavlQ1w4o/maxresdefault.jpg', 
-      videoId: 'y6ZavlQ1w4o', // The Ocean 4K
-      badge: '4K ULTRA HD',
-      category: 'nature'
-    },
-    // Cafe
-    { 
-      id: 7, 
-      name: 'Amsterdam Canal Cafe', 
-      image: 'https://img.youtube.com/vi/FWtf1pHBsZQ/maxresdefault.jpg', 
-      videoId: 'FWtf1pHBsZQ', // Amsterdam Coffee Shop with Canal View
-      badge: '4K ULTRA HD',
-      category: 'cafe'
-    },
-    { 
-      id: 8, 
-      name: 'Rainy Cozy Coffee Shop', 
-      image: 'https://img.youtube.com/vi/kjnBNkUE5IY/maxresdefault.jpg', 
-      videoId: 'kjnBNkUE5IY', // Rainy Jazz Cafe
-      badge: '4K ULTRA HD',
-      category: 'cafe'
-    },
-    { 
-      id: 9, 
-      name: 'Tokyo Ghibli Vibes Cafe', 
-      image: 'https://img.youtube.com/vi/_MBnoMojjE4/maxresdefault.jpg', 
-      videoId: '_MBnoMojjE4', // Urban Serenity Tokyo Cafe
-      badge: '4K ULTRA HD',
-      category: 'cafe'
-    },
-    { 
-      id: 10, 
-      name: 'Parisian Cafe Autumn', 
-      image: 'https://img.youtube.com/vi/vb9z91KsxFE/maxresdefault.jpg', 
-      videoId: 'vb9z91KsxFE', // Cafe de Paris 4K
-      badge: '4K ULTRA HD',
-      category: 'cafe'
-    },
-    // Urban
-    { 
-      id: 11, 
-      name: 'Tokyo Ginza Night Walk', 
-      image: 'https://img.youtube.com/vi/xvwfZAwJqHA/maxresdefault.jpg', 
-      videoId: 'xvwfZAwJqHA', // Tokyo Ginza Night
-      badge: '4K HDR',
-      category: 'urban'
-    },
-    { 
-      id: 12, 
-      name: 'New York City Night', 
-      image: 'https://img.youtube.com/vi/23uRPFhhwNU/maxresdefault.jpg', 
-      videoId: '23uRPFhhwNU', // NYC 4K HDR
-      badge: '4K HDR',
-      category: 'urban'
-    },
-    // Floral
-    { 
-      id: 13, 
-      name: 'Cherry Blossoms', 
-      image: 'https://img.youtube.com/vi/Q4MIOG1BpU0/maxresdefault.jpg', 
-      videoId: 'Q4MIOG1BpU0', // Japan Cherry Blossoms
-      badge: '4K HDR',
-      category: 'floral'
-    },
-    { 
-      id: 14, 
-      name: 'Spring Garden & Birds', 
-      image: 'https://img.youtube.com/vi/dYfMj1SjzRc/maxresdefault.jpg', 
-      videoId: 'dYfMj1SjzRc', // Nightingale & Cherry Blossom
-      badge: '4K HDR',
-      category: 'floral'
-    },
-    // Vintage
-    { 
-      id: 15, 
-      name: 'Vintage Room Oldies', 
-      image: 'https://img.youtube.com/vi/WinMvfKVUx0/maxresdefault.jpg', 
-      videoId: 'WinMvfKVUx0', // Vintage oldies in another room
-      badge: 'COZY',
-      category: 'vintage'
-    },
-  ];
+  const categories = SPACES_CATEGORIES;
+  const allSpaces = SPACES_CATALOG;
 
   // Filter spaces by category - show all videos by default
   const filteredSpaces = activeTab === 'Videos' 
-    ? (selectedCategory === 'all' 
-        ? allSpaces 
-        : allSpaces.filter(space => space.category === selectedCategory))
+    ? filterSpacesByCategory(selectedCategory)
     : activeTab === 'Favorites'
     ? allSpaces.filter(space => favorites.includes(space.videoId))
     : [];

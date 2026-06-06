@@ -22,22 +22,22 @@ export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
         </Link>
         <ul className="hidden md:flex gap-8 list-none">
           <li>
-            <a href="#features" className="text-slate-900 font-medium no-underline transition-colors hover:text-indigo-500">
+            <a href="#features" className="text-neutral-700 font-medium text-sm no-underline transition-colors hover:text-neutral-900">
               Features
             </a>
           </li>
           <li>
-            <a href="#solutions" className="text-slate-900 font-medium no-underline transition-colors hover:text-indigo-500">
+            <a href="#solutions" className="text-neutral-700 font-medium text-sm no-underline transition-colors hover:text-neutral-900">
               Solutions
             </a>
           </li>
           <li>
-            <a href="#resources" className="text-slate-900 font-medium no-underline transition-colors hover:text-indigo-500">
+            <a href="#resources" className="text-neutral-700 font-medium text-sm no-underline transition-colors hover:text-neutral-900">
               Resources
             </a>
           </li>
           <li>
-            <a href="#pricing" className="text-slate-900 font-medium no-underline transition-colors hover:text-indigo-500">
+            <a href="#pricing" className="text-neutral-700 font-medium text-sm no-underline transition-colors hover:text-neutral-900">
               Pricing
             </a>
           </li>

@@ -1,4 +1,9 @@
 import Link from 'next/link';
+import { SPACES_CATALOG } from '@/lib/spacesCatalog';
+import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
+
+const SPACES_COUNT = SPACES_CATALOG.length;
+const FREE_SPACES_COUNT = 5;
 
 export default function Pricing() {
   return (
@@ -7,7 +12,7 @@ export default function Pricing() {
         <div className="max-w-7xl mx-auto">
           
           {/* Header */}
-          <header className="text-center mb-16">
+          <ScrollReveal as="header" className="text-center mb-16">
             
             {/* UPDATED: Pricing Plans Badge with animated dot, using indigo colors */}
             <div className="relative z-20 inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-1.5 text-xs font-semibold text-indigo-600 ring-1 ring-inset ring-indigo-200 shadow-sm uppercase mb-6">
@@ -21,21 +26,21 @@ export default function Pricing() {
             </div>
             
             {/* UPDATED: Title with Indigo/Violet Gradient */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-800 via-violet-700 to-indigo-800 leading-tight">
+            <h1 className="landing-display text-4xl sm:text-5xl lg:text-[3.25rem] text-neutral-900">
               Simple, Transparent Pricing
             </h1>
             
-            {/* Subtitle (slate-500) */}
-            <p className="mt-6 max-w-3xl mx-auto text-lg text-slate-500 leading-relaxed">
+            <p className="mt-6 max-w-3xl mx-auto landing-body text-lg">
               Start free. Upgrade for deeper insights, pro features, and a premium experience.
             </p>
-          </header>
+          </ScrollReveal>
 
           {/* Cards Grid: lg:grid-cols-4 */}
-          <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-[1100px] mx-auto">
+          <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-[1100px] mx-auto" stagger={0.12}>
             
             {/* 1. Free Card (Light Theme) */}
-            <div className="bg-white border-2 border-slate-100 rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2">
+            <ScrollItem>
+            <div className="bg-white border-2 border-slate-100 rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 h-full">
               <div className="flex-grow">
                 <h3 className="text-2xl font-semibold text-slate-900 mb-1.5">Free</h3>
                 <p className="text-slate-500 text-sm leading-relaxed">Forever free — useful &amp; complete</p>
@@ -47,15 +52,14 @@ export default function Pricing() {
 
                 <ul className="space-y-3.5 text-slate-500">
                   {[
-                    "8 immersive environments (select)",
+                    `${FREE_SPACES_COUNT} Focus Spaces (select)`,
                     "Standard Pomodoro timer",
                     "Full task lists + subtasks",
                     "Basic productivity dashboard",
-                    "Limited music integration",
-                    "Read-only Gmail/Outlook & Calendar",
+                    "Basic soundscape mixer",
+                    "Read-only Gmail & Calendar preview",
                     "5 AI assistant messages / day",
-                    "1 canvas in editor",
-                    "Community support"
+                    "Community support",
                   ].map((item, i) => (
                     <li key={i} className="flex items-start">
                       {/* Checkmark style */}
@@ -76,9 +80,11 @@ export default function Pricing() {
                 Get Started — Free
               </a>
             </div>
+            </ScrollItem>
 
             {/* 2. Pro Monthly Card (Most Popular - Primary Accent) */}
-            <div className="relative bg-white border-2 border-indigo-500 rounded-2xl p-8 flex flex-col shadow-2xl shadow-indigo-500/10 scale-105">
+            <ScrollItem>
+            <div className="relative bg-white border-2 border-indigo-500 rounded-2xl p-8 flex flex-col shadow-2xl shadow-indigo-500/10 scale-105 h-full">
               
               {/* "Most Popular" Badge (indigo-500) */}
               <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-indigo-500 text-white px-6 py-2 text-sm font-bold rounded-full shadow-lg text-center whitespace-nowrap">
@@ -97,16 +103,16 @@ export default function Pricing() {
 
                 <ul className="space-y-3.5 text-slate-500">
                   {[
-                    "All 50+ immersive environments (4K + dynamic)",
+                    `All ${SPACES_COUNT} immersive 4K Focus Spaces`,
                     "Advanced Pomodoro (custom cycles & lock)",
                     "Full task management + smart reminders",
-                    "Gmail, Outlook & Calendar full sync & actions",
-                    "Eraser-style editor — unlimited canvases",
+                    "Gmail & Google Calendar full sync",
+                    "Custom soundscape composer + recipes",
                     "AI assistant (unlimited messages)",
-                    "Music mixer + focus playlists",
+                    "Layered ambient sound mixer",
                     "Advanced analytics & heatmaps",
                     "Priority support",
-                    "14-day free trial"
+                    "14-day free trial",
                   ].map((item, i) => (
                     <li key={i} className="flex items-start">
                       {/* Checkmark style */}
@@ -127,9 +133,11 @@ export default function Pricing() {
                 Start 14-Day Trial
               </a>
             </div>
+            </ScrollItem>
 
             {/* 3. Pro Yearly Card (Light Theme) */}
-            <div className="bg-white border-2 border-slate-100 rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2">
+            <ScrollItem>
+            <div className="bg-white border-2 border-slate-100 rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 h-full">
               <div className="flex-grow">
                 <h3 className="text-2xl font-semibold text-slate-900 mb-1.5">Pro Yearly</h3>
                 <p className="text-slate-500 text-sm leading-relaxed">Best value — save ~45% vs monthly</p>
@@ -143,9 +151,9 @@ export default function Pricing() {
                 <ul className="space-y-3.5 text-slate-500">
                   {[
                     "Everything in Pro (monthly)",
-                    "Priority updates & early access to scenes",
-                    "Personalized AI weekly report",
-                    "Exclusive yearly-only ambience packs"
+                    "Priority updates & early access to Focus Spaces",
+                    "Personalized AI weekly productivity report",
+                    "Exclusive yearly soundscape & ambience packs",
                   ].map((item, i) => (
                     <li key={i} className="flex items-start">
                       {/* Checkmark style */}
@@ -166,9 +174,11 @@ export default function Pricing() {
                 Get Yearly & Save
               </a>
             </div>
+            </ScrollItem>
 
             {/* 4. Lifetime Card (Light Theme with GOLD accent and INNER GRADIENT) */}
-            <div className="relative bg-gradient-to-br from-orange-50 to-amber-100 border-2 border-[#F59E0B] rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 overflow-hidden">
+            <ScrollItem>
+            <div className="relative bg-gradient-to-br from-orange-50 to-amber-100 border-2 border-[#F59E0B] rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 overflow-hidden h-full">
               
               <div className="flex-grow">
                 {/* Title and Badge arranged horizontally */}
@@ -192,9 +202,9 @@ export default function Pricing() {
                 <ul className="space-y-3.5 text-slate-500">
                   {[
                     "All Pro features forever",
-                    "Lifetime access to new ambience packs",
+                    "Lifetime access to new Focus Spaces & soundscapes",
                     "Lifetime AI credits & premium support",
-                    "Invite-only community events"
+                    "Invite-only community events",
                   ].map((item, i) => (
                     <li key={i} className="flex items-start">
                       {/* Gold Star Icon */}
@@ -213,14 +223,15 @@ export default function Pricing() {
                 Claim Lifetime Access
               </a>
             </div>
-          </main>
+            </ScrollItem>
+          </ScrollStagger>
           
           {/* Footer */}
-          <footer className="text-center mt-12 max-w-3xl mx-auto">
+          <ScrollReveal as="footer" className="text-center mt-12 max-w-3xl mx-auto" variant="fadeUpSoft" delay={0.15}>
             <p className="text-sm text-slate-500 leading-relaxed">
               All plans include regular updates. Cancel anytime. No hidden fees.
             </p>
-          </footer>
+          </ScrollReveal>
         </div>
     </section>
   );

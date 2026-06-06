@@ -10,6 +10,7 @@ import Solutions from '@/components/landing_sections/Solutions';
 import FooterLanding from '@/components/landing_sections/FooterLanding';
 import Resources from '@/components/landing_sections/Resources';
 import Pricing from '@/components/landing_sections/Pricing';
+import { landingFont } from '@/lib/landingFont';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -44,7 +45,7 @@ export default function LandingPage() {
   };
 
   return (
-    <>
+    <div className={`landing-page ${landingFont.className} ${landingFont.variable}`}>
       <NavbarLanding 
         onSignInClick={() => openAuth('signin')} 
         onGetStartedClick={() => openAuth('signup')} 
@@ -60,6 +61,6 @@ export default function LandingPage() {
         onClose={closeAuth} 
         initialMode={initialMode}
       />
-    </>
+    </div>
   );
 }

@@ -107,11 +107,10 @@ export default function Dashboard() {
     const list = Array.isArray(raw) ? raw : [];
     const videoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
     const videoVol = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
-    const spacesPaused =
-      getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
+    const spacesPlaying =
+      getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'false';
     const spacesOn = !!(
-      isPlayingNow &&
-      !spacesPaused &&
+      spacesPlaying &&
       videoId &&
       videoVol &&
       parseInt(videoVol, 10) > 0
@@ -124,6 +123,9 @@ export default function Dashboard() {
     setSoundscapeActiveSounds(
       withSpaces.map((s) => ({ id: s.id, name: SOUNDSCAPE_SOUND_NAMES[s.id] || s.name || s.id }))
     );
+    if (spacesOn && !isPlayingNow) {
+      setSoundscapeIsPlaying(true);
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -181,13 +183,24 @@ export default function Dashboard() {
 
     setUserStorageItem(userId, 'soundscape-is-playing', next ? 'true' : 'false');
     setUserStorageItem(userId, 'soundscape-session-active', next ? 'true' : 'false');
-    setUserStorageItem(userId, 'focus-spaces-paused', next ? 'false' : 'true');
+    if (next) {
+      setUserStorageItem(userId, 'focus-spaces-paused', 'false');
+    } else {
+      setUserStorageItem(userId, 'focus-spaces-paused', 'true');
+    }
     setSoundscapeIsPlaying(next);
     window.dispatchEvent(
       new CustomEvent('soundscape-play-pause-changed', {
         detail: { isPlaying: next, bootstrapSpaces: next },
       })
     );
+    if (!next) {
+      window.dispatchEvent(
+        new CustomEvent('focus-volume-changed', { detail: { volume: 0, playbackOnly: true } })
+      );
+    } else {
+      window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
+    }
   }, [userId, soundscapeIsPlaying]);
 
   const openSoundscapeComposer = useCallback(() => {

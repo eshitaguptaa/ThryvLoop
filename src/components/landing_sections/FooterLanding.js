@@ -1,8 +1,9 @@
 import Link from 'next/link';
+import { ScrollReveal } from '@/components/landing_sections/ScrollReveal';
 
 export default function FooterLanding() {
   return (
-    <footer className="bg-slate-900 text-white py-16 px-8">
+    <ScrollReveal as="footer" variant="fadeUpSoft" className="bg-slate-900 text-white py-16 px-8">
       <div className="max-w-[1200px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
         <div className="md:col-span-2">
           <h3 className="text-3xl font-bold mb-4 bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
@@ -43,6 +44,6 @@ export default function FooterLanding() {
       <div className="max-w-[1200px] mx-auto pt-8 border-t border-slate-700 text-center text-slate-400">
         <p>© 2025 ThryvLoop. All rights reserved.</p>
       </div>
-    </footer>
+    </ScrollReveal>
   );
 }
