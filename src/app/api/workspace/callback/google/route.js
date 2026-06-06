@@ -1,3 +1,4 @@
+import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import {
   exchangeGoogleCode,
@@ -15,36 +16,42 @@ function getRedirectBase(request) {
   return url.origin;
 }
 
+function redirectWithError(base, reason) {
+  const res = NextResponse.redirect(
+    `${base}/home?error=${encodeURIComponent(reason)}`
+  );
+  res.cookies.delete(WORKSPACE_OAUTH_COOKIE);
+  return res;
+}
+
 export async function GET(request) {
   const base = getRedirectBase(request);
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
-  const stateParam = searchParams.get('state');
   const cookieState = request.cookies.get(WORKSPACE_OAUTH_COOKIE)?.value;
-  const state = cookieState || stateParam;
   const oauthError = searchParams.get('error');
 
   if (oauthError) {
-    const res = NextResponse.redirect(
-      `${base}/settings/integrations?error=${encodeURIComponent(oauthError)}`
-    );
-    res.cookies.delete(WORKSPACE_OAUTH_COOKIE);
-    return res;
+    return redirectWithError(base, oauthError);
   }
 
   if (!code) {
-    const res = NextResponse.redirect(`${base}/settings/integrations?error=missing_code`);
-    res.cookies.delete(WORKSPACE_OAUTH_COOKIE);
-    return res;
+    return redirectWithError(base, 'missing_code');
   }
 
-  const stateReason = getStateErrorReason(state);
-  const parsed = verifyState(state);
+  if (!cookieState) {
+    return redirectWithError(base, 'missing_state');
+  }
+
+  const stateReason = getStateErrorReason(cookieState);
+  const parsed = verifyState(cookieState);
   if (stateReason || !parsed?.userId || parsed.provider !== 'google') {
-    const reason = stateReason || 'invalid_state';
-    const res = NextResponse.redirect(`${base}/settings/integrations?error=${reason}`);
-    res.cookies.delete(WORKSPACE_OAUTH_COOKIE);
-    return res;
+    return redirectWithError(base, stateReason || 'invalid_state');
+  }
+
+  const { userId } = await auth();
+  if (!userId || userId !== parsed.userId) {
+    return redirectWithError(base, 'session_mismatch');
   }
 
   try {
@@ -69,13 +76,11 @@ export async function GET(request) {
     });
 
     await syncUserWorkspaces(parsed.userId);
-    const res = NextResponse.redirect(`${base}/settings/integrations?connected=google`);
+    const res = NextResponse.redirect(`${base}/home?connected=google`);
     res.cookies.delete(WORKSPACE_OAUTH_COOKIE);
     return res;
   } catch (err) {
-    const msg = encodeURIComponent(err instanceof Error ? err.message : 'connection_failed');
-    const res = NextResponse.redirect(`${base}/settings/integrations?error=${msg}`);
-    res.cookies.delete(WORKSPACE_OAUTH_COOKIE);
-    return res;
+    console.error('Google OAuth callback failed:', err);
+    return redirectWithError(base, 'connection_failed');
   }
 }

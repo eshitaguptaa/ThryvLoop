@@ -5,6 +5,7 @@ import {
   createOAuthState,
   WORKSPACE_OAUTH_COOKIE,
 } from '@/lib/workspace/oauth';
+import { rateLimitResponse } from '@/lib/security/rateLimit';
 
 export async function GET() {
   const { userId } = await auth();
@@ -12,6 +13,10 @@ export async function GET() {
   if (!userId) {
     return NextResponse.redirect(new URL('/signin', base));
   }
+
+  const limited = rateLimitResponse(userId, 'workspace-connect-google', { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
+
   try {
     const state = createOAuthState(userId, 'google');
     const url = buildGoogleAuthUrl(state);
@@ -26,6 +31,6 @@ export async function GET() {
     return res;
   } catch (err) {
     const msg = encodeURIComponent(err instanceof Error ? err.message : 'Google OAuth not configured');
-    return NextResponse.redirect(`${base}/settings/integrations?error=${msg}`);
+    return NextResponse.redirect(`${base}/home?error=${msg}`);
   }
 }

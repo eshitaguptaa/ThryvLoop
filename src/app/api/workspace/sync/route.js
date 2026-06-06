@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { syncUserWorkspaces } from '@/lib/workspace/sync';
 import { getWorkspaceStatus } from '@/lib/workspace/status';
 import { getWorkspaceUserId } from '@/lib/workspace/requireAuth';
+import { rateLimitResponse } from '@/lib/security/rateLimit';
 
 export async function POST() {
   const userId = await getWorkspaceUserId();
@@ -11,6 +12,10 @@ export async function POST() {
       { status: 401 }
     );
   }
+
+  const limited = rateLimitResponse(userId, 'workspace-sync', { limit: 6, windowMs: 60_000 });
+  if (limited) return limited;
+
   try {
     const results = await syncUserWorkspaces(userId);
     const status = await getWorkspaceStatus(userId);

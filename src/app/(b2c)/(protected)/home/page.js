@@ -21,8 +21,9 @@ import { formatWorkspaceSyncError } from '@/lib/workspace/userMessages';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient, setSupabaseAuthToken, getUserStorageItem, getUserStorageJson, setUserStorageItem } from '@/utils/userStorage';
-import { localEndOfDay, localStartOfDay } from '@/lib/dateRanges';
+import { localDateKey, localStartOfDay } from '@/lib/dateRanges';
 import { useTimer } from '@/contexts/TimerContext';
+import { openIntegrationsSettings } from '@/lib/openFocusSettings';
 
 const FOCUS_GOAL_MINUTES = 120; // 2 hours default daily goal
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -60,9 +61,7 @@ export default function Dashboard() {
   const displayName = user?.firstName || user?.username || 'there';
   const avatarUrl = user?.imageUrl || 'https://i.pravatar.cc/150?u=default';
 
-  const [todayFocusSeconds, setTodayFocusSeconds] = useState(0);
-  const [yesterdayFocusSeconds, setYesterdayFocusSeconds] = useState(0);
-  const [weeklyFocusMinutes, setWeeklyFocusMinutes] = useState([]);
+  const [weeklyFocusSeconds, setWeeklyFocusSeconds] = useState([]);
   const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [homeLoading, setHomeLoading] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -71,7 +70,12 @@ export default function Dashboard() {
   const [productivityTrendHeight, setProductivityTrendHeight] = useState(null);
   const workspaceSyncedRef = useRef(false);
 
-  const { unloggedFocusSeconds } = useTimer();
+  const {
+    todayFocusSeconds,
+    yesterdayLoggedFocusSeconds,
+    unloggedFocusSeconds,
+    isFocusTimerRunningToday,
+  } = useTimer();
 
   const {
     hasConnection,
@@ -81,7 +85,6 @@ export default function Dashboard() {
     inMeeting,
     currentMeeting,
     upcomingMeetings,
-    meetingMinutesToday,
     notifications: workspaceNotifications,
     unreadCount,
     sync: syncWorkspace,
@@ -92,15 +95,27 @@ export default function Dashboard() {
   const [soundscapeActiveSounds, setSoundscapeActiveSounds] = useState([]);
   const [spacesActive, setSpacesActive] = useState(false);
 
-  const getSoundscapeState = useCallback(() => {
+  const syncSoundscapeFromStorage = useCallback((playingOverride) => {
     if (typeof window === 'undefined' || !userId) return;
-    const playing = getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing');
-    setSoundscapeIsPlaying(playing === null ? false : playing === 'true');
+    const sessionActive =
+      getUserStorageItem(userId, 'soundscape-session-active', 'soundscape-session-active') === 'true';
+    const playing = getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing') === 'true';
+    const isPlayingNow =
+      playingOverride !== undefined ? playingOverride : sessionActive && playing;
+    setSoundscapeIsPlaying(isPlayingNow);
     const raw = getUserStorageJson(userId, 'soundscape-active-sounds', 'soundscape-active-sounds');
     const list = Array.isArray(raw) ? raw : [];
     const videoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
     const videoVol = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
-    const spacesOn = !!(videoId && videoVol && parseInt(videoVol, 10) > 0);
+    const spacesPaused =
+      getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
+    const spacesOn = !!(
+      isPlayingNow &&
+      !spacesPaused &&
+      videoId &&
+      videoVol &&
+      parseInt(videoVol, 10) > 0
+    );
     setSpacesActive(spacesOn);
     const withSpaces = list.filter((s) => s.id !== 'spaces');
     if (spacesOn && !list.some((s) => s.id === 'spaces')) {
@@ -112,27 +127,31 @@ export default function Dashboard() {
   }, [userId]);
 
   useEffect(() => {
-    getSoundscapeState();
-    const interval = setInterval(getSoundscapeState, 2000);
+    syncSoundscapeFromStorage();
+    const interval = setInterval(() => syncSoundscapeFromStorage(), 2000);
     const onPlayPause = (e) => {
-      if (e.detail?.isPlaying !== undefined) setSoundscapeIsPlaying(e.detail.isPlaying);
+      syncSoundscapeFromStorage(
+        e.detail?.isPlaying !== undefined ? e.detail.isPlaying : undefined
+      );
     };
-    const onVolume = () => getSoundscapeState();
+    const onVolume = () => syncSoundscapeFromStorage();
     const onStop = () => {
       setSoundscapeIsPlaying(false);
       setSoundscapeActiveSounds([]);
       setSpacesActive(false);
     };
     window.addEventListener('soundscape-play-pause-changed', onPlayPause);
+    window.addEventListener('soundscape-state-changed', onVolume);
     window.addEventListener('focus-volume-changed', onVolume);
     window.addEventListener('soundscape-stop-all', onStop);
     return () => {
       clearInterval(interval);
       window.removeEventListener('soundscape-play-pause-changed', onPlayPause);
+      window.removeEventListener('soundscape-state-changed', onVolume);
       window.removeEventListener('focus-volume-changed', onVolume);
       window.removeEventListener('soundscape-stop-all', onStop);
     };
-  }, [userId, getSoundscapeState]);
+  }, [userId, syncSoundscapeFromStorage]);
 
   useEffect(() => {
     const el = productivityTrendRef.current;
@@ -154,14 +173,21 @@ export default function Dashboard() {
       ro.disconnect();
       window.removeEventListener('resize', syncHeight);
     };
-  }, [homeLoading, weeklyFocusMinutes.length]);
+  }, [homeLoading, weeklyFocusSeconds.length]);
 
   const toggleSoundscapePlayPause = useCallback(() => {
     if (typeof window === 'undefined' || !userId) return;
     const next = !soundscapeIsPlaying;
+
     setUserStorageItem(userId, 'soundscape-is-playing', next ? 'true' : 'false');
+    setUserStorageItem(userId, 'soundscape-session-active', next ? 'true' : 'false');
+    setUserStorageItem(userId, 'focus-spaces-paused', next ? 'false' : 'true');
     setSoundscapeIsPlaying(next);
-    window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: next } }));
+    window.dispatchEvent(
+      new CustomEvent('soundscape-play-pause-changed', {
+        detail: { isPlaying: next, bootstrapSpaces: next },
+      })
+    );
   }, [userId, soundscapeIsPlaying]);
 
   const openSoundscapeComposer = useCallback(() => {
@@ -179,9 +205,9 @@ export default function Dashboard() {
   }, []);
 
 
-  const loadHomeData = useCallback(async () => {
+  const loadHomeData = useCallback(async ({ silent = false } = {}) => {
     if (!userId) return;
-    setHomeLoading(true);
+    if (!silent) setHomeLoading(true);
     try {
       const token = await getToken({ template: 'supabase' });
       if (!token) {
@@ -195,33 +221,16 @@ export default function Dashboard() {
         return;
       }
       const now = new Date();
-      const todayStart = localStartOfDay(now);
-      const todayEnd = localEndOfDay(now);
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStart = localStartOfDay(yesterday);
-      const yesterdayEnd = localEndOfDay(yesterday);
       const weekAgo = new Date(now);
       weekAgo.setDate(weekAgo.getDate() - 6);
       const weekStart = localStartOfDay(weekAgo);
 
-      const [todayRes, yesterdayRes, weekRes, tasksRes] = await Promise.all([
-        supabase
-          .from('focus_sessions')
-          .select('duration_seconds')
-          .eq('user_id', userId)
-          .gte('completed_at', todayStart)
-          .lte('completed_at', todayEnd),
-        supabase
-          .from('focus_sessions')
-          .select('duration_seconds')
-          .eq('user_id', userId)
-          .gte('completed_at', yesterdayStart)
-          .lte('completed_at', yesterdayEnd),
+      const [weekRes, tasksRes] = await Promise.all([
         supabase
           .from('focus_sessions')
           .select('completed_at, duration_seconds')
           .eq('user_id', userId)
+          .eq('phase', 'session')
           .gte('completed_at', weekStart)
           .order('completed_at', { ascending: true }),
         supabase
@@ -234,20 +243,15 @@ export default function Dashboard() {
           .limit(5),
       ]);
 
-      const sum = (arr) => (arr || []).reduce((a, r) => a + (r.duration_seconds || 0), 0);
-      setTodayFocusSeconds(sum(todayRes.data));
-      setYesterdayFocusSeconds(sum(yesterdayRes.data));
-
       const weekData = weekRes.data || [];
       const byDay = {};
       for (let i = 0; i < 7; i++) {
         const d = new Date(weekAgo);
         d.setDate(d.getDate() + i);
-        const key = d.toISOString().slice(0, 10);
-        byDay[key] = 0;
+        byDay[localDateKey(d)] = 0;
       }
       weekData.forEach((row) => {
-        const key = new Date(row.completed_at).toISOString().slice(0, 10);
+        const key = localDateKey(new Date(row.completed_at));
         if (byDay[key] !== undefined) byDay[key] += row.duration_seconds || 0;
       });
       const dayOrder = [];
@@ -256,11 +260,11 @@ export default function Dashboard() {
         d.setDate(d.getDate() + i);
         dayOrder.push(d);
       }
-      setWeeklyFocusMinutes(
+      setWeeklyFocusSeconds(
         dayOrder.map((d) => ({
-          key: d.toISOString().slice(0, 10),
+          key: localDateKey(d),
           label: DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1],
-          minutes: Math.round((byDay[d.toISOString().slice(0, 10)] || 0) / 60),
+          seconds: byDay[localDateKey(d)] || 0,
         }))
       );
 
@@ -288,7 +292,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const onSessionLogged = () => {
-      void loadHomeData();
+      void loadHomeData({ silent: true });
     };
     window.addEventListener('focus-session-logged', onSessionLogged);
     return () => window.removeEventListener('focus-session-logged', onSessionLogged);
@@ -297,7 +301,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !userId) return;
     const id = setInterval(() => {
-      void loadHomeData();
+      void loadHomeData({ silent: true });
     }, 60_000);
     return () => clearInterval(id);
   }, [isLoaded, isSignedIn, userId, loadHomeData]);
@@ -316,16 +320,25 @@ export default function Dashboard() {
   const todayFormatted = typeof window !== 'undefined'
     ? new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
     : '';
-  const meetingSecondsToday = meetingMinutesToday * 60;
-  const productiveSecondsToday =
-    todayFocusSeconds + meetingSecondsToday + (unloggedFocusSeconds || 0);
+  const productiveSecondsToday = todayFocusSeconds;
   const goalSeconds = FOCUS_GOAL_MINUTES * 60;
   const focusPercent =
     goalSeconds > 0 ? Math.min(100, Math.round((productiveSecondsToday / goalSeconds) * 100)) : 0;
   const vsYesterday =
-    yesterdayFocusSeconds > 0
-      ? Math.round(((todayFocusSeconds - yesterdayFocusSeconds) / yesterdayFocusSeconds) * 100)
-      : (todayFocusSeconds > 0 ? 100 : 0);
+    yesterdayLoggedFocusSeconds > 0
+      ? Math.round(((productiveSecondsToday - yesterdayLoggedFocusSeconds) / yesterdayLoggedFocusSeconds) * 100)
+      : (productiveSecondsToday > 0 ? 100 : 0);
+  const todayKey = typeof window !== 'undefined' ? localDateKey() : '';
+  const weeklyFocusMinutes = useMemo(
+    () =>
+      weeklyFocusSeconds.map((d) => ({
+        ...d,
+        minutes: Math.round(
+          (d.seconds + (d.key === todayKey ? unloggedFocusSeconds : 0)) / 60
+        ),
+      })),
+    [weeklyFocusSeconds, unloggedFocusSeconds, todayKey]
+  );
   const weekMax = Math.max(1, ...weeklyFocusMinutes.map((d) => d.minutes));
   const productivityPeakDay =
     weeklyFocusMinutes.length > 0
@@ -337,6 +350,9 @@ export default function Dashboard() {
           weeklyFocusMinutes.reduce((a, d) => a + d.minutes, 0) / weeklyFocusMinutes.length
         )
       : 0;
+  const productiveHours = Math.floor(productiveSecondsToday / 3600);
+  const productiveMinutes = Math.floor((productiveSecondsToday % 3600) / 60);
+  const productiveRemainderSeconds = productiveSecondsToday % 60;
 
   const workspaceAlertFeed = useMemo(() => {
     const items = [];
@@ -462,13 +478,16 @@ export default function Dashboard() {
                   ) : workspaceNotifications.length === 0 ? (
                     <div className="px-4 py-4 text-center text-gray-500 text-sm">
                       {needsWorkspaceSync && !workspaceLoading ? (
-                        <Link
-                          href="/settings/integrations"
-                          onClick={() => setNotificationsOpen(false)}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotificationsOpen(false);
+                            openIntegrationsSettings();
+                          }}
                           className="text-indigo-600 font-semibold hover:underline"
                         >
                           Sync Gmail & Calendar →
-                        </Link>
+                        </button>
                       ) : (
                         "You're all caught up."
                       )}
@@ -618,30 +637,25 @@ export default function Dashboard() {
                 </div>
                 
                 <div className="mb-3 sm:mb-4 md:mb-5">
-                  {homeLoading ? (
-                    <div className="h-16 sm:h-20 flex items-center text-gray-400 text-sm">Loading…</div>
-                  ) : (
-                    <>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none">{Math.floor(productiveSecondsToday / 3600)}</span>
-                        <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">h</span>
-                        <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none ml-2">{Math.floor((productiveSecondsToday % 3600) / 60)}</span>
-                        <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">m</span>
-                      </div>
-                      {(meetingMinutesToday > 0 || productiveSecondsToday > meetingSecondsToday) ? (
-                        <p className="text-xs text-gray-500 mt-2">
-                          {meetingMinutesToday > 0 ? `Includes ${meetingMinutesToday}m meetings` : null}
-                          {productiveSecondsToday > meetingSecondsToday ? (
-                            <>
-                              {meetingMinutesToday > 0 ? ' · ' : null}
-                              {Math.floor((productiveSecondsToday - meetingSecondsToday) / 60)}m focus timer
-                              {unloggedFocusSeconds > 0 ? ' (timer running)' : ''}
-                            </>
-                          ) : null}
-                        </p>
-                      ) : null}
-                    </>
-                  )}
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none">{productiveHours}</span>
+                    <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">h</span>
+                    <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none ml-2">{productiveMinutes}</span>
+                    <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">m</span>
+                    {isFocusTimerRunningToday && productiveRemainderSeconds > 0 ? (
+                      <>
+                        <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 leading-none ml-2">{productiveRemainderSeconds}</span>
+                        <span className="text-sm sm:text-base text-gray-500 font-medium">s</span>
+                      </>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {isFocusTimerRunningToday
+                      ? 'Focus timer running — updates live'
+                      : productiveSecondsToday > 0
+                        ? 'From focus timer sessions today'
+                        : 'Start the focus timer to track productive time'}
+                  </p>
                 </div>
                 
                 <div>
@@ -888,21 +902,23 @@ export default function Dashboard() {
                   </div>
                   <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">Your day at a glance</p>
                </div>
-               <Link
-                 href="/settings/integrations"
+               <button
+                 type="button"
+                 onClick={openIntegrationsSettings}
                  className="shrink-0 inline-flex items-center justify-center rounded-full border border-indigo-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-600 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
                >
                  Integrations
-               </Link>
+               </button>
              </div>
 
              <div className="relative h-[11rem] sm:h-[12rem] md:h-[13rem] lg:h-auto lg:flex-1 lg:min-h-0">
                <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-none overscroll-contain px-0.5 py-2">
              <div className="space-y-2 sm:space-y-2.5">
                 {showConnectPrompt ? (
-                  <Link
-                    href="/settings/integrations"
-                    className="flex items-start gap-3 p-4 rounded-2xl border-2 border-indigo-200/90 bg-gradient-to-r from-indigo-50 to-violet-50/80 hover:border-indigo-300 hover:shadow-md transition-all group"
+                  <button
+                    type="button"
+                    onClick={openIntegrationsSettings}
+                    className="w-full flex items-start gap-3 p-4 rounded-2xl border-2 border-indigo-200/90 bg-gradient-to-r from-indigo-50 to-violet-50/80 hover:border-indigo-300 hover:shadow-md transition-all group text-left"
                   >
                     <span className="relative flex h-3 w-3 shrink-0 mt-1">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
@@ -917,7 +933,7 @@ export default function Dashboard() {
                     <span className="text-xs font-bold text-indigo-600 shrink-0 group-hover:translate-x-0.5 transition-transform">
                       →
                     </span>
-                  </Link>
+                  </button>
                 ) : null}
 
                 {showReconnectPrompt ? (
@@ -925,24 +941,26 @@ export default function Dashboard() {
                     <p className="flex-1 text-xs sm:text-sm text-indigo-950 leading-relaxed">
                       Google connection expired. Reconnect to see meetings and mail here.
                     </p>
-                    <Link
-                      href="/settings/integrations"
+                    <button
+                      type="button"
+                      onClick={openIntegrationsSettings}
                       className="shrink-0 inline-flex items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
                     >
                       Open integrations
-                    </Link>
+                    </button>
                   </div>
                 ) : null}
 
                 {showSyncBanner ? (
-                  <Link
-                    href="/settings/integrations"
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs font-medium hover:bg-amber-100/80 transition-colors"
+                  <button
+                    type="button"
+                    onClick={openIntegrationsSettings}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs font-medium hover:bg-amber-100/80 transition-colors text-left"
                   >
                     <span className="shrink-0 w-2 h-2 rounded-full bg-amber-500" />
                     <span className="flex-1 truncate">{workspaceSyncMessage}</span>
                     <span className="shrink-0 font-semibold">Fix →</span>
-                  </Link>
+                  </button>
                 ) : null}
 
                 {workspaceLoading && !hasWorkspaceAlerts ? (
@@ -1031,12 +1049,13 @@ export default function Dashboard() {
                 {!workspaceLoading && hasConnection && !hasWorkspaceAlerts && !showConnectPrompt ? (
                   <div className="py-4 text-center text-gray-500 text-sm rounded-2xl border border-dashed border-gray-200/80 bg-white/40">
                     <p>No upcoming meetings or unread mail.</p>
-                    <Link
-                      href="/settings/integrations"
+                    <button
+                      type="button"
+                      onClick={openIntegrationsSettings}
                       className="text-indigo-600 font-medium hover:underline text-xs mt-1 inline-block"
                     >
                       Sync now →
-                    </Link>
+                    </button>
                   </div>
                 ) : null}
 

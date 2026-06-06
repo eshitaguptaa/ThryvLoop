@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseClient } from '@/lib/supabaseClient';
+import { rateLimitResponse } from '@/lib/security/rateLimit';
 
 /**
  * Generates sample focus_sessions for the last 14 days with varied times (peak hours).
@@ -78,14 +79,25 @@ function generateSampleTasks(userId) {
 }
 
 export async function POST() {
+  if (process.env.NODE_ENV === 'production') {
+    return Response.json({ error: 'Not found' }, { status: 404 });
+  }
+
   try {
     const { userId, getToken } = await auth();
     if (!userId) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const limited = rateLimitResponse(userId, 'seed-insights', { limit: 3, windowMs: 60_000 });
+    if (limited) return limited;
+
     const token = await getToken({ template: 'supabase' });
-    const supabase = createSupabaseClient(token || undefined);
+    if (!token) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabase = createSupabaseClient(token);
     if (!supabase) {
       return Response.json({ error: 'Database not configured' }, { status: 500 });
     }
@@ -123,9 +135,6 @@ export async function POST() {
     });
   } catch (err) {
     console.error('Seed insights error:', err);
-    return Response.json(
-      { error: err?.message || 'Something went wrong' },
-      { status: 500 }
-    );
+    return Response.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }

@@ -1,5 +1,6 @@
 import { Webhook } from 'svix';
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { checkRateLimit } from '@/lib/security/rateLimit';
 
 function jsonResponse(body, status = 200) {
   return Response.json(body, { status });
@@ -87,6 +88,11 @@ export async function POST(req) {
     return jsonResponse({ error: 'Missing svix headers' }, 400);
   }
 
+  const limited = checkRateLimit(`clerk-webhook:${svixId}`, { limit: 5, windowMs: 60_000 });
+  if (!limited.allowed) {
+    return jsonResponse({ error: 'Too many requests' }, 429);
+  }
+
   let evt;
   try {
     const wh = new Webhook(secret);
@@ -155,8 +161,8 @@ export async function POST(req) {
         break;
     }
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Webhook handler failed';
-    return jsonResponse({ error: message }, 500);
+    console.error('Clerk webhook handler failed:', e);
+    return jsonResponse({ received: false }, 500);
   }
 
   return jsonResponse({ received: true });

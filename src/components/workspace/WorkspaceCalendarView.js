@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { openIntegrationsSettings } from '@/lib/openFocusSettings';
 import { useAuth } from '@clerk/nextjs';
 import {
   Calendar,
@@ -407,12 +408,13 @@ export default function WorkspaceCalendarView() {
                 Sync
               </button>
             ) : (
-              <Link
-                href="/settings/integrations"
+              <button
+                type="button"
+                onClick={openIntegrationsSettings}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 shadow-sm transition-colors"
               >
                 Connect Google
-              </Link>
+              </button>
             )}
           </div>
         </header>
@@ -433,12 +435,13 @@ export default function WorkspaceCalendarView() {
               <span className="font-semibold">Google Calendar not connected.</span> You can still create events
               here. Connect Google to push events to your calendar and import meetings.
             </p>
-            <Link
-              href="/settings/integrations"
+            <button
+              type="button"
+              onClick={openIntegrationsSettings}
               className="shrink-0 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
             >
               Connect Google
-            </Link>
+            </button>
           </div>
         ) : null}
 
@@ -448,12 +451,13 @@ export default function WorkspaceCalendarView() {
               <span className="font-semibold">Google is read-only.</span> Events save in ThryvLoop but will not
               appear in Google Calendar until you reconnect with write access.
             </p>
-            <Link
-              href="/settings/integrations"
+            <button
+              type="button"
+              onClick={openIntegrationsSettings}
               className="shrink-0 inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-700"
             >
               Reconnect Google
-            </Link>
+            </button>
           </div>
         ) : null}
 

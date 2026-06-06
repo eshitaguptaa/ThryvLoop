@@ -146,7 +146,7 @@ export default function FocusPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="relative min-h-screen bg-transparent">
       {/* Landscape background is provided by layout */}
       {showTask && <FocusTaskBar />}
       {showTimer && <TimerWidget />}

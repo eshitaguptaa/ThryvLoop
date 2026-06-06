@@ -10,12 +10,8 @@ function LandingWrapper() {
   const { isLoaded, isSignedIn } = useAuth();
 
   useEffect(() => {
-    const isDevelopment = process.env.NODE_ENV === 'development';
-    
-    // In development, don't auto-redirect so you can test the landing page
-    // In production, redirect authenticated users to home
-    if (isLoaded && isSignedIn && !isDevelopment) {
-      router.push('/home');
+    if (isLoaded && isSignedIn) {
+      router.replace('/home');
     }
   }, [isLoaded, isSignedIn, router]);
 

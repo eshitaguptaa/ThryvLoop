@@ -89,7 +89,9 @@ export default function TimerWidget() {
 
   const handleOpenSettings = () => {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('open-soundscape-composer'));
+      window.dispatchEvent(
+        new CustomEvent('open-soundscape-composer', { detail: { panel: 'focusflow' } })
+      );
     }
   };
 

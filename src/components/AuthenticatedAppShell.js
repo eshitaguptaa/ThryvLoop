@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Suspense } from 'react';
 import Sidebar from '@/components/Sidebar';
 import SpacesBackgroundVideo from '@/components/focus/SpacesBackgroundVideo';
 import { MusicProvider } from '@/contexts/MusicContext';
@@ -13,7 +14,7 @@ export default function AuthenticatedAppShell({ children }) {
   const hideSidebar = isFullscreen || isMeetRoom;
 
   useEffect(() => {
-    if (pathname !== '/focus') return;
+    if (!pathname?.startsWith('/focus')) return;
 
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -32,16 +33,20 @@ export default function AuthenticatedAppShell({ children }) {
     };
   }, [pathname]);
 
+  const isOnFocusRoute = pathname?.startsWith('/focus');
+
   return (
     <>
       <SpacesBackgroundVideo />
       <div
         className={`relative z-10 flex min-h-screen ${
-          pathname === '/focus' ? 'bg-transparent' : 'bg-linear-to-br from-slate-900 via-purple-900 to-slate-900'
+          isOnFocusRoute ? 'bg-transparent' : 'bg-linear-to-br from-slate-900 via-purple-900 to-slate-900'
         }`}
       >
         <MusicProvider>
-          <Sidebar className={hideSidebar ? 'opacity-0 pointer-events-none' : ''} />
+          <Suspense fallback={null}>
+            <Sidebar className={hideSidebar ? 'opacity-0 pointer-events-none' : ''} />
+          </Suspense>
           <main className={`flex-1 min-w-0 ${hideSidebar ? '' : 'ml-24'}`}>{children}</main>
         </MusicProvider>
       </div>

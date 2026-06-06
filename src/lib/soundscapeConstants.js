@@ -8,6 +8,12 @@ export const SOUNDSCAPE_SOUND_FILES = {
   waterfall: '/sounds/waterfall.mp3',
 };
 
+export const DEFAULT_BOOTSTRAP_SOUNDS = [
+  { id: 'rain', name: 'Heavy Rain', volume: 60, category: 'Atmosphere' },
+  { id: 'binaural', name: 'Binaural (40Hz)', volume: 50, category: 'Neural' },
+  { id: 'forest', name: 'Forest', volume: 30, category: 'Atmosphere' },
+];
+
 export const SOUNDSCAPE_SOUND_NAMES = {
   rain: 'Heavy Rain',
   binaural: 'Binaural (40Hz)',

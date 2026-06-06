@@ -4,6 +4,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
 import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
+import { DEFAULT_SPACES_VIDEO_ID } from '@/lib/spacesConstants';
 
 export default function SpacesDrawer({ isOpen, onClose }) {
   const { user } = useUser();
@@ -91,9 +92,9 @@ export default function SpacesDrawer({ isOpen, onClose }) {
       return focusContext.backgroundVideoId;
     }
     if (typeof window !== 'undefined') {
-      return getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id') || null;
+      return getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id') || DEFAULT_SPACES_VIDEO_ID;
     }
-    return null;
+    return DEFAULT_SPACES_VIDEO_ID;
   };
   
   const [backgroundVideoId, setBackgroundVideoIdState] = useState(getBackgroundVideoId);

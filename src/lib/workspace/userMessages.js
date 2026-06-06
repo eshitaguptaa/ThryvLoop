@@ -36,8 +36,11 @@ export function formatIntegrationsQueryError(raw) {
   if (m === 'access_denied') {
     return 'Google connection was cancelled. You can try again anytime.';
   }
-  if (m === 'missing_code' || m === 'invalid_state') {
+  if (m === 'missing_code' || m === 'invalid_state' || m === 'missing_state') {
     return 'Connection session expired. Use Connect with Google again.';
+  }
+  if (m === 'session_mismatch') {
+    return 'Google connection was started under a different account. Sign in with the same account and try again.';
   }
   if (m === 'connection_failed') {
     return 'Could not finish connecting Google. Please try again.';

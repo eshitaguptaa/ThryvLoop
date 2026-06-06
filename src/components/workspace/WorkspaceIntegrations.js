@@ -1,11 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { workspaceApiFetch } from '@/lib/workspace/clientApi';
-import { CheckCircle2, Loader2, RefreshCw, Unlink, ArrowLeft, Sparkles } from 'lucide-react';
+import { CheckCircle2, Loader2, RefreshCw, Unlink, Sparkles } from 'lucide-react';
 import { getRequiredApiFixes } from '@/lib/workspace/googleApiErrors';
 import {
   formatIntegrationsQueryError,
@@ -14,7 +12,7 @@ import {
 } from '@/lib/workspace/userMessages';
 
 const GOOGLE_ICON = (
-  <svg className="w-10 h-10" viewBox="0 0 24 24" aria-hidden>
+  <svg className="w-8 h-8" viewBox="0 0 24 24" aria-hidden>
     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
@@ -22,9 +20,13 @@ const GOOGLE_ICON = (
   </svg>
 );
 
-export default function WorkspaceIntegrations() {
+export default function WorkspaceIntegrations({
+  embedded = true,
+  oauthConnected = null,
+  oauthError = null,
+  onOAuthNoticeConsumed,
+}) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
-  const searchParams = useSearchParams();
   const [connection, setConnection] = useState(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -61,15 +63,16 @@ export default function WorkspaceIntegrations() {
   }, [load]);
 
   useEffect(() => {
-    const connected = searchParams.get('connected');
-    const error = searchParams.get('error');
-    if (connected === 'google') {
+    if (oauthConnected === 'google') {
       setToast({ type: 'success', text: 'Google connected. Run sync to pull calendar and Gmail.' });
-    } else if (error) {
-      const text = formatIntegrationsQueryError(error);
+      void load();
+      onOAuthNoticeConsumed?.();
+    } else if (oauthError) {
+      const text = formatIntegrationsQueryError(oauthError);
       if (text) setToast({ type: 'error', text });
+      onOAuthNoticeConsumed?.();
     }
-  }, [searchParams]);
+  }, [oauthConnected, oauthError, onOAuthNoticeConsumed, load]);
 
   const syncNow = async () => {
     if (!isLoaded || !isSignedIn) {
@@ -133,151 +136,192 @@ export default function WorkspaceIntegrations() {
   const apiFixes = getRequiredApiFixes(syncErrorDisplay || connection?.sync_error);
   const isConnected = Boolean(connection);
 
-  return (
-    <div className="max-w-lg mx-auto">
-      <Link
-        href="/home"
-        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 mb-8 transition-colors"
-      >
-        <ArrowLeft size={16} />
-        Back to dashboard
-      </Link>
+  const cardClass = embedded
+    ? 'rounded-2xl border border-white/[0.06] bg-[#141416]/80 overflow-hidden backdrop-blur-sm'
+    : 'bg-white rounded-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.12)] border border-gray-100/80 overflow-hidden';
 
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-md border border-gray-100 mb-4">
-          {GOOGLE_ICON}
+  return (
+    <section className={embedded ? cardClass : `max-w-lg mx-auto ${cardClass}`}>
+      <div className={embedded ? 'p-6 pb-4 border-b border-white/[0.06]' : 'px-6 sm:px-8 pt-8 pb-6 border-b border-gray-50'}>
+        <div className="flex items-start gap-4">
+          <div
+            className={
+              embedded
+                ? 'shrink-0 w-12 h-12 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center'
+                : 'shrink-0 w-12 h-12 rounded-xl bg-white shadow-md border border-gray-100 flex items-center justify-center'
+            }
+          >
+            {GOOGLE_ICON}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className={`text-base font-semibold ${embedded ? 'text-white' : 'text-gray-900'}`}>
+              Google Workspace
+            </h3>
+            <p className={`text-sm mt-1 leading-relaxed ${embedded ? 'text-white/50' : 'text-gray-500'}`}>
+              Calendar meetings and unread Gmail on your dashboard.
+            </p>
+          </div>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Google Workspace</h1>
-        <p className="text-gray-500 text-sm mt-2 max-w-sm mx-auto leading-relaxed">
-          Calendar meetings and unread Gmail on your dashboard. Meeting time counts toward productive hours.
-        </p>
       </div>
 
       {toast ? (
         <div
-          className={`mb-6 rounded-2xl px-4 py-3 text-sm text-center ${
+          className={`mx-6 mt-4 rounded-xl px-4 py-3 text-sm ${
             toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/60'
-              : 'bg-red-50 text-red-800 ring-1 ring-red-200/60'
+              ? embedded
+                ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20'
+                : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/60'
+              : embedded
+                ? 'bg-red-500/10 text-red-300 ring-1 ring-red-500/20'
+                : 'bg-red-50 text-red-800 ring-1 ring-red-200/60'
           }`}
         >
           {toast.text}
         </div>
       ) : null}
 
-      <div className="bg-white rounded-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.12)] border border-gray-100/80 overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center py-16 text-gray-400">
-            <Loader2 className="w-8 h-8 animate-spin" />
-          </div>
-        ) : (
-          <>
-            <div className="px-6 sm:px-8 pt-8 pb-6 border-b border-gray-50">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Account</p>
-                  {isConnected ? (
-                    <p className="text-base font-semibold text-gray-900 mt-1">{connection.account_email}</p>
-                  ) : (
-                    <p className="text-base font-medium text-gray-400 mt-1">Not connected</p>
-                  )}
-                </div>
+      {loading ? (
+        <div className={`flex justify-center py-12 ${embedded ? 'text-white/40' : 'text-gray-400'}`}>
+          <Loader2 className="w-7 h-7 animate-spin" />
+        </div>
+      ) : (
+        <>
+          <div className={embedded ? 'px-6 py-4 border-b border-white/[0.06]' : 'px-6 sm:px-8 py-4 border-b border-gray-50'}>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className={`text-xs font-semibold uppercase tracking-wider ${embedded ? 'text-white/40' : 'text-gray-400'}`}>
+                  Account
+                </p>
                 {isConnected ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full">
-                    <CheckCircle2 size={14} />
-                    Linked
-                  </span>
+                  <p className={`text-sm font-semibold mt-1 truncate ${embedded ? 'text-white' : 'text-gray-900'}`}>
+                    {connection.account_email}
+                  </p>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
-                    <Sparkles size={14} />
-                    Optional
-                  </span>
+                  <p className={`text-sm font-medium mt-1 ${embedded ? 'text-white/40' : 'text-gray-400'}`}>
+                    Not connected
+                  </p>
                 )}
               </div>
-              {connection?.last_synced_at ? (
-                <p className="text-xs text-gray-400 mt-3">
-                  Last synced {new Date(connection.last_synced_at).toLocaleString()}
-                </p>
-              ) : null}
-            </div>
-
-            {showReconnectHint ? (
-              <div className="px-6 sm:px-8 py-4 bg-indigo-50/80 border-b border-indigo-100/80">
-                <p className="text-sm text-indigo-950 leading-relaxed">
-                  Your Google connection expired. Disconnect below, then connect again to restore calendar and
-                  Gmail.
-                </p>
-              </div>
-            ) : null}
-
-            {syncErrorDisplay ? (
-              <div className="px-6 sm:px-8 py-4 bg-gray-50/80 border-b border-gray-100">
-                <p className="text-sm text-gray-700 leading-relaxed">{syncErrorDisplay}</p>
-                {apiFixes.length > 0 ? (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
-                    {apiFixes.map((fix) => (
-                      <a
-                        key={fix.id}
-                        href={fix.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
-                      >
-                        {fix.label} →
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="px-6 sm:px-8 py-6 flex flex-col sm:flex-row gap-3">
               {isConnected ? (
-                <>
-                  <button
-                    type="button"
-                    disabled={syncing || disconnecting}
-                    onClick={syncNow}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                  >
-                    {syncing ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <RefreshCw size={16} />
-                    )}
-                    Sync now
-                  </button>
-                  <button
-                    type="button"
-                    disabled={disconnecting || syncing}
-                    onClick={disconnect}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                  >
-                    {disconnecting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Unlink size={16} />
-                    )}
-                    Disconnect
-                  </button>
-                </>
-              ) : (
-                <a
-                  href="/api/workspace/connect/google"
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors"
+                <span
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full shrink-0 ${
+                    embedded ? 'text-emerald-300 bg-emerald-500/15' : 'text-emerald-700 bg-emerald-50'
+                  }`}
                 >
-                  Connect with Google
-                </a>
+                  <CheckCircle2 size={14} />
+                  Linked
+                </span>
+              ) : (
+                <span
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full shrink-0 ${
+                    embedded ? 'text-white/50 bg-white/[0.06]' : 'text-gray-500 bg-gray-100'
+                  }`}
+                >
+                  <Sparkles size={14} />
+                  Optional
+                </span>
               )}
             </div>
+            {connection?.last_synced_at ? (
+              <p className={`text-xs mt-3 ${embedded ? 'text-white/35' : 'text-gray-400'}`}>
+                Last synced {new Date(connection.last_synced_at).toLocaleString()}
+              </p>
+            ) : null}
+          </div>
 
-            <ul className="px-6 sm:px-8 pb-8 text-xs text-gray-400 space-y-1.5">
-              <li>· Calendar — meetings & availability</li>
-              <li>· Gmail — unread messages in alerts</li>
-            </ul>
-          </>
-        )}
-      </div>
-    </div>
+          {showReconnectHint ? (
+            <div
+              className={
+                embedded
+                  ? 'px-6 py-3 bg-indigo-500/10 border-b border-indigo-500/15'
+                  : 'px-6 sm:px-8 py-4 bg-indigo-50/80 border-b border-indigo-100/80'
+              }
+            >
+              <p className={`text-sm leading-relaxed ${embedded ? 'text-indigo-200' : 'text-indigo-950'}`}>
+                Your Google connection expired. Disconnect below, then connect again to restore calendar and Gmail.
+              </p>
+            </div>
+          ) : null}
+
+          {syncErrorDisplay ? (
+            <div
+              className={
+                embedded
+                  ? 'px-6 py-3 bg-white/[0.03] border-b border-white/[0.06]'
+                  : 'px-6 sm:px-8 py-4 bg-gray-50/80 border-b border-gray-100'
+              }
+            >
+              <p className={`text-sm leading-relaxed ${embedded ? 'text-white/70' : 'text-gray-700'}`}>
+                {syncErrorDisplay}
+              </p>
+              {apiFixes.length > 0 ? (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+                  {apiFixes.map((fix) => (
+                    <a
+                      key={fix.id}
+                      href={fix.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`text-xs font-medium ${embedded ? 'text-[#a78bfa] hover:text-[#c4b5fd]' : 'text-indigo-600 hover:text-indigo-800'}`}
+                    >
+                      {fix.label} →
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className={`px-6 py-5 flex flex-col sm:flex-row gap-3 ${embedded ? '' : 'sm:px-8'}`}>
+            {isConnected ? (
+              <>
+                <button
+                  type="button"
+                  disabled={syncing || disconnecting}
+                  onClick={syncNow}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors ${
+                    embedded
+                      ? 'bg-[#8b5cf6] text-white hover:bg-[#7c3aed]'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw size={16} />}
+                  Sync now
+                </button>
+                <button
+                  type="button"
+                  disabled={disconnecting || syncing}
+                  onClick={disconnect}
+                  className={`inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-medium disabled:opacity-50 transition-colors ${
+                    embedded
+                      ? 'border border-white/10 text-white/70 hover:bg-white/[0.06]'
+                      : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {disconnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink size={16} />}
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <a
+                href="/api/workspace/connect/google"
+                className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-semibold transition-colors ${
+                  embedded
+                    ? 'bg-white text-gray-900 hover:bg-white/90'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                Connect with Google
+              </a>
+            )}
+          </div>
+
+          <ul className={`px-6 pb-6 text-xs space-y-1 ${embedded ? 'text-white/35' : 'text-gray-400'}`}>
+            <li>· Calendar — meetings & availability</li>
+            <li>· Gmail — unread messages in alerts</li>
+          </ul>
+        </>
+      )}
+    </section>
   );
 }

@@ -1,12 +1,13 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useClerk, useUser } from '@clerk/nextjs';
 import SpacesDrawer from '@/components/focus/SpacesDrawer';
 import SoundscapeComposer from '@/components/focus/SoundscapeComposer';
+import { normalizeSettingsPanel } from '@/lib/openFocusSettings';
 import { getUserStorageJson, removeUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 
 const navigationItems = [
@@ -158,6 +159,9 @@ export default function Sidebar({ className = '' }) {
   });
   const [showSpacesDrawer, setShowSpacesDrawer] = useState(false);
   const [showSoundscapeComposer, setShowSoundscapeComposer] = useState(false);
+  const [composerInitialPanel, setComposerInitialPanel] = useState('composer');
+  const [integrationsOAuth, setIntegrationsOAuth] = useState(null);
+  const searchParams = useSearchParams();
 
   // Save expanded items to localStorage whenever they change
   useEffect(() => {
@@ -178,7 +182,8 @@ export default function Sidebar({ className = '' }) {
 
   // Listen for open-soundscape-composer event from MusicWidget
   useEffect(() => {
-    const handleOpenSoundscape = () => {
+    const handleOpenSoundscape = (e) => {
+      setComposerInitialPanel(normalizeSettingsPanel(e.detail?.panel));
       setShowSoundscapeComposer(true);
     };
 
@@ -187,6 +192,23 @@ export default function Sidebar({ className = '' }) {
       window.removeEventListener('open-soundscape-composer', handleOpenSoundscape);
     };
   }, []);
+
+  // After Google OAuth, open settings on Focus Flow → Integrations
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    const error = searchParams.get('error');
+    if (connected !== 'google' && !error) return;
+
+    setComposerInitialPanel('integrations');
+    setShowSoundscapeComposer(true);
+    setIntegrationsOAuth({ connected, error });
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('connected');
+    params.delete('error');
+    const nextQuery = params.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [searchParams, router, pathname]);
   
   // Toggle widgets using custom events (since context is in child layout)
   const toggleTimer = () => {
@@ -324,6 +346,7 @@ export default function Sidebar({ className = '' }) {
       removeUserStorageItem(userId, 'soundscape-global-volume');
       removeUserStorageItem(userId, 'soundscape-is-playing');
       removeUserStorageItem(userId, 'soundscape-session-active');
+      removeUserStorageItem(userId, 'focus-spaces-paused');
     }
     await signOut({ redirectUrl: '/' });
   };
@@ -525,7 +548,10 @@ export default function Sidebar({ className = '' }) {
       {/* Settings (Soundscape/Timer) Button */}
       <button
         type="button"
-        onClick={() => setShowSoundscapeComposer(true)}
+        onClick={() => {
+          setComposerInitialPanel('composer');
+          setShowSoundscapeComposer(true);
+        }}
         className="flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 transition-all duration-200 mb-2 group"
         title="Settings"
       >
@@ -557,7 +583,17 @@ export default function Sidebar({ className = '' }) {
       <SpacesDrawer isOpen={showSpacesDrawer} onClose={() => setShowSpacesDrawer(false)} />
       
       {/* Soundscape Composer Modal */}
-      <SoundscapeComposer isOpen={showSoundscapeComposer} onClose={() => setShowSoundscapeComposer(false)} />
+      <SoundscapeComposer
+        isOpen={showSoundscapeComposer}
+        onClose={() => {
+          setShowSoundscapeComposer(false);
+          setComposerInitialPanel('composer');
+          setIntegrationsOAuth(null);
+        }}
+        initialPanel={composerInitialPanel}
+        integrationsOAuth={integrationsOAuth}
+        onIntegrationsOAuthConsumed={() => setIntegrationsOAuth(null)}
+      />
     </div>
   );
 }

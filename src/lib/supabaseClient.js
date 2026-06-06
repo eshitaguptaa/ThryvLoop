@@ -11,7 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const createSupabaseClient = (accessToken) => {
   if (!supabaseUrl || !supabaseAnonKey) return null;
-  if (!accessToken) return createClient(supabaseUrl, supabaseAnonKey);
+  if (!accessToken) return null;
   return createClient(supabaseUrl, supabaseAnonKey, {
     global: {
       headers: {

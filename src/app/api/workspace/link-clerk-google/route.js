@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { linkGoogleWorkspaceFromClerk } from '@/lib/workspace/clerkGoogle';
 import { getWorkspaceUserId } from '@/lib/workspace/requireAuth';
+import { rateLimitResponse } from '@/lib/security/rateLimit';
 
 export async function POST() {
   const userId = await getWorkspaceUserId();
@@ -10,6 +11,9 @@ export async function POST() {
       { status: 401 }
     );
   }
+
+  const limited = rateLimitResponse(userId, 'link-clerk-google', { limit: 5, windowMs: 60_000 });
+  if (limited) return limited;
 
   try {
     const result = await linkGoogleWorkspaceFromClerk(userId);

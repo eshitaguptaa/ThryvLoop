@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
+import { DEFAULT_SPACES_VIDEO_ID } from '@/lib/spacesConstants';
 
 export const FocusContext = createContext(null);
 
@@ -28,9 +29,9 @@ export function FocusProvider({ children }) {
   const [showTask, setShowTask] = useState(() => loadWidgetState('task', true));
   const [showTaskBar, setShowTaskBar] = useState(() => loadWidgetState('taskBar', true));
   const [backgroundVideoId, setBackgroundVideoId] = useState(() => {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined') return DEFAULT_SPACES_VIDEO_ID;
     const saved = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
-    return saved || null;
+    return saved || DEFAULT_SPACES_VIDEO_ID;
   });
 
   const [volume, setVolumeState] = useState(() => {
@@ -76,7 +77,7 @@ export function FocusProvider({ children }) {
     setShowTask(loadWidgetState('task', true));
     setShowTaskBar(loadWidgetState('taskBar', true));
     const savedVideoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
-    setBackgroundVideoId(savedVideoId || null);
+    setBackgroundVideoId(savedVideoId || DEFAULT_SPACES_VIDEO_ID);
     const savedVolume = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
     const parsed = savedVolume ? parseInt(savedVolume, 10) : 50;
     setVolumeState(Number.isNaN(parsed) ? 50 : Math.max(0, Math.min(100, parsed)));

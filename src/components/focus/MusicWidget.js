@@ -17,10 +17,11 @@ export default function MusicWidget() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [currentSoundIndex, setCurrentSoundIndex] = useState(0);
+  const [spacesPaused, setSpacesPaused] = useState(false);
   const widgetRef = useRef(null);
   const globalVolumeRef = useRef(75);
 
-  // Helper to check if Spaces is actually playing
+  // Helper to check if Spaces is configured for playback
   const checkSpacesPlaying = () => {
     if (typeof window === 'undefined') return false;
     const videoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
@@ -37,6 +38,18 @@ export default function MusicWidget() {
   const setSessionActive = (value) => {
     if (typeof window === 'undefined') return;
     setUserStorageItem(userId, 'soundscape-session-active', value ? 'true' : 'false');
+  };
+
+  const hasSoundscapeMix = () => {
+    if (activeSounds.some((s) => s.id !== 'spaces')) return true;
+    try {
+      const raw = getUserStorageItem(userId, 'soundscape-active-sounds', 'soundscape-active-sounds');
+      if (!raw) return false;
+      const sounds = JSON.parse(raw);
+      return Array.isArray(sounds) && sounds.some((s) => s?.id && s.id !== 'spaces');
+    } catch {
+      return false;
+    }
   };
 
   // Get active sounds from localStorage (synced with SoundscapeComposer)
@@ -57,9 +70,16 @@ export default function MusicWidget() {
           });
         }
         
-        const spacesPlaying = checkSpacesPlaying();
-        const hasSpaces = filteredSounds.some(s => s.id === 'spaces');
-        if (spacesPlaying && !hasSpaces) {
+        const savedPlaying =
+          getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing') === 'true';
+        const paused =
+          getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
+        setSpacesPaused(paused);
+        const onFocus = pathname?.startsWith('/focus');
+        const spacesAuto = onFocus && checkSpacesPlaying() && !paused;
+        const spacesInMix = (savedPlaying && checkSpacesPlaying()) || spacesAuto;
+        const hasSpaces = filteredSounds.some((s) => s.id === 'spaces');
+        if (spacesInMix && !hasSpaces) {
           const spacesVolume = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
           filteredSounds.push({
             id: 'spaces',
@@ -76,10 +96,6 @@ export default function MusicWidget() {
           globalVolumeRef.current = parseInt(savedVolume) || 75;
         }
         
-        const hasActiveSounds = filteredSounds.length > 0;
-        if (pathname === '/focus') {
-          setSessionActive(true);
-        }
         const sessionActive = getSessionActive();
         if (!sessionActive) {
           setIsPlaying(false);
@@ -110,9 +126,13 @@ export default function MusicWidget() {
       setActiveSounds([]);
     };
     
+    const handleSpacesState = () => loadActiveSounds();
+
     window.addEventListener('soundscape-play-pause-changed', handlePlayPauseChange);
     window.addEventListener('focus-volume-changed', handleSpacesVolumeChange);
     window.addEventListener('soundscape-stop-all', handleStopAll);
+    window.addEventListener('focus-spaces-activate', handleSpacesState);
+    window.addEventListener('focus-spaces-resume', handleSpacesState);
 
     const interval = setInterval(loadActiveSounds, 500);
 
@@ -120,6 +140,8 @@ export default function MusicWidget() {
       window.removeEventListener('soundscape-play-pause-changed', handlePlayPauseChange);
       window.removeEventListener('focus-volume-changed', handleSpacesVolumeChange);
       window.removeEventListener('soundscape-stop-all', handleStopAll);
+      window.removeEventListener('focus-spaces-activate', handleSpacesState);
+      window.removeEventListener('focus-spaces-resume', handleSpacesState);
       clearInterval(interval);
     };
   }, [userId, pathname]);
@@ -228,16 +250,43 @@ export default function MusicWidget() {
   }, [isDragging, dragStart, position]);
 
   const togglePlayPause = () => {
-    const newPlayingState = !isPlaying;
-    setIsPlaying(newPlayingState);
-    if (typeof window !== 'undefined') {
-      if (newPlayingState) {
-        setSessionActive(true);
-      }
-      setUserStorageItem(userId, 'soundscape-is-playing', newPlayingState.toString());
-      window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
-        detail: { isPlaying: newPlayingState }
-      }));
+    if (typeof window === 'undefined' || !userId) return;
+
+    const paused =
+      getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
+    const spacesAuto = isOnFocus && checkSpacesPlaying() && !paused;
+    const currentlyPlaying = isPlaying || spacesAuto;
+    const next = !currentlyPlaying;
+
+    if (!next) {
+      setUserStorageItem(userId, 'focus-spaces-paused', 'true');
+      setSpacesPaused(true);
+      setIsPlaying(false);
+      setSessionActive(false);
+      setUserStorageItem(userId, 'soundscape-is-playing', 'false');
+      setUserStorageItem(userId, 'soundscape-session-active', 'false');
+      window.dispatchEvent(
+        new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: false } })
+      );
+      return;
+    }
+
+    setUserStorageItem(userId, 'focus-spaces-paused', 'false');
+    setSpacesPaused(false);
+
+    if (hasSoundscapeMix() || isPlaying || getSessionActive()) {
+      setIsPlaying(true);
+      setSessionActive(true);
+      setUserStorageItem(userId, 'soundscape-is-playing', 'true');
+      setUserStorageItem(userId, 'soundscape-session-active', 'true');
+      window.dispatchEvent(
+        new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: true } })
+      );
+      return;
+    }
+
+    if (isOnFocus && checkSpacesPlaying()) {
+      window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
     }
   };
 
@@ -254,6 +303,10 @@ export default function MusicWidget() {
   const currentSound = activeSounds.length > 0 
     ? activeSounds[currentSoundIndex] 
     : null;
+
+  const isOnFocus = pathname?.startsWith('/focus');
+  const spacesAutoPlaying = isOnFocus && checkSpacesPlaying() && !spacesPaused;
+  const showAsPlaying = isPlaying || spacesAutoPlaying;
 
   if (!position) return null;
 
@@ -296,7 +349,7 @@ export default function MusicWidget() {
 
         {/* LEFT: Visualizer Icon */}
         <div className="shrink-0 w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
-          {isPlaying && activeSounds.length > 0 ? (
+          {showAsPlaying && (activeSounds.length > 0 || checkSpacesPlaying()) ? (
             <div className="flex items-end justify-center gap-[3px] h-5 mb-0.5">
               <div 
                 className="w-1 bg-[#a855f7] rounded-full"
@@ -357,7 +410,9 @@ export default function MusicWidget() {
                   </div>
                 ))
               ) : (
-                <div className="h-6 text-white/50 font-medium text-[15px]">Paused</div>
+                <div className="h-6 text-white/50 font-medium text-[15px]">
+                  {showAsPlaying ? 'Spaces' : 'Paused'}
+                </div>
               )}
             </div>
           </div>
@@ -381,7 +436,7 @@ export default function MusicWidget() {
             onClick={togglePlayPause}
             className="flex items-center justify-center w-12 h-12 rounded-full bg-[#8b5cf6] hover:bg-[#7c3aed] text-white shadow-[0_0_15px_rgba(139,92,246,0.5)] hover:shadow-[0_0_20px_rgba(139,92,246,0.7)] transition-all transform hover:scale-105"
           >
-            {isPlaying ? (
+            {showAsPlaying ? (
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <rect x="6" y="4" width="4" height="16" rx="1" />
                 <rect x="14" y="4" width="4" height="16" rx="1" />
