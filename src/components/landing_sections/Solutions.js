@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { SPACES_CATALOG } from '@/lib/spacesCatalog';
 import TeamsNotifyForm from '@/components/landing_sections/TeamsNotifyForm';
+import WorkspaceEnvironment from '@/components/landing_sections/WorkspaceEnvironment';
 import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
+import { SectionBlend, gridFadeStyle } from '@/components/landing_sections/SectionBlend';
 
 export default function Solutions() {
   const featuresLeft = [
@@ -35,7 +37,7 @@ export default function Solutions() {
       }
     } else {
       // Reset effect: Revert to original styles
-      if (text) text.style.color = "var(--dark)"; // Revert text color
+      if (text) text.style.color = "var(--foreground)"; // Revert text color
       if (checkmark) {
         checkmark.style.transform = "scale(1)";
         checkmark.style.color = "var(--primary)"; // Revert checkmark icon color
@@ -47,10 +49,10 @@ export default function Solutions() {
   };
 
   return (
-    <main className="relative w-full overflow-hidden">
+    <main id="solutions" className="relative w-full overflow-hidden">
 
       {/* ================= HERO ================= */}
-<section className="relative text-center px-6 pt-28 pb-24 overflow-hidden">
+<section className="relative text-center px-6 pt-28 pb-24 overflow-hidden bg-background">
 
   {/* GRID BACKGROUND */}
   <div
@@ -61,6 +63,7 @@ export default function Solutions() {
         linear-gradient(to bottom, rgba(99,102,241,0.06) 1px, transparent 1px)
       `,
       backgroundSize: "32px 32px",
+      ...gridFadeStyle('both'),
     }}
   />
 
@@ -70,8 +73,12 @@ export default function Solutions() {
   style={{
     background:
       "radial-gradient(ellipse 80% 60% at 50% 100%, rgba(139,92,246,0.22), transparent 75%)",
+    maskImage: 'linear-gradient(to bottom, black 40%, transparent 100%)',
+    WebkitMaskImage: 'linear-gradient(to bottom, black 40%, transparent 100%)',
   }}
 />
+
+  <SectionBlend position="bottom" fromColor="transparent" toColor="background" size="md" />
 
 
   <ScrollReveal className="relative max-w-4xl mx-auto">
@@ -92,7 +99,7 @@ export default function Solutions() {
       className="font-extrabold tracking-tight leading-tight mb-6"
       style={{
         fontSize: "clamp(2.6rem, 5vw, 4.2rem)",
-        color: "var(--dark)",
+        color: "var(--foreground)",
       }}
     >
       The Ultimate{" "}
@@ -111,7 +118,7 @@ export default function Solutions() {
     {/* SUBTEXT */}
     <p
       className="max-w-3xl mx-auto text-base sm:text-lg"
-      style={{ color: "var(--gray)" }}
+      style={{ color: "var(--muted-foreground)" }}
     >
       Designed for solo creators, freelancers, and professionals to eliminate
       cognitive overload, reclaim focus, and achieve deep work in a beautiful,
@@ -123,7 +130,6 @@ export default function Solutions() {
 
       {/* ================= CARD ================= */}
       <section className="px-6 pb-32">
-        <ScrollReveal variant="scaleIn">
         <div
           className="max-w-6xl mx-auto rounded-3xl shadow-xl"
           style={{
@@ -131,7 +137,7 @@ export default function Solutions() {
             border: "1px solid rgba(99,102,241,0.15)",
           }}
         >
-          <ScrollStagger className="p-10 md:p-14 grid grid-cols-1 lg:grid-cols-2 gap-16" stagger={0.14}>
+          <ScrollStagger className="p-10 md:p-14 grid grid-cols-1 lg:grid-cols-2 gap-16" stagger={0.1}>
             {/* LEFT */}
             <ScrollItem>
             <div>
@@ -147,7 +153,7 @@ export default function Solutions() {
 
               <h2
                 className="text-3xl sm:text-4xl font-bold mb-6"
-                style={{ color: "var(--dark)" }}
+                style={{ color: "var(--foreground)" }}
               >
                 Everything You Need. <br />
                 Nothing You Don't.
@@ -155,7 +161,7 @@ export default function Solutions() {
 
               <p
                 className="mb-10 max-w-xl"
-                style={{ color: "var(--gray)" }}
+                style={{ color: "var(--muted-foreground)" }}
               >
                 Transform your digital workspace into a sanctuary of focus.
                 We've integrated the best-in-class tools, so you can stop
@@ -185,7 +191,7 @@ export default function Solutions() {
                 Start Your 14-Day Free Trial <span style={{ transition: "transform 0.3s ease" }} className="group-hover:translate-x-1">→</span>
               </Link>
 
-              <p className="mt-4 text-sm" style={{ color: "var(--gray)" }}>
+              <p className="mt-4 text-sm" style={{ color: "var(--muted-foreground)" }}>
                 No credit card required
               </p>
             </div>
@@ -214,7 +220,7 @@ export default function Solutions() {
                   {/* The text content, also with transition for color */}
                   <span 
                     className="feature-text" 
-                    style={{ color: "var(--dark)", transition: "color 0.3s ease" }}
+                    style={{ color: "var(--foreground)", transition: "color 0.3s ease" }}
                   >
                     {item}
                   </span>
@@ -224,34 +230,36 @@ export default function Solutions() {
             </ScrollItem>
           </ScrollStagger>
         </div>
-        </ScrollReveal>
       </section>
 
       {/* ================= TEAMS ================= */}
-<section className="relative px-6 py-14 text-center overflow-hidden">
+<section className="relative px-6 py-14 text-center overflow-hidden bg-background">
 
   {/* GRID BACKGROUND */}
   <div
-    className="absolute inset-0"
+    className="absolute inset-0 z-0"
     style={{
       backgroundImage: `
         linear-gradient(to right, rgba(99,102,241,0.05) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(99,102,241,0.05) 1px, transparent 1px)
       `,
       backgroundSize: "32px 32px",
+      ...gridFadeStyle('both'),
     }}
   />
 
   {/* BLUE–PURPLE GLOW */}
   <div
-    className="absolute inset-x-0 bottom-0 h-[180%]"
+    className="absolute inset-x-0 bottom-0 h-[180%] z-0"
     style={{
       background:
-        "radial-gradient(ellipse 85% 65% at 50% 85%, rgba(99,102,241,0.18), rgba(139,92,246,0.12), transparent 75%)",
+        "radial-gradient(ellipse 85% 65% at 50% 85%, rgba(99,102,241,0.28), rgba(59,130,246,0.18), rgba(139,92,246,0.14), transparent 75%)",
     }}
   />
 
-  <ScrollReveal className="relative max-w-3xl mx-auto">
+  <SectionBlend position="bottom" fromColor="transparent" toColor="surface" size="lg" />
+
+  <ScrollReveal className="relative z-10 max-w-3xl mx-auto">
 
     {/* BADGE */}
     <span
@@ -267,7 +275,7 @@ export default function Solutions() {
     {/* TITLE */}
     <h2
       className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-6"
-      style={{ color: "var(--dark)" }}
+      style={{ color: "var(--foreground)" }}
     >
       Powerhouse for{" "}
       <span
@@ -284,7 +292,7 @@ export default function Solutions() {
     {/* DESCRIPTION */}
     <p
       className="text-lg leading-relaxed max-w-3xl mx-auto mb-12"
-      style={{ color: "var(--gray)" }}
+      style={{ color: "var(--muted-foreground)" }}
     >
       Bring the power of focused work to your entire organization.
       Collaborative features, project management, and shared workspaces
@@ -294,6 +302,8 @@ export default function Solutions() {
     <TeamsNotifyForm />
   </ScrollReveal>
 </section>
+
+      <WorkspaceEnvironment />
 
     </main>
   );

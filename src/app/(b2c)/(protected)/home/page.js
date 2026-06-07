@@ -22,8 +22,30 @@ import { useUser, useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient, setSupabaseAuthToken, getUserStorageItem, getUserStorageJson, setUserStorageItem } from '@/utils/userStorage';
 import { localDateKey, localStartOfDay } from '@/lib/dateRanges';
+import { getClerkSupabaseToken } from '@/lib/clerkSupabaseToken';
 import { useTimer } from '@/contexts/TimerContext';
 import { openIntegrationsSettings } from '@/lib/openFocusSettings';
+import SpacesCrossfadeBackground from '@/components/landing_sections/SpacesCrossfadeBackground';
+import {
+  appSurfaceClass,
+  appSurfaceInsetClass,
+  appContentClass,
+  appPageTitleClass,
+  appEyebrowClass,
+  appMutedTextClass,
+  dashboardHeroCardClass,
+  dashboardPanelClass,
+  dashboardWidePanelClass,
+  dashboardAlertsPanelClass,
+  dashboardGlowOrbClass,
+  dashboardGlowOrbSmClass,
+  dashboardOverlayGradientClass,
+  dashboardBadgeClass,
+  dashboardIconChipClass,
+  dashboardIconChipSmClass,
+  dashboardStatBadgeClass,
+  dashboardStatIconBoxClass,
+} from '@/lib/appShellClasses';
 
 const FOCUS_GOAL_MINUTES = 120; // 2 hours default daily goal
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -219,10 +241,10 @@ export default function Dashboard() {
 
 
   const loadHomeData = useCallback(async ({ silent = false } = {}) => {
-    if (!userId) return;
+    if (!userId || !isSignedIn) return;
     if (!silent) setHomeLoading(true);
     try {
-      const token = await getToken({ template: 'supabase' });
+      const token = await getClerkSupabaseToken(getToken, isSignedIn);
       if (!token) {
         setHomeLoading(false);
         return;
@@ -293,7 +315,7 @@ export default function Dashboard() {
     } finally {
       setHomeLoading(false);
     }
-  }, [userId, getToken]);
+  }, [userId, isSignedIn, getToken]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !userId) {
@@ -435,17 +457,17 @@ export default function Dashboard() {
   const showSyncBanner = !workspaceLoading && hasConnection && Boolean(workspaceSyncMessage);
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-2 pb-4 sm:px-6 sm:pt-3 sm:pb-6 md:px-8 md:pt-4 md:pb-8 lg:px-12 lg:pt-6 lg:pb-10 font-[var(--font-poppins)]">
-      <div className="max-w-7xl mx-auto">
+    <div className={`${appSurfaceClass} ${appSurfaceInsetClass} font-[var(--font-poppins)]`}>
+      <div className={appContentClass}>
         
         {/* --- Header Section --- */}
         <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 sm:mb-3 md:mb-4 gap-3 sm:gap-4">
           <div className="flex-1">
-            <p className="text-indigo-500 text-xs font-semibold uppercase tracking-widest mb-2">Dashboard</p>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-2 leading-tight">
+            <p className={appEyebrowClass}>Dashboard</p>
+            <h1 className={appPageTitleClass}>
               Ready to flow, {displayName}?
             </h1>
-            <p className="text-sm sm:text-base text-gray-500 font-medium">{todayFormatted || '—'}</p>
+            <p className={`text-sm sm:text-base ${appMutedTextClass} font-medium`}>{todayFormatted || '—'}</p>
           </div>
           
           <div className="flex items-center gap-3 sm:gap-4 relative" ref={notificationsRef}>
@@ -459,7 +481,7 @@ export default function Dashboard() {
                   <span className="truncate">Join · {currentMeeting.title || 'Meeting'}</span>
                 </Link>
               ) : (
-                <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-semibold max-w-[200px] truncate">
+                <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-500/30 rounded-full text-amber-800 dark:text-amber-200 text-xs font-semibold max-w-[200px] truncate">
                   <Video size={14} className="shrink-0" />
                   <span className="truncate">{currentMeeting?.title || 'In meeting'}</span>
                 </div>
@@ -468,7 +490,7 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => setNotificationsOpen((o) => !o)}
-              className={`relative p-2.5 sm:p-3 bg-white border rounded-full shadow-sm hover:shadow-md transition-all ${notificationsOpen ? 'border-indigo-200 text-indigo-600 ring-2 ring-indigo-100' : 'border-gray-100 text-gray-600'}`}
+              className={`relative p-2.5 sm:p-3 bg-card border rounded-full shadow-sm hover:shadow-md transition-all cursor-pointer ${notificationsOpen ? 'border-indigo-200 dark:border-indigo-500/40 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-500/25' : 'border-border text-muted-foreground'}`}
               aria-label="Notifications and quick actions"
             >
               <Bell size={18} className="sm:w-5 sm:h-5" />
@@ -477,19 +499,19 @@ export default function Dashboard() {
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               ) : needsWorkspaceSync && !workspaceLoading ? (
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-500 ring-2 ring-white animate-pulse" aria-hidden />
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-500 ring-2 ring-card animate-pulse" aria-hidden />
               ) : null}
             </button>
             {notificationsOpen && (
-              <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50">
-                <div className="px-4 py-2 border-b border-gray-100">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Notifications</p>
+              <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-card rounded-2xl shadow-xl border border-border py-2 z-50">
+                <div className="px-4 py-2 border-b border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notifications</p>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
                   {workspaceLoading && !workspaceNotifications.length ? (
-                    <div className="px-4 py-4 text-center text-gray-400 text-sm">Loading…</div>
+                    <div className="px-4 py-4 text-center text-muted-foreground text-sm">Loading…</div>
                   ) : workspaceNotifications.length === 0 ? (
-                    <div className="px-4 py-4 text-center text-gray-500 text-sm">
+                    <div className="px-4 py-4 text-center text-muted-foreground text-sm">
                       {needsWorkspaceSync && !workspaceLoading ? (
                         <button
                           type="button"
@@ -516,13 +538,13 @@ export default function Dashboard() {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => setNotificationsOpen(false)}
-                        className="flex gap-3 px-4 py-3 hover:bg-indigo-50 border-b border-gray-50 last:border-0"
+                        className="flex gap-3 px-4 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border-b border-border last:border-0"
                       >
                         <Mail size={16} className="text-indigo-500 shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{n.subject}</p>
-                          <p className="text-xs text-gray-500 truncate">{n.preview}</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">
+                          <p className="text-sm font-medium text-foreground truncate">{n.subject}</p>
+                          <p className="text-xs text-muted-foreground truncate">{n.preview}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
                             {formatWorkspaceWhen(n.received_at)} · Gmail
                           </p>
                         </div>
@@ -530,12 +552,12 @@ export default function Dashboard() {
                     ))
                   )}
                 </div>
-                <div className="border-t border-gray-100 px-2 pt-2">
-                  <p className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quick actions</p>
+                <div className="border-t border-border px-2 pt-2">
+                  <p className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quick actions</p>
                   <Link
                     href="/tasks"
                     onClick={() => setNotificationsOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-foreground hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors"
                   >
                     <ListChecks size={18} className="text-indigo-500 shrink-0" />
                     <span className="text-sm font-medium">View tasks</span>
@@ -543,7 +565,7 @@ export default function Dashboard() {
                   <Link
                     href="/focus"
                     onClick={() => setNotificationsOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-foreground hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors"
                   >
                     <Focus size={18} className="text-indigo-500 shrink-0" />
                     <span className="text-sm font-medium">Start focus session</span>
@@ -551,7 +573,7 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full overflow-hidden border-2 border-white shadow-sm">
+            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full overflow-hidden border-2 border-card shadow-sm">
               {/* Placeholder for user avatar */}
               <img 
                 src={avatarUrl}
@@ -567,34 +589,33 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 md:gap-8 mb-5 sm:mb-6 md:mb-8">
           
           {/* 1. Focus Mode Hero Card (Spans 8 columns) */}
-          <div className="lg:col-span-8 bg-gradient-to-br from-white via-indigo-50/20 to-purple-50/30 rounded-3xl sm:rounded-[40px] p-5 sm:p-6 md:p-8 lg:p-10 flex flex-col lg:flex-row relative overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 group">
-            {/* Animated gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/40 via-transparent to-purple-50/30 pointer-events-none opacity-100 group-hover:opacity-80 transition-opacity duration-500"></div>
+          <div className={dashboardHeroCardClass}>
+            <div className={`absolute inset-0 ${dashboardOverlayGradientClass} pointer-events-none opacity-100 group-hover:opacity-80 transition-opacity duration-500`}></div>
             
             {/* Decorative corner accent */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-400/10 to-purple-400/10 rounded-bl-full blur-2xl"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-400/10 to-purple-400/10 dark:from-indigo-500/5 dark:to-purple-500/5 rounded-bl-full blur-2xl"></div>
             
             <div className="flex-1 z-10 flex flex-col justify-center relative pr-0 lg:pr-6 xl:pr-8">
               {/* Enhanced badge */}
-              <div className="inline-flex self-start items-center gap-2 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 px-4 sm:px-5 py-2 rounded-full text-[10px] sm:text-xs font-semibold tracking-wider mb-4 sm:mb-5 md:mb-6 shadow-sm border border-indigo-200/50">
+              <div className={`${dashboardBadgeClass} mb-4 sm:mb-5 md:mb-6`}>
                 <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
                 FOCUS MODE
               </div>
               
-              <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold leading-tight mb-3 sm:mb-4 md:mb-5 text-gray-900 pr-0 lg:pr-4">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold leading-tight mb-3 sm:mb-4 md:mb-5 text-foreground pr-0 lg:pr-4">
                 Enter your flow state
               </h2>
               
-              <p className="text-sm sm:text-base text-gray-600 mb-5 sm:mb-6 md:mb-8 max-w-md leading-relaxed font-medium pr-0 lg:pr-6">
+              <p className="text-sm sm:text-base text-muted-foreground mb-5 sm:mb-6 md:mb-8 max-w-md leading-relaxed font-medium pr-0 lg:pr-6">
                 Start a focused work session tailored to your schedule and preferences.
               </p>
               
               {/* Enhanced CTA Button */}
               <button
                 onClick={() => router.push('/focus')}
-                className="bg-gradient-to-r from-[#545BE8] to-indigo-600 text-white px-7 sm:px-9 py-3 sm:py-3.5 md:py-4 rounded-xl sm:rounded-2xl flex items-center gap-3 font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-xl shadow-indigo-300/50 hover:shadow-2xl hover:shadow-indigo-400/50 w-full sm:w-fit text-sm sm:text-base hover:scale-105 active:scale-100 group/btn"
+                className="bg-gradient-to-r from-[#545BE8] to-indigo-600 text-white px-7 sm:px-9 py-3 sm:py-3.5 md:py-4 rounded-xl sm:rounded-2xl flex items-center gap-3 font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-xl shadow-indigo-300/50 dark:shadow-indigo-900/40 hover:shadow-2xl hover:shadow-indigo-400/50 dark:hover:shadow-indigo-800/50 w-full sm:w-fit text-sm sm:text-base hover:scale-105 active:scale-100 group/btn cursor-pointer"
               >
-                <div className="bg-white/25 p-1.5 rounded-full group-hover/btn:bg-white/30 transition-colors">
+                <div className="bg-white/20 p-1.5 rounded-full group-hover/btn:bg-white/30 transition-colors">
                   <Play size={14} className="sm:w-4 sm:h-4 fill-white ml-0.5" />
                 </div>
                 <span>Begin Focus Session</span>
@@ -602,23 +623,12 @@ export default function Dashboard() {
               </button>
             </div>
             
-            {/* Enhanced Decorative Image Container */}
-            <div className="mt-4 sm:mt-6 lg:mt-0 lg:w-[300px] xl:w-[320px] lg:ml-4 h-40 sm:h-56 md:h-64 lg:h-auto rounded-2xl sm:rounded-[32px] overflow-hidden relative shadow-2xl shrink-0 group-hover:shadow-indigo-200/50 transition-shadow duration-300">
-              {/* Image overlay gradient */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent z-10"></div>
-              
-              {/* Decorative border glow */}
-              <div className="absolute inset-0 rounded-2xl sm:rounded-[32px] border-2 border-white/20 shadow-inner"></div>
-              
-              <img 
-                src="https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&q=80&w=800" 
-                alt="Mountain Landscape" 
-                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              
-              {/* Floating particles effect */}
-              <div className="absolute top-4 right-4 w-2 h-2 bg-white/60 rounded-full blur-sm animate-pulse"></div>
-              <div className="absolute bottom-8 left-6 w-1.5 h-1.5 bg-indigo-300/60 rounded-full blur-sm animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+            {/* Ambience spaces — crossfade (same stills as landing) */}
+            <div className="mt-4 sm:mt-6 lg:mt-0 lg:w-[300px] xl:w-[320px] lg:ml-4 h-40 sm:h-56 md:h-64 lg:min-h-[280px] lg:h-full rounded-2xl sm:rounded-[32px] overflow-hidden relative shadow-2xl shrink-0 group-hover:shadow-indigo-200/50 dark:group-hover:shadow-indigo-900/40 transition-shadow duration-300">
+              <SpacesCrossfadeBackground />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent z-10 pointer-events-none" />
+              <div className="absolute top-4 right-4 w-2 h-2 bg-white/40 rounded-full blur-sm animate-pulse z-10" />
+              <div className="absolute bottom-8 left-6 w-1.5 h-1.5 bg-indigo-300/60 rounded-full blur-sm animate-pulse z-10" style={{ animationDelay: '0.5s' }} />
             </div>
           </div>
 
@@ -626,10 +636,9 @@ export default function Dashboard() {
           <div className="lg:col-span-4 flex flex-col gap-5 sm:gap-6 md:gap-8">
             
             {/* Time Focused Card */}
-            <div className="bg-gradient-to-br from-white to-indigo-50/30 p-5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 flex flex-col justify-between group relative overflow-hidden">
-              {/* Background decorative elements */}
-              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-100/20 rounded-full blur-2xl"></div>
-              <div className="absolute bottom-0 left-0 w-16 h-16 bg-purple-100/20 rounded-full blur-xl"></div>
+            <div className={dashboardPanelClass}>
+              <div className={`absolute top-0 right-0 w-24 h-24 ${dashboardGlowOrbClass} rounded-full blur-2xl`}></div>
+              <div className={`absolute bottom-0 left-0 w-16 h-16 ${dashboardGlowOrbSmClass} rounded-full blur-xl`}></div>
               
               {/* Top accent line */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 rounded-t-2xl sm:rounded-t-[32px]"></div>
@@ -637,12 +646,12 @@ export default function Dashboard() {
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2 sm:mb-3 md:mb-4">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 sm:p-2 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl shadow-sm border border-indigo-200/50">
-                      <Timer size={14} className="sm:w-4 sm:h-4 text-indigo-600" />
+                    <div className={dashboardIconChipClass}>
+                      <Timer size={14} className="sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <span className="text-gray-500 font-semibold text-[10px] sm:text-xs tracking-wider uppercase">Productive time</span>
+                    <span className="text-muted-foreground font-semibold text-[10px] sm:text-xs tracking-wider uppercase">Productive time</span>
                   </div>
-                  <div className={`${vsYesterday >= 0 ? 'bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-700 border-emerald-200/50' : 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200/50'} text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 shadow-sm border`}>
+                  <div className={`${vsYesterday >= 0 ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/45 dark:to-green-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-500/25' : 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/45 dark:to-orange-950/30 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-500/25'} text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 shadow-sm border`}>
                     <ArrowUpRight size={11} className={`sm:w-3.5 sm:h-3.5 ${vsYesterday < 0 ? 'rotate-180' : ''}`} />
                     <span className="font-bold">{vsYesterday >= 0 ? '+' : ''}{vsYesterday}%</span>
                     <span className="font-medium ml-0.5 hidden sm:inline shrink-0 text-[8px] opacity-80">vs yesterday</span>
@@ -651,18 +660,18 @@ export default function Dashboard() {
                 
                 <div className="mb-3 sm:mb-4 md:mb-5">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none">{productiveHours}</span>
-                    <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">h</span>
-                    <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-none ml-2">{productiveMinutes}</span>
-                    <span className="text-base sm:text-lg md:text-xl text-gray-500 font-medium">m</span>
+                    <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground leading-none">{productiveHours}</span>
+                    <span className="text-base sm:text-lg md:text-xl text-muted-foreground font-medium">h</span>
+                    <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground leading-none ml-2">{productiveMinutes}</span>
+                    <span className="text-base sm:text-lg md:text-xl text-muted-foreground font-medium">m</span>
                     {isFocusTimerRunningToday && productiveRemainderSeconds > 0 ? (
                       <>
-                        <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 leading-none ml-2">{productiveRemainderSeconds}</span>
-                        <span className="text-sm sm:text-base text-gray-500 font-medium">s</span>
+                        <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground leading-none ml-2">{productiveRemainderSeconds}</span>
+                        <span className="text-sm sm:text-base text-muted-foreground font-medium">s</span>
                       </>
                     ) : null}
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-muted-foreground mt-2">
                     {isFocusTimerRunningToday
                       ? 'Focus timer running — updates live'
                       : productiveSecondsToday > 0
@@ -673,13 +682,13 @@ export default function Dashboard() {
                 
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Progress</span>
+                    <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Progress</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs sm:text-sm font-bold text-gray-900">{focusPercent}%</span>
-                      <span className="text-[10px] sm:text-xs text-gray-400 font-medium">of goal</span>
+                      <span className="text-xs sm:text-sm font-bold text-foreground">{focusPercent}%</span>
+                      <span className="text-[10px] sm:text-xs text-muted-foreground font-medium">of goal</span>
                     </div>
                   </div>
-                  <div className="h-2.5 sm:h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner relative">
+                  <div className="h-2.5 sm:h-3 bg-muted rounded-full overflow-hidden shadow-inner relative">
                     <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 rounded-full relative overflow-hidden shadow-sm transition-all duration-500" style={{ width: `${focusPercent}%` }} />
                   </div>
                 </div>
@@ -708,7 +717,7 @@ export default function Dashboard() {
                <div className="absolute inset-0 bg-gradient-to-br from-orange-900/10 via-transparent to-indigo-900/10 pointer-events-none z-10"></div>
 
                <div className="flex justify-between items-start relative z-10 gap-2">
-                 <div className="flex items-center gap-1.5 sm:gap-2 bg-white/15 backdrop-blur-md px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-[9px] sm:text-[10px] font-semibold tracking-wider text-white shadow-lg border border-white/10">
+                 <div className="flex items-center gap-1.5 sm:gap-2 bg-card/15 backdrop-blur-md px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-[9px] sm:text-[10px] font-semibold tracking-wider text-white shadow-lg border border-white/10">
                    <Music size={11} className="sm:w-3.5 sm:h-3.5" /> SOUNDSCAPE
                  </div>
                  <div className={`flex items-center gap-1.5 sm:gap-2 backdrop-blur-sm px-2.5 sm:px-3 py-1.5 rounded-full text-[9px] sm:text-[10px] font-semibold shrink-0 shadow-lg border transition-colors ${
@@ -766,7 +775,7 @@ export default function Dashboard() {
                    <div className="flex items-center gap-3 sm:gap-4">
                      <button 
                        onClick={toggleSoundscapePlayPause}
-                       className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full flex items-center justify-center text-indigo-900 hover:scale-110 transition-transform shadow-lg hover:shadow-xl"
+                       className="w-9 h-9 sm:w-10 sm:h-10 bg-white/90 rounded-full flex items-center justify-center text-indigo-900 hover:scale-110 transition-transform shadow-lg hover:shadow-xl cursor-pointer"
                        title={soundscapeIsPlaying ? 'Pause' : 'Play'}
                      >
                        {soundscapeIsPlaying ? (
@@ -789,24 +798,24 @@ export default function Dashboard() {
           {/* Productivity Trend Graph — natural height; right card matches this on lg */}
           <div
             ref={productivityTrendRef}
-            className="bg-gradient-to-br from-white to-indigo-50/30 p-5 sm:p-6 md:p-8 rounded-3xl sm:rounded-[40px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 flex flex-col justify-between group relative overflow-hidden"
+            className={dashboardWidePanelClass}
           >
             {/* Background decorative elements */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100/20 rounded-full blur-2xl"></div>
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-100/20 rounded-full blur-xl"></div>
+            <div className={`absolute top-0 right-0 w-32 h-32 ${dashboardGlowOrbClass} rounded-full blur-2xl`}></div>
+            <div className={`absolute bottom-0 left-0 w-24 h-24 ${dashboardGlowOrbSmClass} rounded-full blur-xl`}></div>
             
             <div className="relative z-10 flex flex-col">
               <div className="flex justify-between items-start mb-4 sm:mb-5 md:mb-6 gap-4 shrink-0">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="p-1.5 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg shadow-sm border border-indigo-200/50">
+                    <div className={dashboardIconChipSmClass}>
                       <div className="w-2 h-2 bg-[#615FFF] rounded-full"></div>
                     </div>
-                    <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900">Productivity Trend</h3>
+                    <h3 className="text-base sm:text-lg md:text-xl font-semibold text-foreground">Productivity Trend</h3>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">Weekly focus efficiency</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1">Weekly focus efficiency</p>
                 </div>
-                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 text-[#615FFF] px-3 sm:px-3.5 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold shrink-0 shadow-sm border border-indigo-200/50 flex items-center gap-1.5">
+                <div className={dashboardStatBadgeClass}>
                   <ArrowUpRight size={12} className="sm:w-3.5 sm:h-3.5" />
                   <span className="font-bold">+15%</span>
                 </div>
@@ -815,7 +824,7 @@ export default function Dashboard() {
               {/* Enhanced SVG Chart - real weekly data */}
               <div className="relative h-40 sm:h-44 md:h-52 w-full mb-3 sm:mb-4">
                 {homeLoading ? (
-                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">Loading…</div>
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">Loading…</div>
                 ) : (
                   <svg viewBox="0 0 400 150" className="w-full h-full">
                     <defs>
@@ -845,44 +854,44 @@ export default function Dashboard() {
                           <path d={lineD} fill="none" stroke="url(#productivityLine)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
                           {pts.map((point, i) => (
                             <g key={i}>
-                              <circle cx={point.x} cy={point.y} r="5" fill="white" stroke="#615FFF" strokeWidth="2.5"/>
+                              <circle cx={point.x} cy={point.y} r="5" fill="var(--card)" stroke="#615FFF" strokeWidth="2.5"/>
                               <circle cx={point.x} cy={point.y} r="2.5" fill="#615FFF"/>
                             </g>
                           ))}
                         </>
                       );
                     })() : (
-                      <text x="200" y="75" textAnchor="middle" className="text-gray-400" fill="currentColor" style={{ fontSize: 14 }}>No focus data this week</text>
+                      <text x="200" y="75" textAnchor="middle" className="text-muted-foreground" fill="currentColor" style={{ fontSize: 14 }}>No focus data this week</text>
                     )}
                   </svg>
                 )}
               </div>
               
-              <div className="flex justify-between mt-2 sm:mt-3 text-[9px] sm:text-[10px] text-gray-500 font-semibold uppercase tracking-wider px-1 sm:px-2">
+              <div className="flex justify-between mt-2 sm:mt-3 text-[9px] sm:text-[10px] text-muted-foreground font-semibold uppercase tracking-wider px-1 sm:px-2">
                 {weeklyFocusMinutes.length > 0
                   ? weeklyFocusMinutes.map((d) => <span key={d.key}>{d.label}</span>)
                   : DAY_LABELS.map((day) => <span key={day}>{day}</span>)}
               </div>
               
-              <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-gray-200/60 flex items-center justify-between gap-4">
+              <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-border flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1">
-                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center border border-indigo-100/50 shadow-sm">
-                    <svg className="w-5 h-5 text-[#615FFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className={dashboardStatIconBoxClass}>
+                    <svg className="w-5 h-5 text-[#615FFF] dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                   </div>
                   <div>
-                    <p className="text-[10px] sm:text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Peak Day</p>
-                    <p className="text-sm sm:text-base font-semibold text-gray-900">{productivityPeakDay?.label ?? '—'}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Peak Day</p>
+                    <p className="text-sm sm:text-base font-semibold text-foreground">{productivityPeakDay?.label ?? '—'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-1 justify-end">
                   <div className="text-right">
-                    <p className="text-[10px] sm:text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Avg (min/day)</p>
-                    <p className="text-base sm:text-lg font-bold text-[#615FFF]">{weekAvg}m</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Avg (min/day)</p>
+                    <p className="text-base sm:text-lg font-bold text-[#615FFF] dark:text-indigo-400">{weekAvg}m</p>
                   </div>
-                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center border border-indigo-100/50 shadow-sm">
-                    <svg className="w-5 h-5 text-[#615FFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className={dashboardStatIconBoxClass}>
+                    <svg className="w-5 h-5 text-[#615FFF] dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                   </div>
@@ -893,7 +902,7 @@ export default function Dashboard() {
 
           {/* Upcoming & Alerts — same height as Productivity Trend on lg; list scrolls inside */}
           <div
-            className="bg-gradient-to-br from-white to-indigo-50/20 p-4 sm:p-5 md:p-6 rounded-3xl sm:rounded-[40px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-indigo-100/60 group relative overflow-hidden flex flex-col w-full"
+            className={`${dashboardAlertsPanelClass} group relative overflow-hidden flex flex-col w-full`}
             style={
               productivityTrendHeight
                 ? { height: productivityTrendHeight, maxHeight: productivityTrendHeight }
@@ -901,24 +910,24 @@ export default function Dashboard() {
             }
           >
             {/* Background decorative elements */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100/20 rounded-full blur-2xl pointer-events-none"></div>
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-100/20 rounded-full blur-xl pointer-events-none"></div>
+            <div className={`absolute top-0 right-0 w-32 h-32 ${dashboardGlowOrbClass} rounded-full blur-2xl pointer-events-none`}></div>
+            <div className={`absolute bottom-0 left-0 w-24 h-24 ${dashboardGlowOrbSmClass} rounded-full blur-xl pointer-events-none`}></div>
             
             <div className="relative z-10 flex flex-col flex-1 min-h-0 h-full overflow-hidden">
              <div className="flex justify-between items-start mb-3 sm:mb-4 shrink-0 gap-4">
                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="p-1.5 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg shadow-sm border border-indigo-200/50">
-                      <Calendar size={14} className="sm:w-4 sm:h-4 text-indigo-600" />
+                    <div className={dashboardIconChipSmClass}>
+                      <Calendar size={14} className="sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900">Upcoming & Alerts</h3>
+                    <h3 className="text-base sm:text-lg md:text-xl font-semibold text-foreground">Upcoming & Alerts</h3>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">Your day at a glance</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1">Your day at a glance</p>
                </div>
                <button
                  type="button"
                  onClick={openIntegrationsSettings}
-                 className="shrink-0 inline-flex items-center justify-center rounded-full border border-indigo-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-600 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
+                 className="shrink-0 inline-flex items-center justify-center rounded-full border border-indigo-200/90 dark:border-indigo-500/30 bg-card px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 shadow-sm hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-colors cursor-pointer"
                >
                  Integrations
                </button>
@@ -931,15 +940,15 @@ export default function Dashboard() {
                   <button
                     type="button"
                     onClick={openIntegrationsSettings}
-                    className="w-full flex items-start gap-3 p-4 rounded-2xl border-2 border-indigo-200/90 bg-gradient-to-r from-indigo-50 to-violet-50/80 hover:border-indigo-300 hover:shadow-md transition-all group text-left"
+                    className="w-full flex items-start gap-3 p-4 rounded-2xl border-2 border-indigo-200/90 dark:border-indigo-500/30 bg-gradient-to-r from-indigo-50 to-violet-50/80 dark:from-indigo-950/40 dark:to-violet-950/30 hover:border-indigo-300 dark:hover:border-indigo-500/50 hover:shadow-md transition-all group text-left cursor-pointer"
                   >
                     <span className="relative flex h-3 w-3 shrink-0 mt-1">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
                       <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500" />
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-indigo-950">Sync Gmail & Calendar</p>
-                      <p className="text-xs text-indigo-800/80 mt-0.5 leading-relaxed">
+                      <p className="text-sm font-semibold text-indigo-950 dark:text-indigo-200">Sync Gmail & Calendar</p>
+                      <p className="text-xs text-indigo-800/80 dark:text-indigo-300/80 mt-0.5 leading-relaxed">
                         Connect Google to see meetings and unread mail here.
                       </p>
                     </div>
@@ -950,8 +959,8 @@ export default function Dashboard() {
                 ) : null}
 
                 {showReconnectPrompt ? (
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-indigo-200/90 bg-indigo-50/60">
-                    <p className="flex-1 text-xs sm:text-sm text-indigo-950 leading-relaxed">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-indigo-200/90 dark:border-indigo-500/30 bg-indigo-50/60 dark:bg-indigo-950/35">
+                    <p className="flex-1 text-xs sm:text-sm text-indigo-950 dark:text-indigo-200 leading-relaxed">
                       Google connection expired. Reconnect to see meetings and mail here.
                     </p>
                     <button
@@ -968,7 +977,7 @@ export default function Dashboard() {
                   <button
                     type="button"
                     onClick={openIntegrationsSettings}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs font-medium hover:bg-amber-100/80 transition-colors text-left"
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/35 border border-amber-200/80 dark:border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs font-medium hover:bg-amber-100/80 dark:hover:bg-amber-950/50 transition-colors text-left cursor-pointer"
                   >
                     <span className="shrink-0 w-2 h-2 rounded-full bg-amber-500" />
                     <span className="flex-1 truncate">{workspaceSyncMessage}</span>
@@ -977,7 +986,7 @@ export default function Dashboard() {
                 ) : null}
 
                 {workspaceLoading && !hasWorkspaceAlerts ? (
-                  <div className="py-6 text-center text-gray-400 text-sm">Loading Gmail & Calendar…</div>
+                  <div className="py-6 text-center text-muted-foreground text-sm">Loading Gmail & Calendar…</div>
                 ) : null}
 
                 {!workspaceLoading && hasWorkspaceAlerts ? (
@@ -988,10 +997,10 @@ export default function Dashboard() {
                       const isMeeting = isNow || isCal;
                       const Icon = isNow ? Video : isCal ? Calendar : Mail;
                       const iconClass = isNow
-                        ? 'text-amber-600 bg-amber-50 border-amber-200/60'
+                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200/60 dark:border-amber-500/30'
                         : isCal
-                          ? 'text-indigo-600 bg-indigo-50 border-indigo-200/60'
-                          : 'text-violet-600 bg-violet-50 border-violet-200/60';
+                          ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/60 dark:border-indigo-500/30'
+                          : 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border-violet-200/60 dark:border-violet-500/30';
                       const row = (
                         <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
                           <div
@@ -1000,16 +1009,16 @@ export default function Dashboard() {
                             <Icon size={18} className="sm:w-[18px] sm:h-[18px]" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">
+                            <p className="text-xs sm:text-sm font-semibold text-foreground truncate">
                               {isNow ? `Now · ${alert.title}` : alert.title}
                             </p>
-                            <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium mt-0.5 truncate">
+                            <p className="text-[10px] sm:text-[11px] text-muted-foreground font-medium mt-0.5 truncate">
                               {alert.when}
                               {isCal && alert.isOnline ? ' · Video call' : ''}
                               {alert.kind === 'gmail' ? ' · Gmail' : isCal ? ' · Calendar' : ''}
                             </p>
                             {alert.preview ? (
-                              <p className="text-[10px] text-gray-400 mt-0.5 truncate">{alert.preview}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{alert.preview}</p>
                             ) : null}
                           </div>
                           {isMeeting && alert.canJoin ? (
@@ -1024,8 +1033,8 @@ export default function Dashboard() {
 
                       const rowClassName = `flex p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all ${
                         isNow
-                          ? 'border-amber-200/80 ring-1 ring-amber-100/50 bg-white/70 hover:bg-amber-50/40'
-                          : 'border-gray-100/80 bg-white/70 hover:bg-indigo-50/40 hover:border-indigo-100'
+                          ? 'border-amber-200/80 dark:border-amber-500/30 ring-1 ring-amber-100/50 dark:ring-amber-500/20 bg-card hover:bg-amber-50/40 dark:hover:bg-amber-950/25'
+                          : 'border-border bg-card hover:bg-indigo-50/40 dark:hover:bg-indigo-950/25 hover:border-indigo-100 dark:hover:border-indigo-500/25'
                       }`;
 
                       if (alert.href?.startsWith('/')) {
@@ -1060,7 +1069,7 @@ export default function Dashboard() {
                 ) : null}
 
                 {!workspaceLoading && hasConnection && !hasWorkspaceAlerts && !showConnectPrompt ? (
-                  <div className="py-4 text-center text-gray-500 text-sm rounded-2xl border border-dashed border-gray-200/80 bg-white/40">
+                  <div className="py-4 text-center text-muted-foreground text-sm rounded-2xl border border-dashed border-border bg-muted/40">
                     <p>No upcoming meetings or unread mail.</p>
                     <button
                       type="button"
@@ -1073,15 +1082,15 @@ export default function Dashboard() {
                 ) : null}
 
                 {upcomingTasks.length > 0 ? (
-                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-400 pt-1">
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-1">
                     Tasks
                   </p>
                 ) : null}
 
                 {homeLoading ? (
-                  <div className="py-4 text-center text-gray-400 text-sm">Loading tasks…</div>
+                  <div className="py-4 text-center text-muted-foreground text-sm">Loading tasks…</div>
                 ) : upcomingTasks.length === 0 && !hasWorkspaceAlerts && !showConnectPrompt && !workspaceLoading ? (
-                  <div className="py-4 text-center text-gray-500 text-sm">
+                  <div className="py-4 text-center text-muted-foreground text-sm">
                     <p className="mb-2">No tasks in focus</p>
                     <Link href="/tasks" className="text-indigo-600 font-medium hover:underline inline-flex items-center gap-1">
                       <ListTodo size={14} /> Go to Tasks
@@ -1102,15 +1111,15 @@ export default function Dashboard() {
                       <Link
                         key={task.id}
                         href="/tasks"
-                        className="flex items-center gap-3 sm:gap-4 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl group cursor-pointer hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-purple-50/30 transition-all duration-200 border border-transparent hover:border-indigo-100/50"
+                        className="flex items-center gap-3 sm:gap-4 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl group cursor-pointer hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-purple-50/30 dark:hover:from-indigo-950/30 dark:hover:to-purple-950/20 transition-all duration-200 border border-transparent hover:border-indigo-100/50 dark:hover:border-indigo-500/25"
                       >
-                        <div className="flex flex-col items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100/50 group-hover:from-indigo-50 group-hover:to-purple-50 transition-all duration-200 shadow-sm shrink-0 border border-gray-200/50 group-hover:border-indigo-200/50">
-                          <span className="text-[8px] sm:text-[9px] font-semibold text-gray-500 uppercase">{monthStr}</span>
-                          <span className="text-base sm:text-lg font-semibold text-gray-800 group-hover:text-indigo-700">{dayStr}</span>
+                        <div className="flex flex-col items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-muted dark:to-muted/80 group-hover:from-indigo-50 group-hover:to-purple-50 dark:group-hover:from-indigo-950/40 dark:group-hover:to-purple-950/30 transition-all duration-200 shadow-sm shrink-0 border border-border group-hover:border-indigo-200/50 dark:group-hover:border-indigo-500/30">
+                          <span className="text-[8px] sm:text-[9px] font-semibold text-muted-foreground uppercase">{monthStr}</span>
+                          <span className="text-base sm:text-lg font-semibold text-foreground group-hover:text-indigo-700 dark:group-hover:text-indigo-400">{dayStr}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-xs sm:text-sm font-semibold text-gray-900 group-hover:text-[#545BE8] transition-colors truncate">{task.title}</h4>
-                          <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium mt-0.5">{timeLabel}</p>
+                          <h4 className="text-xs sm:text-sm font-semibold text-foreground group-hover:text-[#545BE8] transition-colors truncate">{task.title}</h4>
+                          <p className="text-[10px] sm:text-[11px] text-muted-foreground font-medium mt-0.5">{timeLabel}</p>
                         </div>
                         <div className="w-2.5 h-2.5 bg-gradient-to-br from-indigo-400 to-purple-400 rounded-full shrink-0 shadow-sm" />
                       </Link>

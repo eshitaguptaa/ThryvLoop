@@ -3,28 +3,109 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth, useUser } from '@clerk/nextjs';
-import { X, Plus, Calendar, Clock, User, Edit2, Trash2, ArrowRight, ArrowLeft } from 'lucide-react';
+import { X, Plus, Calendar, Clock, User, Edit2, Trash2, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { getSupabaseClient, getUserStorageItem, setSupabaseAuthToken, setUserStorageItem } from '@/utils/userStorage';
 import { useCelebration } from '@/contexts/CelebrationContext';
+import TaskSelect from '@/components/tasks/TaskSelect';
+import {
+  appSurfaceClass,
+  appSurfaceInsetClass,
+  appContentClass,
+  appPageTitleClass,
+  appMutedTextClass,
+} from '@/lib/appShellClasses';
 
 // Category colors mapping
 const categoryColors = {
-  'Finance': 'bg-purple-100 text-purple-700',
-  'Hiring': 'bg-blue-100 text-blue-700',
-  'Dev': 'bg-orange-100 text-orange-700',
-  'Legal': 'bg-green-100 text-green-700',
-  'Project': 'bg-blue-100 text-blue-700',
-  'Marketing': 'bg-pink-100 text-pink-700',
-  'Design': 'bg-yellow-100 text-yellow-700',
-  'Other': 'bg-gray-100 text-gray-700',
+  'Finance': 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
+  'Hiring': 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+  'Dev': 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
+  'Legal': 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300',
+  'Project': 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+  'Marketing': 'bg-pink-100 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300',
+  'Design': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-300',
+  'Other': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
 };
 
-// Priority options
+const taskModalFieldClass =
+  'w-full px-4 py-3 bg-card text-foreground border-2 border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent';
+
+const COLUMN_OPTIONS = [
+  { value: 'todaysFocus', label: "Today's Focus" },
+  { value: 'inProgress', label: 'In Progress' },
+  { value: 'backlog', label: 'Backlog' },
+];
+
+const CATEGORY_OPTIONS = Object.keys(categoryColors).map((cat) => ({
+  value: cat,
+  label: cat,
+}));
+
 const priorityOptions = [
   { level: 'High Priority', color: 'bg-red-500', label: 'High' },
   { level: 'Medium Priority', color: 'bg-orange-500', label: 'Medium' },
   { level: 'Low Priority', color: 'bg-gray-400', label: 'Low' },
 ];
+
+const PRIORITY_SELECT_OPTIONS = [
+  { value: '', label: 'No Priority' },
+  ...priorityOptions.map((opt) => ({
+    value: opt.level,
+    label: opt.label,
+    color: opt.color,
+  })),
+];
+
+const FILTER_PRIORITY_OPTIONS = [
+  { value: 'all', label: 'All Priorities' },
+  ...priorityOptions.map((opt) => ({
+    value: opt.level,
+    label: opt.label,
+    color: opt.color,
+  })),
+  { value: 'none', label: 'No Priority' },
+];
+
+function renderCategoryChip(option) {
+  if (!option) {
+    return <span className="text-muted-foreground">Select category</span>;
+  }
+  return (
+    <span
+      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${categoryColors[option.value] || categoryColors.Other}`}
+    >
+      {option.label}
+    </span>
+  );
+}
+
+function renderCategoryOption(option, isSelected) {
+  return (
+    <>
+      {renderCategoryChip(option)}
+      <span className="flex-1" />
+      {isSelected ? (
+        <Check className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden />
+      ) : null}
+    </>
+  );
+}
+
+function renderPriorityOption(option, isSelected) {
+  return (
+    <>
+      {option.color ? (
+        <span className={`w-2 h-2 rounded-full shrink-0 ${option.color}`} aria-hidden />
+      ) : (
+        <span className="w-2 h-2 rounded-full shrink-0 border border-border" aria-hidden />
+      )}
+      <span className="flex-1 truncate">{option.label}</span>
+      {isSelected ? (
+        <Check className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden />
+      ) : null}
+    </>
+  );
+}
 
 const emptyTasks = {
   todaysFocus: [],
@@ -580,15 +661,15 @@ export default function TasksPage() {
     .filter(t => t.priority?.level === 'High Priority').length;
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-6 md:px-8 md:pt-10 md:pb-8 lg:px-12 lg:pt-12 lg:pb-10 font-(--font-poppins)">
-      <div className="max-w-7xl mx-auto">
+    <div className={`${appSurfaceClass} ${appSurfaceInsetClass} font-(--font-poppins)`}>
+      <div className={appContentClass}>
         <header className="mb-8">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between mb-6 gap-4">
             <div className="flex-1">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-2">
+              <h1 className={appPageTitleClass}>
                 My Tasks
               </h1>
-              <p className="text-sm sm:text-base text-gray-600 mb-4">
+              <p className={`text-sm sm:text-base ${appMutedTextClass} mb-4`}>
                 You have <span className="text-red-500 font-bold">{highPriorityCount} high-priority</span> tasks pending.
               </p>
               
@@ -599,7 +680,7 @@ export default function TasksPage() {
                   value={quickCapture}
                   onChange={(e) => setQuickCapture(e.target.value)}
                   onKeyDown={handleQuickCapture}
-                  className="w-full pl-4 pr-10 py-2.5 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm text-gray-700 shadow-sm hover:shadow-md transition-shadow"
+                  className="w-full pl-4 pr-10 py-2.5 bg-card border-2 border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm text-foreground shadow-sm hover:shadow-md transition-shadow"
                 />
                 <button
                   onClick={() => {
@@ -608,7 +689,7 @@ export default function TasksPage() {
                       setQuickCapture('');
                     }
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -618,13 +699,13 @@ export default function TasksPage() {
             <div className="flex flex-col gap-4 w-full lg:w-auto">
               <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs sm:text-sm text-gray-600 font-medium hidden sm:inline">View</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground font-medium hidden sm:inline">View</span>
                   <button
                     onClick={() => setViewMode('list')}
                     className={`p-2 rounded-xl transition-all ${
                       viewMode === 'list' 
-                        ? 'bg-gray-200 text-gray-900 shadow-sm' 
-                        : 'bg-white text-gray-400 hover:text-gray-600 border-2 border-gray-200 shadow-sm hover:shadow-md'
+                        ? 'bg-muted text-foreground shadow-sm' 
+                        : 'bg-card text-muted-foreground hover:text-muted-foreground border-2 border-border shadow-sm hover:shadow-md'
                     }`}
                   >
                     <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -635,8 +716,8 @@ export default function TasksPage() {
                     onClick={() => setViewMode('grid')}
                     className={`p-2 rounded-xl transition-all ${
                       viewMode === 'grid' 
-                        ? 'bg-gray-200 text-gray-900 shadow-sm' 
-                        : 'bg-white text-gray-400 hover:text-gray-600 border-2 border-gray-200 shadow-sm hover:shadow-md'
+                        ? 'bg-muted text-foreground shadow-sm' 
+                        : 'bg-card text-muted-foreground hover:text-muted-foreground border-2 border-border shadow-sm hover:shadow-md'
                     }`}
                   >
                     <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -659,7 +740,7 @@ export default function TasksPage() {
               
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="relative flex-1 min-w-0">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
@@ -669,14 +750,14 @@ export default function TasksPage() {
                     placeholder="Search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-xs sm:text-sm text-gray-700 shadow-sm hover:shadow-md transition-shadow"
+                    className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-card border-2 border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-xs sm:text-sm text-foreground shadow-sm hover:shadow-md transition-shadow"
                   />
                 </div>
                 
                 <div className="relative">
                   <button
                     onClick={() => setShowFilterMenu(!showFilterMenu)}
-                    className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-1.5 sm:gap-2 text-gray-700 font-medium shadow-sm hover:shadow-md text-xs sm:text-sm whitespace-nowrap"
+                    className="px-3 sm:px-4 py-2 sm:py-2.5 bg-card border-2 border-border rounded-xl hover:bg-muted/60 transition-all flex items-center gap-1.5 sm:gap-2 text-foreground font-medium shadow-sm hover:shadow-md text-xs sm:text-sm whitespace-nowrap"
                   >
                     <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -688,34 +769,57 @@ export default function TasksPage() {
                   </button>
                   
                   {showFilterMenu && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 z-50">
+                    <div className="absolute right-0 mt-2 w-56 bg-card rounded-xl shadow-lg border-2 border-border p-4 z-50">
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-2">Category</label>
-                          <select
+                          <label className="block text-xs font-semibold text-foreground mb-2">Category</label>
+                          <TaskSelect
+                            size="sm"
                             value={filterCategory}
-                            onChange={(e) => setFilterCategory(e.target.value)}
-                            className="w-full px-3 py-2 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          >
-                            <option value="all">All Categories</option>
-                            {categories.map(cat => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                          </select>
+                            onChange={setFilterCategory}
+                            aria-label="Filter by category"
+                            options={[
+                              { value: 'all', label: 'All Categories' },
+                              ...categories.map((cat) => ({ value: cat, label: cat })),
+                            ]}
+                            renderValue={(selected) =>
+                              selected?.value === 'all' || !selected ? (
+                                <span className="truncate">All Categories</span>
+                              ) : (
+                                renderCategoryChip(selected)
+                              )
+                            }
+                            renderOption={(option, isSelected) =>
+                              option.value === 'all' ? (
+                                <>
+                                  <span className="flex-1 truncate">{option.label}</span>
+                                  {isSelected ? (
+                                    <Check className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden />
+                                  ) : null}
+                                </>
+                              ) : (
+                                renderCategoryOption(option, isSelected)
+                              )
+                            }
+                          />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-2">Priority</label>
-                          <select
+                          <label className="block text-xs font-semibold text-foreground mb-2">Priority</label>
+                          <TaskSelect
+                            size="sm"
                             value={filterPriority}
-                            onChange={(e) => setFilterPriority(e.target.value)}
-                            className="w-full px-3 py-2 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          >
-                            <option value="all">All Priorities</option>
-                            <option value="High Priority">High Priority</option>
-                            <option value="Medium Priority">Medium Priority</option>
-                            <option value="Low Priority">Low Priority</option>
-                            <option value="none">No Priority</option>
-                          </select>
+                            onChange={setFilterPriority}
+                            aria-label="Filter by priority"
+                            options={FILTER_PRIORITY_OPTIONS}
+                            renderOption={renderPriorityOption}
+                            renderValue={(selected) =>
+                              selected ? (
+                                <span className="truncate">{selected.label}</span>
+                              ) : (
+                                <span className="text-muted-foreground">All Priorities</span>
+                              )
+                            }
+                          />
                         </div>
                         {(filterCategory !== 'all' || filterPriority !== 'all') && (
                           <button
@@ -723,12 +827,12 @@ export default function TasksPage() {
                               setFilterCategory('all');
                               setFilterPriority('all');
                             }}
-                            className="w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                            className="w-full px-3 py-2 text-sm text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors"
                           >
                             Clear Filters
                           </button>
                         )}
-                        <div className="border-t border-gray-200 pt-4 mt-4">
+                        <div className="border-t border-border pt-4 mt-4">
                           <button
                             onClick={clearAllTasks}
                             className="w-full px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
@@ -752,7 +856,7 @@ export default function TasksPage() {
         )}
 
         {isLoadingTasks ? (
-          <div className="text-center py-12 text-gray-500 text-sm">Loading tasks...</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">Loading tasks...</div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             
@@ -907,7 +1011,7 @@ export default function TasksPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl p-6 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] border-2 border-gray-100/60">
+            <div className="bg-card rounded-xl p-6 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] border-2 border-border">
               <div className="space-y-4">
                 {/* Today's Focus List */}
                 <div
@@ -942,14 +1046,14 @@ export default function TasksPage() {
                       <div className="flex items-center justify-between gap-2 mb-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0 shadow-sm"></div>
-                          <h3 className="text-base font-bold text-gray-900">Today's Focus</h3>
-                          <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length})</span>
+                          <h3 className="text-base font-bold text-foreground">Today's Focus</h3>
+                          <span className="text-xs text-muted-foreground font-medium">({dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length})</span>
                         </div>
                         {dedupeTasks(filterTasks(normalizedTasks.todaysFocus)).length > 0 && (
                           <button
                             type="button"
                             onClick={() => openClearColumnConfirm('todaysFocus')}
-                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
                             title="Clear all tasks from Today's Focus"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1029,14 +1133,14 @@ export default function TasksPage() {
                       <div className="flex items-center justify-between gap-2 mb-4 mt-6">
                         <div className="flex items-center gap-2.5">
                           <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shrink-0 shadow-sm"></div>
-                          <h3 className="text-base font-bold text-gray-900">In Progress</h3>
-                          <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.inProgress)).length})</span>
+                          <h3 className="text-base font-bold text-foreground">In Progress</h3>
+                          <span className="text-xs text-muted-foreground font-medium">({dedupeTasks(filterTasks(normalizedTasks.inProgress)).length})</span>
                         </div>
                         {dedupeTasks(filterTasks(normalizedTasks.inProgress)).length > 0 && (
                           <button
                             type="button"
                             onClick={() => openClearColumnConfirm('inProgress')}
-                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
                             title="Clear all tasks from In Progress"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1116,14 +1220,14 @@ export default function TasksPage() {
                       <div className="flex items-center justify-between gap-2 mb-4 mt-6">
                         <div className="flex items-center gap-2.5">
                           <div className="w-2.5 h-2.5 bg-gray-300 rounded-full shrink-0 shadow-sm"></div>
-                          <h3 className="text-base font-bold text-gray-900">Backlog</h3>
-                          <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.backlog)).length})</span>
+                          <h3 className="text-base font-bold text-foreground">Backlog</h3>
+                          <span className="text-xs text-muted-foreground font-medium">({dedupeTasks(filterTasks(normalizedTasks.backlog)).length})</span>
                         </div>
                         {dedupeTasks(filterTasks(normalizedTasks.backlog)).length > 0 && (
                           <button
                             type="button"
                             onClick={() => openClearColumnConfirm('backlog')}
-                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
                             title="Clear all tasks from Backlog"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1203,14 +1307,14 @@ export default function TasksPage() {
                       <div className="flex items-center justify-between gap-2 mb-4 mt-6">
                         <div className="flex items-center gap-2.5">
                           <div className="w-2.5 h-2.5 bg-green-500 rounded-full shrink-0 shadow-sm"></div>
-                          <h3 className="text-base font-bold text-gray-900">Done</h3>
-                          <span className="text-xs text-gray-500 font-medium">({dedupeTasks(filterTasks(normalizedTasks.done)).length})</span>
+                          <h3 className="text-base font-bold text-foreground">Done</h3>
+                          <span className="text-xs text-muted-foreground font-medium">({dedupeTasks(filterTasks(normalizedTasks.done)).length})</span>
                         </div>
                         {dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 && (
                           <button
                             type="button"
                             onClick={() => openClearColumnConfirm('done')}
-                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
                             title="Clear all tasks from Done"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1263,7 +1367,7 @@ export default function TasksPage() {
                  filterTasks(normalizedTasks.backlog).length === 0 &&
                  filterTasks(normalizedTasks.done).length === 0 &&
                  !dragOverColumn && (
-                  <div className="text-center py-12 text-gray-400 text-sm">
+                  <div className="text-center py-12 text-muted-foreground text-sm">
                     No tasks found
                   </div>
                 )}
@@ -1298,26 +1402,26 @@ export default function TasksPage() {
         const name = columnDisplayNames[clearConfirmColumn] || clearConfirmColumn;
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setClearConfirmColumn(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-card rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
                   <Trash2 className="w-6 h-6 text-red-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">Clear column?</h3>
-                  <p className="text-sm text-slate-500 mt-0.5">
+                  <h3 className="text-lg font-bold text-foreground">Clear column?</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">
                     {count} task{count === 1 ? '' : 's'} from {name}
                   </p>
                 </div>
               </div>
-              <p className="text-sm text-slate-600 mb-6">
+              <p className="text-sm text-muted-foreground mb-6">
                 This cannot be undone. All tasks in this column will be permanently deleted.
               </p>
               <div className="flex gap-3 justify-end">
                 <button
                   type="button"
                   onClick={() => setClearConfirmColumn(null)}
-                  className="px-4 py-2.5 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2.5 rounded-xl font-medium text-foreground bg-muted hover:bg-muted/80 transition-colors"
                 >
                   Cancel
                 </button>
@@ -1405,14 +1509,14 @@ function TaskColumn({
       <div className="flex items-center justify-between gap-2 mb-5">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`w-2.5 h-2.5 ${colorClasses[color]} rounded-full shrink-0 shadow-sm`}></div>
-          <h2 className="text-base font-bold text-gray-900 truncate">{title}</h2>
-          <span className="text-xs text-gray-500 font-medium shrink-0">({tasks.length})</span>
+          <h2 className="text-base font-bold text-foreground truncate">{title}</h2>
+          <span className="text-xs text-muted-foreground font-medium shrink-0">({tasks.length})</span>
         </div>
         {onClearColumn && tasks.length > 0 && (
           <button
             type="button"
             onClick={() => onClearColumn(columnKey)}
-            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
             title={`Clear all tasks from ${title}`}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -1429,7 +1533,7 @@ function TaskColumn({
         }`}
       >
         {tasks.length === 0 ? (
-          <div className={`text-center py-8 text-gray-400 text-sm ${isDragOver ? 'text-blue-500 font-medium' : ''}`}>
+          <div className={`text-center py-8 text-muted-foreground text-sm ${isDragOver ? 'text-blue-500 font-medium' : ''}`}>
             {isDragOver ? 'Drop task here' : 'No tasks found'}
           </div>
         ) : (
@@ -1509,7 +1613,7 @@ function TaskCard({
       draggable={!showMenu}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      className={`bg-white rounded-xl p-5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-gray-100/60 relative group ${
+      className={`bg-card rounded-xl p-5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.2)] transition-all duration-300 border-2 border-border relative group ${
         showMenu ? 'cursor-default' : 'cursor-move'
       } ${
         isDragging ? 'opacity-50 scale-95' : 'opacity-100'
@@ -1537,7 +1641,7 @@ function TaskCard({
             e.preventDefault();
           }}
           draggable={false}
-          className="w-5 h-5 flex items-center justify-center text-gray-300 hover:text-gray-600 transition-colors cursor-pointer"
+          className="w-5 h-5 flex items-center justify-center text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
         >
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -1546,7 +1650,7 @@ function TaskCard({
         
         {showMenu && (
           <div 
-            className={`absolute right-0 w-48 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-2 z-1000 pointer-events-auto ${menuOpenUpward ? 'bottom-full mb-2' : 'mt-2'}`}
+            className={`absolute right-0 w-48 bg-card rounded-lg shadow-xl border-2 border-border py-2 z-1000 pointer-events-auto ${menuOpenUpward ? 'bottom-full mb-2' : 'mt-2'}`}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             draggable={false}
@@ -1560,14 +1664,14 @@ function TaskCard({
                 setShowMenu(false);
               }}
               draggable={false}
-              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-none first:rounded-t-lg"
+              className="w-full px-4 py-2.5 text-left text-sm text-foreground hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-none first:rounded-t-lg"
             >
               <Edit2 className="w-4 h-4" />
               Edit
             </button>
-            <div className="border-t border-gray-200 my-1"></div>
+            <div className="border-t border-border my-1"></div>
             <div className="px-2 py-1">
-              <div className="text-xs font-semibold text-gray-500 px-2 mb-1">Move to:</div>
+              <div className="text-xs font-semibold text-muted-foreground px-2 mb-1">Move to:</div>
               {columnOptions.map(opt => (
                 <button
                   key={opt.value}
@@ -1579,7 +1683,7 @@ function TaskCard({
                     setShowMenu(false);
                   }}
                   draggable={false}
-                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100 cursor-pointer transition-all duration-200 rounded-none"
+                  className="w-full px-4 py-2.5 text-left text-sm text-foreground hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100 cursor-pointer transition-all duration-200 rounded-none"
                 >
                   {opt.label}
                 </button>
@@ -1587,7 +1691,7 @@ function TaskCard({
             </div>
             {currentColumn !== 'done' && (
               <>
-                <div className="border-t border-gray-200 my-1"></div>
+                <div className="border-t border-border my-1"></div>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -1628,20 +1732,20 @@ function TaskCard({
         {task.category}
       </div>
 
-      <h3 className="text-base font-bold text-gray-900 mb-3 pr-8">
+      <h3 className="text-base font-bold text-foreground mb-3 pr-8">
         {task.title}
       </h3>
 
       {task.priority && (
         <div className="flex items-center gap-2 mb-3">
           <div className={`w-1 h-4 ${task.priority.color} rounded-full`}></div>
-          <span className="text-xs font-medium text-gray-700">{task.priority.level}</span>
+          <span className="text-xs font-medium text-foreground">{task.priority.level}</span>
         </div>
       )}
 
       <div className="flex items-center justify-between mt-4">
         {task.dueTime && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock className="w-4 h-4" />
             <span>{task.dueTime}</span>
           </div>
@@ -1652,7 +1756,7 @@ function TaskCard({
             {task.assignedUsers.map((user, index) => (
               <div
                 key={index}
-                className="w-7 h-7 rounded-full border-2 border-white overflow-hidden bg-gray-200"
+                className="w-7 h-7 rounded-full border-2 border-card overflow-hidden bg-muted"
                 title={user.name}
               >
                 <img
@@ -1712,98 +1816,104 @@ function TaskModal({ task, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">
+      <div className="bg-card rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-foreground">
             {task ? 'Edit Task' : 'New Task'}
           </h2>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-muted-foreground transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Task Title *</label>
+            <label className="block text-sm font-semibold text-foreground mb-2">Task Title *</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter task title"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              className={taskModalFieldClass}
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
-              <select
+              <label className="block text-sm font-semibold text-foreground mb-2">Category</label>
+              <TaskSelect
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              >
-                {Object.keys(categoryColors).map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+                onChange={setCategory}
+                aria-label="Task category"
+                options={CATEGORY_OPTIONS}
+                renderValue={(_, val) => renderCategoryChip(CATEGORY_OPTIONS.find((o) => o.value === val))}
+                renderOption={renderCategoryOption}
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Priority</label>
-              <select
+              <label className="block text-sm font-semibold text-foreground mb-2">Priority</label>
+              <TaskSelect
                 value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              >
-                <option value="">No Priority</option>
-                {priorityOptions.map(opt => (
-                  <option key={opt.level} value={opt.level}>{opt.label}</option>
-                ))}
-              </select>
+                onChange={setPriority}
+                aria-label="Task priority"
+                placeholder="No Priority"
+                options={PRIORITY_SELECT_OPTIONS}
+                renderValue={(selected) =>
+                  selected ? (
+                    <span className="flex items-center gap-2 truncate">
+                      {selected.color ? (
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${selected.color}`} aria-hidden />
+                      ) : null}
+                      {selected.label}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">No Priority</span>
+                  )
+                }
+                renderOption={renderPriorityOption}
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Due Date</label>
+              <label className="block text-sm font-semibold text-foreground mb-2">Due Date</label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className={taskModalFieldClass}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Due Time</label>
+              <label className="block text-sm font-semibold text-foreground mb-2">Due Time</label>
               <input
                 type="time"
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className={taskModalFieldClass}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Column</label>
-            <select
+            <label className="block text-sm font-semibold text-foreground mb-2">Column</label>
+            <TaskSelect
               value={column}
-              onChange={(e) => setColumn(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            >
-              <option value="todaysFocus">Today&apos;s Focus</option>
-              <option value="inProgress">In Progress</option>
-              <option value="backlog">Backlog</option>
-            </select>
+              onChange={setColumn}
+              aria-label="Task column"
+              options={COLUMN_OPTIONS}
+            />
           </div>
 
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-3 border-2 border-border rounded-xl text-foreground font-medium hover:bg-muted/60 transition-colors"
             >
               Cancel
             </button>

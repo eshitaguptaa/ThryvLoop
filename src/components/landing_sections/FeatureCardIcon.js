@@ -10,12 +10,12 @@ const MaterialSymbol = ({ icon, className = '', fill = 0 }) => (
 );
 
 const TONES = {
-  purple: 'bg-purple-50 text-purple-700 border border-purple-100/80',
-  blue: 'bg-sky-50 text-sky-700 border border-sky-100/80',
-  violet: 'bg-violet-50 text-violet-700 border border-violet-100/80',
+  purple: 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-100/80 dark:border-purple-800/50',
+  blue: 'bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 border border-sky-100/80 dark:border-sky-800/50',
+  violet: 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-100/80 dark:border-violet-800/50',
   brand: 'bg-[#5D3FD3]/10 text-[#5D3FD3] border border-[#5D3FD3]/15',
-  amber: 'bg-amber-50 text-amber-800 border border-amber-100/80',
-  indigo: 'bg-indigo-50 text-indigo-700 border border-indigo-100/80',
+  amber: 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-100/80 dark:border-amber-800/50',
+  indigo: 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-100/80 dark:border-indigo-800/50',
   dark: 'bg-white/10 text-white border border-white/15',
 };
 

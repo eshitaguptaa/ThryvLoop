@@ -1,18 +1,18 @@
+'use client';
+
 import { SignUp } from '@clerk/nextjs';
+import AuthPageShell, { useClerkAppearance } from '@/components/auth/AuthPageShell';
 
 export default function SignUpPage() {
+  const appearance = useClerkAppearance();
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-900 via-purple-900 to-slate-900">
+    <AuthPageShell>
       <SignUp
         fallbackRedirectUrl="/home"
         signInUrl="/signin"
-        appearance={{
-          elements: {
-            rootBox: 'mx-auto',
-            card: 'shadow-xl',
-          },
-        }}
+        appearance={appearance}
       />
-    </div>
+    </AuthPageShell>
   );
 }

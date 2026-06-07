@@ -14,9 +14,9 @@ export async function sumFocusSecondsInRange(supabase, userId, startIso, endIso)
 }
 
 /** Logged focus timer seconds for today and yesterday (local calendar). */
-export async function fetchTodayAndYesterdayFocusSeconds(userId, getToken) {
-  if (!userId) return { today: 0, yesterday: 0 };
-  const token = await getToken({ template: 'supabase' }).catch(() => null);
+export async function fetchTodayAndYesterdayFocusSeconds(userId, getSupabaseToken) {
+  if (!userId || !getSupabaseToken) return { today: 0, yesterday: 0 };
+  const token = await getSupabaseToken();
   if (!token) return { today: 0, yesterday: 0 };
   setSupabaseAuthToken(token);
   const supabase = getSupabaseClient();

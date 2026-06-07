@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useAuth, useClerk, useOrganization, useSignIn } from '@clerk/nextjs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { workspaceCardClass } from '@/components/b2b/workspaceShellClasses';
+import { suspendClerkAuthRequests } from '@/lib/clerkSupabaseToken';
 
 function JoiningMessage() {
   return (
-    <div className="min-h-[50vh] flex flex-col items-center justify-center px-6 text-center rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <p className="text-gray-900 text-lg font-semibold">Joining workspace…</p>
-      <p className="text-gray-500 text-sm mt-2 font-medium">Completing your invitation</p>
+    <div className={`min-h-[50vh] flex flex-col items-center justify-center px-6 text-center ${workspaceCardClass}`}>
+      <p className="text-foreground text-lg font-semibold">Joining workspace…</p>
+      <p className="text-muted-foreground text-sm mt-2 font-medium">Completing your invitation</p>
     </div>
   );
 }
@@ -81,6 +83,7 @@ export default function AcceptOrgInvitation({ orgSlug, mode = 'gate' }) {
       try {
         // Ticket sign-in conflicts with an existing session (common after OAuth on /signin).
         if (isSignedIn && signOut) {
+          suspendClerkAuthRequests();
           await signOut();
         }
 
@@ -125,8 +128,8 @@ export default function AcceptOrgInvitation({ orgSlug, mode = 'gate' }) {
     if (mode === 'gate') {
       return (
         <div className="px-2 py-12 max-w-md mx-auto text-center">
-          <h1 className="text-xl font-bold text-gray-900">Workspace not found</h1>
-          <p className="text-gray-500 text-sm mt-3 leading-relaxed font-medium">
+          <h1 className="text-xl font-bold text-foreground">Workspace not found</h1>
+          <p className="text-muted-foreground text-sm mt-3 leading-relaxed font-medium">
             You don&apos;t have access to this workspace, or the invite link has expired.
           </p>
           <Link href="/o" className="inline-block mt-8 text-sm font-semibold text-indigo-600 hover:text-indigo-500">
@@ -142,8 +145,8 @@ export default function AcceptOrgInvitation({ orgSlug, mode = 'gate' }) {
     return (
       <div className="px-2 py-12 max-w-md mx-auto text-center">
         <h1 className="text-xl font-bold text-red-700">Could not join workspace</h1>
-        <p className="text-gray-600 text-sm mt-3 font-medium">{error}</p>
-        <p className="text-gray-400 text-xs mt-4">
+        <p className="text-muted-foreground text-sm mt-3 font-medium">{error}</p>
+        <p className="text-muted-foreground text-xs mt-4">
           Ask your admin to resend the invite, or open the link in a private window.
         </p>
         <Link href="/o" className="inline-block mt-8 text-sm font-semibold text-indigo-600 hover:text-indigo-500">

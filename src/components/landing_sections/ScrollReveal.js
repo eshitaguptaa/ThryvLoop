@@ -11,6 +11,7 @@ import {
   staggerContainer,
   staggerItem,
   transition,
+  motionLayer,
 } from '@/lib/landingMotion';
 
 const VARIANTS = {
@@ -20,6 +21,10 @@ const VARIANTS = {
   slideFromLeft,
   slideFromRight,
 };
+
+function layerClass(className = '') {
+  return [motionLayer.className, className].filter(Boolean).join(' ');
+}
 
 /**
  * Reveals content when it scrolls into view.
@@ -44,7 +49,8 @@ export function ScrollReveal({
 
   return (
     <Component
-      className={className}
+      className={layerClass(className)}
+      style={motionLayer.style}
       initial="hidden"
       whileInView="visible"
       viewport={VIEWPORT}
@@ -66,15 +72,16 @@ export function ScrollReveal({
 export function ScrollStagger({
   children,
   className = '',
-  stagger = 0.1,
-  delay = 0.06,
+  stagger = 0.08,
+  delay = 0.04,
 }) {
   const reduced = useReducedMotion();
   if (reduced) return <div className={className}>{children}</div>;
 
   return (
     <motion.div
-      className={className}
+      className={layerClass(className)}
+      style={motionLayer.style}
       initial="hidden"
       whileInView="visible"
       viewport={VIEWPORT}
@@ -91,7 +98,11 @@ export function ScrollItem({ children, className = '' }) {
   if (reduced) return <div className={className}>{children}</div>;
 
   return (
-    <motion.div className={className} variants={staggerItem}>
+    <motion.div
+      className={layerClass(className)}
+      style={motionLayer.style}
+      variants={staggerItem}
+    >
       {children}
     </motion.div>
   );
@@ -111,11 +122,12 @@ export function HeroReveal({
 
   return (
     <motion.div
-      className={className}
+      className={layerClass(className)}
+      style={motionLayer.style}
       initial="hidden"
       animate="visible"
       variants={variants}
-      transition={{ delay }}
+      transition={{ delay, type: 'tween', ease: [0.25, 0.46, 0.45, 0.94] }}
     >
       {children}
     </motion.div>

@@ -966,6 +966,18 @@ export default function SoundscapeComposer({
   }, [bootstrapSpacesPlayback]);
 
   useEffect(() => {
+    const handleVideoChanged = () => {
+      if (typeof window === 'undefined') return;
+      if (!getBackgroundVideoId()) return;
+      if (isSpacesPausedByUser()) return;
+      lastPlaybackVolumeRef.current = null;
+      bootstrapSpacesPlayback();
+    };
+    window.addEventListener('focus-video-changed', handleVideoChanged);
+    return () => window.removeEventListener('focus-video-changed', handleVideoChanged);
+  }, [bootstrapSpacesPlayback, userId]);
+
+  useEffect(() => {
     const handlePlayerReady = () => {
       if (!isSpacesPlaybackActive()) return;
       bootstrapSpacesPlayback();
@@ -1892,13 +1904,16 @@ export default function SoundscapeComposer({
                 )}
               </button>
             )}
-            <button 
-              data-save-recipe
-              onClick={handleSaveRecipe}
-              className="px-5 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-sm font-medium rounded-full transition-colors"
-            >
-              Save Recipe
-            </button>
+            {settingsPanel !== 'integrations' &&
+              !(settingsPanel === 'focusflow' && timerMode === 'stopwatch') && (
+              <button 
+                data-save-recipe
+                onClick={handleSaveRecipe}
+                className="px-5 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-sm font-medium rounded-full transition-colors"
+              >
+                Save Recipe
+              </button>
+            )}
             <button 
               onClick={onClose}
               className="w-9 h-9 flex items-center justify-center rounded-full bg-[#2d2d36] hover:bg-white/10 text-white/60 transition-colors"

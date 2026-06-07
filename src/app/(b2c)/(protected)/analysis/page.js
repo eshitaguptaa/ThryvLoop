@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth, useUser } from '@clerk/nextjs';
 import {
@@ -19,8 +19,6 @@ import {
 } from 'recharts';
 import { 
   Download, 
-  Zap,
-  MoveRight,
   TrendingUp,
   Target,
   CheckCircle2,
@@ -29,14 +27,22 @@ import {
   Database,
   Activity,
   Flame,
-  BarChart3,
   CircleDot,
   Video,
   Mail,
 } from 'lucide-react';
+import ThryvAIInsightCard from '@/components/analysis/ThryvAIInsightCard';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { Outfit } from 'next/font/google';
 import { getSupabaseClient, setSupabaseAuthToken, getFocusTimerStateFromSupabase } from '@/utils/userStorage';
+import {
+  appSurfaceClass,
+  appSurfaceInsetClass,
+  appContentClass,
+  appPageTitleClass,
+  appEyebrowClass,
+  appMutedTextClass,
+} from '@/lib/appShellClasses';
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -225,6 +231,83 @@ export default function AnalyticsDashboard() {
     else break;
   }
 
+  let peakDayIndex = 0;
+  let peakHour = 0;
+  let peakSessionCount = 0;
+  dayLabels.forEach((_, dayIndex) => {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const count = peakByDayHour[dayIndex]?.[hour] ?? 0;
+      if (count > peakSessionCount) {
+        peakSessionCount = count;
+        peakDayIndex = dayIndex;
+        peakHour = hour;
+      }
+    }
+  });
+
+  const aiMetrics = useMemo(() => {
+    const cats = tasks.reduce((acc, t) => {
+      const cat = t.category || 'Other';
+      acc[cat] = (acc[cat] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      date: todayStr,
+      sessionsToday: displaySessions,
+      focusMinutesToday: Math.round(focusMinutesToday),
+      focusMinutesThisWeek: Math.round(focusMinutesThisWeek),
+      sessionsThisWeek,
+      tasksCompletedThisWeek,
+      streak,
+      focusEfficiency,
+      totalTasks,
+      doneCount,
+      highPriorityCount,
+      overdueCount,
+      todaysFocusCount,
+      inProgressCount,
+      backlogCount,
+      meetingMinutesToday,
+      productiveMinutesToday,
+      productiveMinutesThisWeek,
+      timerMode: modeLabel,
+      categoryCounts: cats,
+      peakFocusWindow:
+        peakSessionCount > 0
+          ? `${dayLabels[peakDayIndex]} ${peakHour % 12 || 12}${peakHour >= 12 ? 'pm' : 'am'} (${peakSessionCount} sessions)`
+          : null,
+      calendarConnected: hasConnection,
+      inMeeting,
+    };
+  }, [
+    tasks,
+    todayStr,
+    displaySessions,
+    focusMinutesToday,
+    focusMinutesThisWeek,
+    sessionsThisWeek,
+    tasksCompletedThisWeek,
+    streak,
+    focusEfficiency,
+    totalTasks,
+    doneCount,
+    highPriorityCount,
+    overdueCount,
+    todaysFocusCount,
+    inProgressCount,
+    backlogCount,
+    meetingMinutesToday,
+    productiveMinutesToday,
+    productiveMinutesThisWeek,
+    modeLabel,
+    peakSessionCount,
+    peakDayIndex,
+    peakHour,
+    hasConnection,
+    inMeeting,
+  ]);
+
   const handleExport = () => {
     if (typeof window === 'undefined') return;
     const escapeCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -270,18 +353,18 @@ export default function AnalyticsDashboard() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-[#F1F5F9] ${outfit.className} text-gray-900 flex items-center justify-center`}>
+      <div className={`${appSurfaceClass} ${outfit.className} flex items-center justify-center`}>
         <div className="flex flex-col items-center gap-6">
           <div className="w-12 h-12 border-2 border-indigo-200 border-t-[#5043F3] rounded-full animate-spin" />
-          <p className="text-slate-600 font-medium tracking-wide">Loading analytics</p>
+          <p className={`${appMutedTextClass} font-medium tracking-wide`}>Loading analytics</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen bg-[#F1F5F9] ${outfit.className} text-gray-900 antialiased`}>
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
+    <div className={`${appSurfaceClass} ${appSurfaceInsetClass} ${outfit.className}`}>
+      <main className={`${appContentClass} max-w-[1600px] py-4 lg:py-6`}>
         {error && (
           <div className="mb-6 py-3 px-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium">
             {error}
@@ -296,11 +379,11 @@ export default function AnalyticsDashboard() {
         {/* Header */}
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-10">
           <div>
-            <p className="text-xs font-semibold text-indigo-500 uppercase tracking-[0.2em] mb-2">Insights</p>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-gray-900">
+            <p className={appEyebrowClass}>Insights</p>
+            <h1 className={appPageTitleClass}>
               Analytics
             </h1>
-            <p className="mt-2 text-slate-500 font-medium">{dateString}</p>
+            <p className={`mt-2 ${appMutedTextClass} font-medium`}>{dateString}</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button
@@ -320,7 +403,7 @@ export default function AnalyticsDashboard() {
               type="button"
               onClick={handleExport}
               disabled={loading || !!error}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-sm transition-colors shadow-sm disabled:opacity-50 disabled:pointer-events-none"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-card hover:bg-muted/60 border border-border text-foreground font-semibold text-sm transition-colors shadow-sm disabled:opacity-50 disabled:pointer-events-none"
             >
               <Download className="w-4 h-4" />
               Export CSV
@@ -329,12 +412,12 @@ export default function AnalyticsDashboard() {
         </header>
 
         {/* Main chart: Focus time (area) + Sessions (line) — above KPI cards */}
-        <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 mb-8 lg:mb-10" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+        <div className="rounded-2xl bg-card border border-border overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 mb-8 lg:mb-10" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
           <div className="p-6 lg:p-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 mb-5 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 mb-5 border-b border-border">
             <div>
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight">Focus & sessions</h2>
-              <p className="text-sm text-slate-500 mt-1">Last 14 days · focus time (min) & session count</p>
+              <h2 className="text-lg font-bold text-foreground tracking-tight">Focus & sessions</h2>
+              <p className="text-sm text-muted-foreground mt-1">Last 14 days · focus time (min) & session count</p>
             </div>
             <div className="flex gap-3">
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5043F3]/10 text-[#5043F3] text-xs font-semibold border border-[#5043F3]/20">
@@ -385,13 +468,13 @@ export default function AnalyticsDashboard() {
           ].map((kpi) => (
             <div
               key={kpi.label}
-              className="group relative rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:border-slate-300/80 hover:-translate-y-0.5"
+              className="group relative rounded-2xl bg-card border border-border overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-black/10 hover:border-border hover:-translate-y-0.5"
               style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)' }}
             >
               <div className="absolute top-0 left-0 w-1 h-full opacity-90" style={{ backgroundColor: kpi.color }} />
               <div className="relative p-5">
                 <div className="flex items-start justify-between gap-2 mb-3">
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">{kpi.label}</span>
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">{kpi.label}</span>
                   <div
                     className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110"
                     style={{ backgroundColor: kpi.bg }}
@@ -399,10 +482,10 @@ export default function AnalyticsDashboard() {
                     <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} strokeWidth={2.5} />
                   </div>
                 </div>
-                <p className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums tracking-tight" style={{ letterSpacing: '-0.02em' }}>
+                <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums tracking-tight" style={{ letterSpacing: '-0.02em' }}>
                   {kpi.value}
                 </p>
-                <p className="text-xs font-medium text-slate-500 mt-1">{kpi.sub}</p>
+                <p className="text-xs font-medium text-muted-foreground mt-1">{kpi.sub}</p>
               </div>
             </div>
           ))}
@@ -410,11 +493,11 @@ export default function AnalyticsDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
           {/* Sessions trend – line chart */}
-          <div className="lg:col-span-2 rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+          <div className="lg:col-span-2 rounded-2xl bg-card border border-border overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
             <div className="p-6">
-            <div className="pb-4 mb-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-1">Sessions per day</h2>
-              <p className="text-sm text-slate-500">Daily session count · last 14 days</p>
+            <div className="pb-4 mb-4 border-b border-border">
+              <h2 className="text-lg font-bold text-foreground tracking-tight mb-1">Sessions per day</h2>
+              <p className="text-sm text-muted-foreground">Daily session count · last 14 days</p>
             </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -434,11 +517,11 @@ export default function AnalyticsDashboard() {
           </div>
 
           {/* Task distribution – bar chart */}
-          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+          <div className="rounded-2xl bg-card border border-border overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
             <div className="p-6">
-            <div className="pb-4 mb-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-1">Task distribution</h2>
-              <p className="text-sm text-slate-500">By column</p>
+            <div className="pb-4 mb-4 border-b border-border">
+              <h2 className="text-lg font-bold text-foreground tracking-tight mb-1">Task distribution</h2>
+              <p className="text-sm text-muted-foreground">By column</p>
             </div>
             {taskDistributionData.length > 0 ? (
               <div className="h-[240px]">
@@ -460,19 +543,19 @@ export default function AnalyticsDashboard() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-[240px] flex items-center justify-center text-slate-500 text-sm">No tasks yet</div>
+              <div className="h-[240px] flex items-center justify-center text-muted-foreground text-sm">No tasks yet</div>
             )}
             </div>
           </div>
         </div>
                
         {/* Peak hours heatmap */}
-        <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 mb-10" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+        <div className="rounded-2xl bg-card border border-border overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 mb-10" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
           <div className="p-6 lg:p-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 mb-5 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 mb-5 border-b border-border">
             <div>
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight">Peak hours</h2>
-              <p className="text-sm text-slate-500 mt-1">When you focus · last 30 days</p>
+              <h2 className="text-lg font-bold text-foreground tracking-tight">Peak hours</h2>
+              <p className="text-sm text-muted-foreground mt-1">When you focus · last 30 days</p>
             </div>
             <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#5043F3]/10 text-[#5043F3] border border-[#5043F3]/20">Sun–Sat · 0h–23h</span>
           </div>
@@ -480,7 +563,7 @@ export default function AnalyticsDashboard() {
             <div className="min-w-[320px] space-y-2">
               {dayLabels.map((label, dayIndex) => (
                 <div key={dayIndex} className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-slate-500 w-9 shrink-0">{label}</span>
+                  <span className="text-xs font-medium text-muted-foreground w-9 shrink-0">{label}</span>
                   <div className="flex gap-0.5 flex-1">
                     {Array.from({ length: 24 }, (_, hour) => {
                       const count = peakByDayHour[dayIndex]?.[hour] ?? 0;
@@ -507,11 +590,11 @@ export default function AnalyticsDashboard() {
         {/* Bottom row: Balance, Focus & tasks summary, AI */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Balance score */}
-          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+          <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
             <div className="p-6 flex flex-col flex-1">
-              <div className="pb-4 mb-4 border-b border-slate-100">
-                <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-1">Balance score</h2>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Focus vs tasks</p>
+              <div className="pb-4 mb-4 border-b border-border">
+                <h2 className="text-lg font-bold text-foreground tracking-tight mb-1">Balance score</h2>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Focus vs tasks</p>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-6">
                 <div className="shrink-0 flex justify-center sm:justify-start">
@@ -536,19 +619,19 @@ export default function AnalyticsDashboard() {
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums">{focusEfficiency}</span>
-                      <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">of 100</span>
+                      <span className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">{focusEfficiency}</span>
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">of 100</span>
                     </div>
                   </div>
                 </div>
                 <div className="flex-1 min-w-0 space-y-0">
-                  <div className="flex items-center justify-between py-3 px-0 border-b border-slate-100">
-                    <span className="text-sm text-slate-500">High priority</span>
-                    <span className="text-sm font-semibold text-gray-900 tabular-nums">{highPriorityCount}</span>
+                  <div className="flex items-center justify-between py-3 px-0 border-b border-border">
+                    <span className="text-sm text-muted-foreground">High priority</span>
+                    <span className="text-sm font-semibold text-foreground tabular-nums">{highPriorityCount}</span>
                   </div>
-                  <div className="flex items-center justify-between py-3 px-0 border-b border-slate-100">
-                    <span className="text-sm text-slate-500">Overdue</span>
-                    <span className="text-sm font-semibold text-gray-900 tabular-nums">{overdueCount}</span>
+                  <div className="flex items-center justify-between py-3 px-0 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Overdue</span>
+                    <span className="text-sm font-semibold text-foreground tabular-nums">{overdueCount}</span>
                   </div>
                   <div className="pt-3">
                     <span
@@ -557,7 +640,7 @@ export default function AnalyticsDashboard() {
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                           : focusEfficiency >= 40
                             ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            : 'bg-muted text-muted-foreground border border-border'
                       }`}
                     >
                       {focusEfficiency >= 70 ? 'On track' : focusEfficiency >= 40 ? 'Good' : 'Getting started'}
@@ -566,14 +649,14 @@ export default function AnalyticsDashboard() {
                 </div>
               </div>
               {/* Fill space: next milestone + tip */}
-              <div className="mt-6 pt-5 border-t border-slate-100 flex-1 flex flex-col justify-end gap-4">
+              <div className="mt-6 pt-5 border-t border-border flex-1 flex flex-col justify-end gap-4">
                 <div>
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Next milestone</p>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Next milestone</p>
                   {focusEfficiency >= 70 ? (
-                    <p className="text-sm text-slate-600">You&apos;re on track. Keep your rhythm with regular focus sessions.</p>
+                    <p className="text-sm text-muted-foreground">You&apos;re on track. Keep your rhythm with regular focus sessions.</p>
                   ) : focusEfficiency >= 40 ? (
                     <>
-                      <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
                         <span>70% · On track</span>
                         <span>{70 - focusEfficiency}% to go</span>
                       </div>
@@ -583,7 +666,7 @@ export default function AnalyticsDashboard() {
                     </>
                   ) : (
                     <>
-                      <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
                         <span>40% · Good</span>
                         <span>{40 - focusEfficiency}% to go</span>
                       </div>
@@ -593,7 +676,7 @@ export default function AnalyticsDashboard() {
                     </>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {displaySessions < 2 ? 'Complete more focus sessions and move tasks to Done to improve your balance score.' : highPriorityCount > 0 ? 'Tackle high-priority tasks in focus mode to see your score rise.' : 'Balance reflects focus time and task progress together.'}
                 </p>
               </div>
@@ -601,34 +684,34 @@ export default function AnalyticsDashboard() {
           </div>
 
           {/* Focus & tasks summary */}
-          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
+          <div className="rounded-2xl bg-card border border-border overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
             <div className="p-6">
-            <div className="pb-4 mb-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight">Focus & tasks</h2>
+            <div className="pb-4 mb-4 border-b border-border">
+              <h2 className="text-lg font-bold text-foreground tracking-tight">Focus & tasks</h2>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'Focus blocks today', value: displaySessions, icon: CircleDot, c: 'text-indigo-600', bg: 'bg-indigo-100' },
                 { label: "Today's focus tasks", value: todaysFocusCount, icon: Target, c: 'text-amber-600', bg: 'bg-amber-100' },
                 { label: 'In progress', value: inProgressCount, icon: Activity, c: 'text-cyan-600', bg: 'bg-cyan-100' },
-                { label: 'Categories', value: Object.keys(categoryCounts).length, icon: ListTodo, c: 'text-slate-600', bg: 'bg-slate-100' },
+                { label: 'Categories', value: Object.keys(categoryCounts).length, icon: ListTodo, c: 'text-muted-foreground', bg: 'bg-slate-100' },
               ].map((item) => (
-                <div key={item.label} className="rounded-xl border border-slate-200/80 p-4 transition-all duration-200 hover:shadow-md hover:border-slate-300/60" style={{ boxShadow: '0 2px 12px -4px rgba(0,0,0,0.06)' }}>
+                <div key={item.label} className="rounded-xl border border-border p-4 transition-all duration-200 hover:shadow-md hover:border-border" style={{ boxShadow: '0 2px 12px -4px rgba(0,0,0,0.06)' }}>
                   <div className="flex items-start gap-3">
                     <div className={`shrink-0 w-9 h-9 rounded-lg ${item.bg} flex items-center justify-center ${item.c}`}>
                       <item.icon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{item.label}</p>
-                      <p className="text-xl font-bold text-gray-900 tabular-nums mt-0.5">{item.value}</p>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{item.label}</p>
+                      <p className="text-xl font-bold text-foreground tabular-nums mt-0.5">{item.value}</p>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
             {Object.keys(categoryCounts).length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">By category</p>
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">By category</p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(categoryCounts).map(([cat, count]) => (
                     <span key={cat} className="px-2.5 py-1 rounded-lg bg-[#5043F3]/10 text-[#5043F3] text-xs font-semibold border border-[#5043F3]/20">
@@ -641,54 +724,7 @@ export default function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* AI Insight */}
-          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5" style={{ boxShadow: '0 4px 24px -4px rgba(0,0,0,0.06)' }}>
-            <div className="p-6 flex flex-col flex-1">
-            <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-100">
-              <div className="w-10 h-10 rounded-xl bg-[#5043F3] flex items-center justify-center shadow-lg shadow-indigo-200/50">
-                <Zap className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 tracking-tight">Thryv AI</h2>
-                <p className="text-[10px] font-semibold text-[#5043F3] uppercase tracking-wider">Personalized</p>
-              </div>
-            </div>
-            <div className="flex-1 rounded-xl bg-indigo-50/50 border border-indigo-100 p-4 mb-4">
-              {displaySessions >= 4 && todaysFocusCount <= 2 ? (
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  Strong focus today — <span className="text-indigo-600 font-medium">{displaySessions} sessions</span>. Consider moving a task to Today&apos;s Focus.
-                </p>
-              ) : displaySessions < 2 && todaysFocusCount > 0 ? (
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  You have <span className="text-indigo-600 font-medium">{todaysFocusCount} tasks</span> planned. Start a Pomodoro to build momentum.
-                </p>
-              ) : tasksCompletedThisWeek > 0 && streak >= 2 ? (
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  <span className="text-emerald-600 font-medium">{tasksCompletedThisWeek} tasks</span> done this week and a <span className="text-amber-600 font-medium">{streak}-day</span> streak. Keep it up.
-                </p>
-              ) : highPriorityCount > 0 ? (
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  <span className="text-amber-600 font-medium">{highPriorityCount} high-priority</span> tasks — tackle them in focus mode.
-                </p>
-              ) : totalTasks === 0 && focusSessions.length === 0 ? (
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  Add tasks and run focus sessions to see personalized insights here.
-                </p>
-              ) : (
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  Sessions and task progress are synced. Complete more to unlock detailed trends.
-                </p>
-              )}
-            </div>
-            <Link
-              href="/tasks"
-              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[#5043F3] hover:bg-[#4337D9] text-white font-semibold text-sm transition-colors shadow-lg shadow-indigo-200/50"
-            >
-              View tasks
-              <MoveRight className="w-4 h-4" />
-            </Link>
-            </div>
-          </div>
+          <ThryvAIInsightCard metrics={aiMetrics} enabled={Boolean(isSignedIn && !loading && !error)} />
         </div>
       </main>
     </div>

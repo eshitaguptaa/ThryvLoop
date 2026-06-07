@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import Sidebar from '@/components/Sidebar';
 import SpacesBackgroundVideo from '@/components/focus/SpacesBackgroundVideo';
 import { MusicProvider } from '@/contexts/MusicContext';
+import ThryvBotWidget from '@/components/assistant/ThryvBotWidget';
 
 export default function AuthenticatedAppShell({ children }) {
   const pathname = usePathname();
@@ -40,7 +41,9 @@ export default function AuthenticatedAppShell({ children }) {
       <SpacesBackgroundVideo />
       <div
         className={`relative z-10 flex min-h-screen ${
-          isOnFocusRoute ? 'bg-transparent' : 'bg-linear-to-br from-slate-900 via-purple-900 to-slate-900'
+          isOnFocusRoute
+            ? 'bg-transparent'
+            : 'bg-linear-to-br from-slate-900 via-purple-900 to-slate-900 dark:from-background dark:via-surface dark:to-background'
         }`}
       >
         <MusicProvider>
@@ -48,6 +51,7 @@ export default function AuthenticatedAppShell({ children }) {
             <Sidebar className={hideSidebar ? 'opacity-0 pointer-events-none' : ''} />
           </Suspense>
           <main className={`flex-1 min-w-0 ${hideSidebar ? '' : 'ml-24'}`}>{children}</main>
+          <ThryvBotWidget />
         </MusicProvider>
       </div>
     </>

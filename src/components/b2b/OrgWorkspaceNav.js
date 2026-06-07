@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-/** Inactive: plain text (reference). Active: purple pill. */
+/** Inactive: plain text. Active: purple pill. */
 const linkInactive =
-  'text-sm font-medium text-gray-800 px-2 py-1 sm:px-2.5 transition-colors hover:text-gray-950 leading-tight';
+  'text-sm font-medium text-muted-foreground px-2 py-1 sm:px-2.5 transition-colors hover:text-foreground leading-tight';
 const linkActive =
   'text-sm font-semibold text-white bg-[#5D3FD3] px-3.5 py-1.5 sm:px-4 rounded-full shadow-sm transition-colors leading-tight';
 

@@ -70,11 +70,16 @@ export default function SpacesBackgroundVideo() {
     () => backgroundVideoId || DEFAULT_VIDEO_ID
   );
   const currentVideoIdRef = useRef(currentVideoId);
+  const embedSrcRef = useRef(getYouTubeEmbedUrl(currentVideoId));
   const playbackPositionIntervalRef = useRef(null);
+  const pendingVideoSwitchRef = useRef(false);
   const volumeRef = useRef(volume);
   const playbackVolumeRef = useRef(null);
   const userIdRef = useRef(userId);
   const attachPlayerApiRef = useRef(null);
+  const applyPlayerVolumeRef = useRef(null);
+  const startPlaybackRef = useRef(null);
+  const restoreAudioAfterVideoSwitchRef = useRef(null);
 
   volumeRef.current = volume;
   userIdRef.current = userId;
@@ -82,20 +87,6 @@ export default function SpacesBackgroundVideo() {
   useEffect(() => {
     currentVideoIdRef.current = currentVideoId;
   }, [currentVideoId]);
-
-  useEffect(() => {
-    const nextId = backgroundVideoId || DEFAULT_VIDEO_ID;
-    if (nextId !== currentVideoId) {
-      setCurrentVideoId(nextId);
-      if (playerRef.current?.loadVideoById) {
-        try {
-          playerRef.current.loadVideoById(nextId);
-        } catch (e) {
-          console.error('Error loading video by id:', e);
-        }
-      }
-    }
-  }, [backgroundVideoId, currentVideoId]);
 
   useEffect(() => {
     const activate = () => setPlayerActivated(true);
@@ -122,9 +113,12 @@ export default function SpacesBackgroundVideo() {
   const shouldRunPlayer = () => playerActivated;
 
   const resolvePlaybackVolume = useCallback(() => {
-    if (!isSpacesPlaybackActive()) return 0;
     if (isSpacesPausedByUser()) return 0;
     const ducked = playbackVolumeRef.current;
+    const activeViaPreference = isSpacesPlaybackActive();
+    const activeViaPlayback =
+      ducked !== null && ducked !== undefined && ducked > 0;
+    if (!activeViaPreference && !activeViaPlayback) return 0;
     if (ducked === null || ducked === undefined) return volumeRef.current;
     // Session duck-to-zero must not silence Spaces unless the user paused/muted
     if (ducked === 0) return volumeRef.current;
@@ -179,6 +173,66 @@ export default function SpacesBackgroundVideo() {
     }
   }, [applyPlayerVolume, isSpacesPausedByUser, isSpacesPlaybackActive, startPlayback]);
 
+  const restoreAudioAfterVideoSwitch = useCallback(
+    (player = playerRef.current) => {
+      if (!player) return;
+      if (isSpacesPausedByUser()) {
+        applyPlayerVolume(player, 0);
+        return;
+      }
+
+      const baseVolume = volumeRef.current;
+      const ducked = playbackVolumeRef.current;
+      const effectiveVolume =
+        ducked !== null && ducked !== undefined && ducked > 0 ? ducked : baseVolume;
+
+      if (effectiveVolume <= 0) return;
+
+      playbackVolumeRef.current = effectiveVolume;
+      applyPlayerVolume(player, effectiveVolume);
+      try {
+        if (typeof player.unMute === 'function') player.unMute();
+        if (typeof player.playVideo === 'function') player.playVideo();
+      } catch (e) {
+        console.error('Error restoring audio after video switch:', e);
+      }
+    },
+    [applyPlayerVolume, isSpacesPausedByUser]
+  );
+
+  applyPlayerVolumeRef.current = applyPlayerVolume;
+  startPlaybackRef.current = startPlayback;
+  restoreAudioAfterVideoSwitchRef.current = restoreAudioAfterVideoSwitch;
+
+  const switchToVideo = useCallback((newVideoId) => {
+    const resolvedId = newVideoId || DEFAULT_VIDEO_ID;
+    if (resolvedId === currentVideoIdRef.current) return;
+
+    currentVideoIdRef.current = resolvedId;
+    setCurrentVideoId(resolvedId);
+    setIsVideoPlaying(false);
+    pendingVideoSwitchRef.current = true;
+
+    if (playerRef.current?.loadVideoById) {
+      try {
+        playerRef.current.loadVideoById(resolvedId);
+      } catch (e) {
+        console.error('Error switching video:', e);
+        pendingVideoSwitchRef.current = false;
+      }
+    } else {
+      pendingVideoSwitchRef.current = false;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
+    }
+  }, []);
+
+  useEffect(() => {
+    switchToVideo(backgroundVideoId || DEFAULT_VIDEO_ID);
+  }, [backgroundVideoId, switchToVideo]);
+
   const savePlaybackPosition = (videoId, time) => {
     if (typeof window === 'undefined' || !videoId) return;
     try {
@@ -208,14 +262,24 @@ export default function SpacesBackgroundVideo() {
     if (!window.YT?.Player) return;
 
     try {
-      playerRef.current = new window.YT.Player(iframeRef.current, {
+      playerRef.current = new window.YT.Player('youtube-background-player', {
         events: {
           onReady: (event) => {
             setPlayerReady(true);
             if (playbackVolumeRef.current === null && isSpacesPlaybackActive()) {
               playbackVolumeRef.current = volumeRef.current;
             }
-            startPlayback(event.target);
+            const targetId = currentVideoIdRef.current;
+            if (targetId && targetId !== videoId && typeof event.target.loadVideoById === 'function') {
+              try {
+                pendingVideoSwitchRef.current = true;
+                event.target.loadVideoById(targetId);
+              } catch (e) {
+                console.error('Error loading target video on ready:', e);
+                pendingVideoSwitchRef.current = false;
+              }
+            }
+            startPlaybackRef.current?.(event.target);
             window.dispatchEvent(new CustomEvent('focus-spaces-player-ready'));
             if (playbackPositionIntervalRef.current) {
               clearInterval(playbackPositionIntervalRef.current);
@@ -224,8 +288,9 @@ export default function SpacesBackgroundVideo() {
               try {
                 if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
                   const currentTime = playerRef.current.getCurrentTime();
-                  if (currentTime && currentTime > 0) {
-                    savePlaybackPosition(videoId, currentTime);
+                  const activeVideoId = currentVideoIdRef.current;
+                  if (currentTime && currentTime > 0 && activeVideoId) {
+                    savePlaybackPosition(activeVideoId, currentTime);
                   }
                 }
               } catch (e) {}
@@ -234,6 +299,12 @@ export default function SpacesBackgroundVideo() {
           onStateChange: (event) => {
             if (event.data === window.YT.PlayerState.PLAYING) {
               setIsVideoPlaying(true);
+              if (pendingVideoSwitchRef.current) {
+                pendingVideoSwitchRef.current = false;
+                restoreAudioAfterVideoSwitchRef.current?.(event.target);
+              } else {
+                applyPlayerVolumeRef.current?.(event.target);
+              }
             } else if (
               event.data === window.YT.PlayerState.BUFFERING ||
               event.data === window.YT.PlayerState.PAUSED ||
@@ -247,7 +318,13 @@ export default function SpacesBackgroundVideo() {
                 (event.data === window.YT.PlayerState.PAUSED ||
                   event.data === window.YT.PlayerState.CUED)
               ) {
-                setTimeout(() => startPlayback(event.target), 150);
+                setTimeout(() => {
+                  if (pendingVideoSwitchRef.current) {
+                    restoreAudioAfterVideoSwitchRef.current?.(event.target);
+                  } else {
+                    startPlaybackRef.current?.(event.target);
+                  }
+                }, 150);
               }
             }
           },
@@ -262,7 +339,7 @@ export default function SpacesBackgroundVideo() {
     } catch (e) {
       console.error('Error attaching YouTube player API:', e);
     }
-  }, [isSpacesPausedByUser, startPlayback]);
+  }, [isSpacesPausedByUser, isSpacesPlaybackActive]);
 
   attachPlayerApiRef.current = attachPlayerApi;
 
@@ -282,21 +359,11 @@ export default function SpacesBackgroundVideo() {
 
   useEffect(() => {
     const handleVideoChange = (e) => {
-      const newVideoId = e.detail?.videoId || DEFAULT_VIDEO_ID;
-      if (newVideoId !== currentVideoIdRef.current) {
-        setCurrentVideoId(newVideoId);
-        if (playerRef.current?.loadVideoById) {
-          try {
-            playerRef.current.loadVideoById(newVideoId);
-          } catch (err) {
-            console.error('Error switching video:', err);
-          }
-        }
-      }
+      switchToVideo(e.detail?.videoId || DEFAULT_VIDEO_ID);
     };
     window.addEventListener('focus-video-changed', handleVideoChange);
     return () => window.removeEventListener('focus-video-changed', handleVideoChange);
-  }, []);
+  }, [switchToVideo]);
 
   useEffect(() => {
     if (!playerActivated || !isSpacesPlaybackActive()) return;
@@ -319,6 +386,9 @@ export default function SpacesBackgroundVideo() {
             setPlayerActivated(true);
           }
           playbackVolumeRef.current = e.detail.volume;
+          if (pendingVideoSwitchRef.current) {
+            return;
+          }
           applyPlayerVolume(playerRef.current, e.detail.volume);
           if (e.detail.volume > 0 && playerRef.current) {
             startPlayback(playerRef.current);
@@ -332,7 +402,10 @@ export default function SpacesBackgroundVideo() {
   }, [applyPlayerVolume, startPlayback, isSpacesPausedByUser]);
 
   useEffect(() => {
-    const resume = () => syncSpacesPlayback();
+    const resume = () => {
+      if (pendingVideoSwitchRef.current && playerRef.current) return;
+      syncSpacesPlayback();
+    };
     window.addEventListener('focus-spaces-activate', resume);
     window.addEventListener('focus-spaces-resume', resume);
     return () => {
@@ -406,10 +479,9 @@ export default function SpacesBackgroundVideo() {
         }}
       >
         <iframe
-          key={currentVideoId}
           ref={iframeRef}
           id="youtube-background-player"
-          src={getYouTubeEmbedUrl(currentVideoId)}
+          src={embedSrcRef.current}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
           onLoad={handleIframeLoad}

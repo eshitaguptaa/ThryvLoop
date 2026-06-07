@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-surface: var(--surface);
+    --color-card: var(--card);
+    --color-border: var(--border);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-primary: var(--primary);
+    --color-secondary: var(--secondary);
+    --color-accent: var(--accent);
+    --color-accent-purple: var(--secondary);
+}
+
 /* ========== BASE RESET & VARIABLES ========== */
 :root {
     --primary: #6366f1;
@@ -11,12 +27,42 @@
     --gray: #64748b;
     --light: #f1f5f9;
     --white: #ffffff;
+
+    /* Semantic theme tokens (light) */
+    --background: #ffffff;
+    --foreground: #0f172a;
+    --surface: #f1f5f9;
+    --card: #ffffff;
+    --border: rgba(226, 232, 240, 0.9);
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --footer: #0f172a;
+}
+
+.dark {
+    --dark: #f8fafc;
+    --dark-light: #e2e8f0;
+    --gray: #94a3b8;
+    --light: #1e293b;
+    --white: #1e293b;
+
+    color-scheme: dark;
+
+    --background: #0b1020;
+    --foreground: #f8fafc;
+    --surface: #111827;
+    --card: #1e293b;
+    --border: rgba(51, 65, 85, 0.9);
+    --muted: #334155;
+    --muted-foreground: #94a3b8;
+    --footer: #0b1020;
 }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
         Arial, sans-serif;
-    color: var(--dark);
+    color: var(--foreground);
+    background-color: var(--background);
     line-height: 1.6;
     overflow-x: hidden;
 }
@@ -105,16 +151,16 @@ body {
 
 @layer components {
   .card {
-    @apply relative overflow-hidden bg-white border border-violet-100 rounded-[2rem] transition-all duration-300 ease-out;
+    @apply relative overflow-hidden bg-card border border-border rounded-[2rem] transition-all duration-300 ease-out;
   }
 
   .card:hover {
-    @apply border-violet-200 shadow-2xl shadow-violet-600/10;
+    @apply border-violet-200 dark:border-violet-800 shadow-2xl shadow-violet-600/10;
     transform: translateY(-8px);
   }
 
   .card-title {
-    @apply text-3xl font-bold tracking-tight text-purple-900;
+    @apply text-3xl font-bold tracking-tight text-purple-900 dark:text-purple-200;
   }
 
   .icon-btn {
@@ -153,7 +199,11 @@ body {
   }
 
   .sidebar-scroll:hover {
-    scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05); /* Firefox - show on hover */
+    scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .sidebar-scroll:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
   }
 
   .sidebar-scroll::-webkit-scrollbar {
@@ -170,6 +220,10 @@ body {
     background: rgba(0, 0, 0, 0.05);
   }
 
+  .dark .sidebar-scroll:hover::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
   .sidebar-scroll::-webkit-scrollbar-thumb {
     background: transparent; /* Hidden by default */
     border-radius: 2px;
@@ -177,11 +231,19 @@ body {
   }
 
   .sidebar-scroll:hover::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2); /* Visible on hover */
+    background: rgba(0, 0, 0, 0.2);
   }
 
   .sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .dark .sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 
   /* Resize handles for draggable widgets - completely invisible */
@@ -239,18 +301,26 @@ body {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+.landing-page #features,
+.landing-page #solutions,
+.landing-page #resources,
+.landing-page #pricing {
+  scroll-margin-top: 4rem;
 }
 
 .landing-display {
   font-weight: 600;
   letter-spacing: -0.03em;
-  color: #171717;
+  color: var(--foreground);
   line-height: 1.1;
 }
 
 .landing-body {
   font-weight: 400;
-  color: #525252;
+  color: var(--muted-foreground);
   line-height: 1.65;
 }
 
@@ -258,14 +328,14 @@ body {
   font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: #171717;
+  color: var(--foreground);
   line-height: 1.3;
 }
 
 .landing-card-desc {
   font-size: 0.875rem;
   font-weight: 400;
-  color: #737373;
+  color: var(--muted-foreground);
   line-height: 1.6;
 }
 
@@ -273,5 +343,20 @@ body {
   font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: #737373;
+  color: var(--muted-foreground);
+}
+
+/* Hero section dot grid — visible in light and dark */
+.hero-dot-grid {
+  background-image:
+    radial-gradient(circle, rgba(0, 0, 0, 0.05) 2px, transparent 2px),
+    radial-gradient(circle, rgba(0, 0, 0, 0.05) 2px, transparent 2px);
+  background-size: 16px 16px, 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+.dark .hero-dot-grid {
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.06) 2px, transparent 2px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.06) 2px, transparent 2px);
 }

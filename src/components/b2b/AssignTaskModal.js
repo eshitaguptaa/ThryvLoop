@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 const CATEGORIES = ['General', 'Project', 'Operations', 'Support', 'Other'];
 
 const fieldClass =
-  'w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/35';
+  'w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-[#5D3FD3]/35';
 
 export default function AssignTaskModal({
   open,
@@ -26,18 +26,18 @@ export default function AssignTaskModal({
       aria-modal="true"
       aria-labelledby="assign-task-title"
     >
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div>
-            <h2 id="assign-task-title" className="text-base font-semibold text-gray-900">
+            <h2 id="assign-task-title" className="text-base font-semibold text-foreground">
               Assign task
             </h2>
-            <p className="text-xs text-gray-500 mt-0.5 font-medium">Adds to {columnLabel}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 font-medium">Adds to {columnLabel}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-100"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -59,7 +59,7 @@ export default function AssignTaskModal({
             rows={2}
             className={`${fieldClass} resize-none`}
           />
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Assign to
           </label>
           <select
@@ -106,14 +106,14 @@ export default function AssignTaskModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              className="flex-1 rounded-lg border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors"
+              className="flex-1 rounded-lg bg-[#5D3FD3] hover:bg-[#5032c4] disabled:opacity-50 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors"
             >
               {saving ? 'Assigning…' : 'Assign'}
             </button>

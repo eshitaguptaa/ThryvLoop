@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import WorkspacesShowcase from '@/components/landing_sections/WorkspacesShowcase';
 import SoundscapeComposerShowcase from '@/components/landing_sections/SoundscapeComposerShowcase';
 import TasksShowcase from '@/components/landing_sections/TasksShowcase';
@@ -8,6 +9,7 @@ import SpacesCrossfadeBackground from '@/components/landing_sections/SpacesCross
 import ForestRainControls from '@/components/landing_sections/ForestRainControls';
 import FeatureCardIcon from '@/components/landing_sections/FeatureCardIcon';
 import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
+import { SectionBlend } from '@/components/landing_sections/SectionBlend';
 
 // ====================================================================
 // 1. Icon Components for React/Next.js
@@ -107,20 +109,21 @@ export default function Features() {
         }
       `}</style>
 
-       <div className="light bg-gray-100 dark:bg-background-dark text-neutral-900 dark:text-white antialiased selection:bg-primary/30 selection:text-primary min-h-screen">
-         <div className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden bg-gray-100">
-           <main id="features" className="flex-grow flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 relative bg-gray-100">
+       <div className="bg-surface text-foreground antialiased selection:bg-primary/30 selection:text-primary min-h-screen">
+         <div className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden bg-surface">
+           <main id="features" className="flex-grow flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 relative bg-surface">
+            <SectionBlend position="bottom" fromColor="transparent" toColor="background" size="xl" />
             {/* Background Gradient Blobs */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[600px] bg-primary/10 blur-[120px] rounded-full pointer-events-none -z-10 dark:opacity-40"></div>
             <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-accent-purple/10 blur-[100px] rounded-full pointer-events-none -z-10 dark:opacity-30"></div>
             
             <div className="w-full max-w-[1280px] flex flex-col gap-20">
-              {/* Header Section */}
-               <ScrollReveal className="relative flex flex-col items-center text-center gap-6 max-w-4xl mx-auto py-12">
+              {/* Header Section — always visible; scroll-reveal was leaving this stuck at opacity 0 when partially on screen */}
+               <div className="relative z-10 flex flex-col items-center text-center gap-6 max-w-4xl mx-auto py-12">
                  {/* Purple glow effect around heading */}
                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-gradient-to-r from-[#5b4ded]/8 via-[#7c3aed]/10 to-[#8b5cf6]/8 blur-[100px] rounded-full pointer-events-none z-0"></div>
                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-[#5b4ded]/5 blur-[80px] rounded-full pointer-events-none z-0"></div>
-                 <div className="relative z-20 inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-1.5 text-xs font-semibold text-[#5b4ded] ring-1 ring-inset ring-[#d9d9f3] shadow-sm">
+                 <div className="relative z-20 inline-flex items-center gap-2 rounded-full bg-card/70 px-4 py-1.5 text-xs font-semibold text-[#5b4ded] ring-1 ring-inset ring-border shadow-sm">
                    <span className="relative flex h-2 w-2">
                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5b4ded] opacity-75"></span>
                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#5b4ded]"></span>
@@ -133,14 +136,14 @@ export default function Features() {
                 <p className="relative z-20 landing-body text-lg sm:text-xl max-w-2xl">
                   Experience a workspace that adapts to your energy. ThryvLoop orchestrates your day, silences the noise, and keeps you in the zone.
                 </p>
-               </ScrollReveal>
+               </div>
 
               {/* Features Grid */}
-              <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr" stagger={0.09}>
+              <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr" stagger={0.06}>
 
                 {/* Feature Card 1: Ambience & Pomodoro (Large Card) */}
                 <ScrollItem className="col-span-1 md:col-span-2 lg:row-span-2">
-                <div className="group relative h-full overflow-hidden rounded-3xl bg-[#2f1952] border border-gray-100 shadow-2xl shadow-gray-900/20 hover:shadow-primary/10 transition-all duration-500">
+                <div className="group relative h-full overflow-hidden rounded-3xl bg-[#2f1952] border-0 shadow-2xl shadow-gray-900/20 dark:shadow-black/40 hover:shadow-primary/10 transition-all duration-500">
                   <div className="absolute inset-0 z-0 overflow-hidden rounded-3xl">
                     <SpacesCrossfadeBackground />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#000000]/90 via-[#392f55]/70 to-[#867a9e]/50 z-10" />
@@ -224,11 +227,11 @@ export default function Features() {
 
                {/* Feature Card 7: AI Chatbot Assistant (Wide Card) */}
                 <ScrollItem className="col-span-1 md:col-span-2 lg:col-span-3">
-<div className="group relative overflow-hidden rounded-3xl bg-gradient-to-r from-white to-[#fbf8ff] border border-gray-100 shadow-2xl shadow-gray-200/50 hover:shadow-[0_20px_60px_-15px_rgba(99,72,193,0.15)] transition-all duration-300 p-8 sm:p-12 flex flex-col md:flex-row items-center gap-10">
+<div className="group relative overflow-hidden rounded-3xl bg-card border border-border shadow-2xl shadow-gray-200/50 dark:shadow-black/30 hover:shadow-[0_20px_60px_-15px_rgba(99,72,193,0.15)] transition-all duration-300 p-8 sm:p-12 flex flex-col md:flex-row items-center gap-10">
 
   {/* subtle grid + mask (keeps same behavior) */}
   <div
-    className="absolute inset-0 bg-grid-slate-100/40"
+    className="absolute inset-0 opacity-40 dark:opacity-20"
     style={{ maskImage: "linear-gradient(to bottom, transparent, black)" }}
   ></div>
 
@@ -237,7 +240,7 @@ export default function Features() {
     <div>
       <FeatureCardIcon icon="smart_toy" tone="indigo" className="mb-6" fill={1} />
       <h3 className="landing-display text-3xl md:text-4xl">
-        AI Chatbot <span className="text-neutral-700">Assistant</span>
+        AI Chatbot <span className="text-muted-foreground">Assistant</span>
       </h3>
     </div>
 
@@ -246,12 +249,18 @@ export default function Features() {
     </p>
 
     <div className="flex gap-4">
-      <button className="px-7 py-3 rounded-full bg-[#0f0e1b] text-white font-bold shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 hover:-translate-y-1 transition-all flex items-center gap-2">
+      <Link
+        href="/home"
+        className="px-7 py-3 rounded-full bg-foreground text-background font-bold shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 hover:-translate-y-1 transition-all flex items-center gap-2"
+      >
         Chat with AI <MaterialSymbol icon="arrow_forward" className="text-sm" />
-      </button>
-      <button className="px-7 py-3 rounded-full bg-white border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors">
+      </Link>
+      <Link
+        href="/signup"
+        className="px-7 py-3 rounded-full bg-card border border-border text-foreground font-semibold hover:bg-muted transition-colors"
+      >
         View Demo
-      </button>
+      </Link>
     </div>
   </div>
 
@@ -260,42 +269,42 @@ export default function Features() {
     {/* purple glow background (indigo→purple, softer opacity + blur) */}
     <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-r from-indigo-500 to-purple-600 opacity-20 blur-3xl group-hover:opacity-30 transition-opacity duration-500 pointer-events-none"></div>
 
-    <div className="relative bg-white rounded-2xl border border-gray-200 shadow-2xl overflow-hidden flex flex-col h-[400px] transform transition-transform duration-500 ease-out">
+    <div className="relative bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col h-[400px] transform transition-transform duration-500 ease-out">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 backdrop-blur-md sticky top-0 z-10">
+      <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/80 backdrop-blur-md sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg ring-2 ring-white">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg ring-2 ring-card">
               <MaterialSymbol icon="smart_toy" className="text-lg" />
             </div>
-            <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-green-500 ring-2 ring-white shadow-sm"></span>
+            <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-green-500 ring-2 ring-card shadow-sm"></span>
           </div>
           <div>
-            <h4 className="text-sm font-bold text-gray-900">ThryvBot</h4>
+            <h4 className="text-sm font-bold text-foreground">ThryvBot</h4>
             <span className="text-xs text-green-500 font-bold uppercase tracking-wider">Online</span>
           </div>
         </div>
         <div className="flex gap-2">
-          <MaterialSymbol icon="history" className="text-gray-400 hover:text-gray-600 cursor-pointer p-1 rounded-md hover:bg-gray-100 transition-colors" fill={0} />
-          <MaterialSymbol icon="more_vert" className="text-gray-400 hover:text-gray-600 cursor-pointer p-1 rounded-md hover:bg-gray-100 transition-colors" fill={0} />
+          <MaterialSymbol icon="history" className="text-muted-foreground hover:text-foreground cursor-pointer p-1 rounded-md hover:bg-muted transition-colors" fill={0} />
+          <MaterialSymbol icon="more_vert" className="text-muted-foreground hover:text-foreground cursor-pointer p-1 rounded-md hover:bg-muted transition-colors" fill={0} />
         </div>
       </div>
 
       {/* Messages area */}
-      <div className="flex-grow p-6 space-y-6 overflow-y-auto bg-grid-slate-50/40">
+      <div className="flex-grow p-6 space-y-6 overflow-y-auto bg-surface/50">
         {/* AI Message */}
         <div className="flex items-start gap-4 animate-[float-slow_4s_ease-in-out_infinite]">
           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold shadow-md mt-1">AI</div>
-          <div className="bg-gray-100 rounded-2xl rounded-tl-none p-4 text-sm text-[#0f0e1b] max-w-[85%] shadow-sm border border-transparent">
+          <div className="bg-muted rounded-2xl rounded-tl-none p-4 text-sm text-foreground max-w-[85%] shadow-sm border border-transparent">
             <p className="leading-relaxed">
-              Good morning! You have <span className="font-bold text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded">3 high-priority tasks</span> today.
+              Good morning! You have <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1 py-0.5 rounded">3 high-priority tasks</span> today.
             </p>
-            <div className="mt-3 p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="mt-3 p-3 bg-card rounded-xl border border-border shadow-sm">
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                <span className="text-xs font-semibold">Project Review</span>
+                <span className="text-xs font-semibold text-foreground">Project Review</span>
               </div>
-              <div className="text-[10px] text-gray-500">10:00 AM - 11:30 AM</div>
+              <div className="text-[10px] text-muted-foreground">10:00 AM - 11:30 AM</div>
             </div>
             <p className="mt-3 leading-relaxed">Should I schedule a deep work block?</p>
           </div>
@@ -306,25 +315,25 @@ export default function Features() {
           <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white rounded-2xl rounded-tr-none p-4 text-sm max-w-[85%] shadow-lg shadow-indigo-500/20">
             <p className="leading-relaxed">Yes, please block out 2 hours starting at 10 AM.</p>
           </div>
-          <div className="h-8 w-8 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 text-xs font-bold mt-1 border-2 border-white">ME</div>
+          <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0 flex items-center justify-center text-muted-foreground text-xs font-bold mt-1 border-2 border-card">ME</div>
         </div>
 
         {/* Typing Indicator */}
         <div className="flex items-center gap-2 ml-12">
-          <div className="bg-gray-100 px-3 py-2 rounded-2xl rounded-tl-none border border-transparent flex gap-1 items-center">
-            <span className="animate-bounce h-1.5 w-1.5 bg-gray-400 rounded-full"></span>
-            <span className="animate-bounce h-1.5 w-1.5 bg-gray-400 rounded-full delay-75"></span>
-            <span className="animate-bounce h-1.5 w-1.5 bg-gray-400 rounded-full delay-150"></span>
+          <div className="bg-muted px-3 py-2 rounded-2xl rounded-tl-none border border-transparent flex gap-1 items-center">
+            <span className="animate-bounce h-1.5 w-1.5 bg-muted-foreground rounded-full"></span>
+            <span className="animate-bounce h-1.5 w-1.5 bg-muted-foreground rounded-full delay-75"></span>
+            <span className="animate-bounce h-1.5 w-1.5 bg-muted-foreground rounded-full delay-150"></span>
           </div>
-          <span className="text-xs text-gray-400 italic">ThryvBot is typing...</span>
+          <span className="text-xs text-muted-foreground italic">ThryvBot is typing...</span>
         </div>
       </div>
 
       {/* Input area */}
-      <div className="p-4 border-t border-gray-100 bg-white">
+      <div className="p-4 border-t border-border bg-card">
         <div className="relative group/input">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full opacity-0 group-hover/input:opacity-10 blur transition-opacity pointer-events-none"></div>
-          <input className="w-full bg-gray-50 border border-gray-200 rounded-full py-3.5 pl-5 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder-gray-500 text-gray-800 shadow-inner transition-all relative z-10" placeholder="Ask anything..." type="text" />
+          <input className="w-full bg-muted border border-border rounded-full py-3.5 pl-5 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder-muted-foreground text-foreground shadow-inner transition-all relative z-10" placeholder="Ask anything..." type="text" />
           <button className="absolute right-2 top-2 h-9 w-9 bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full flex items-center justify-center transition-all shadow-md hover:scale-110 z-20">
             <MaterialSymbol icon="send" className="text-sm" />
           </button>
@@ -339,7 +348,7 @@ export default function Features() {
               </ScrollStagger>
 
               <ScrollReveal className="flex justify-center mt-12" variant="fadeUpSoft" delay={0.1}>
-                <button className="group relative flex min-w-[240px] cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-full h-16 px-10 bg-[#0f0e1b] dark:bg-white text-white dark:text-[#0f0e1b] text-lg font-bold leading-normal tracking-wide transition-all hover:scale-105 hover:shadow-2xl hover:shadow-primary/30">
+                <button className="group relative flex min-w-[240px] cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-full h-16 px-10 bg-foreground text-background text-lg font-bold leading-normal tracking-wide transition-all hover:scale-105 hover:shadow-2xl hover:shadow-primary/30">
                   <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></span>
                   <span className="truncate">Explore all features</span>
                   <MaterialSymbol icon="arrow_forward" className="text-lg transition-transform group-hover:translate-x-1" />

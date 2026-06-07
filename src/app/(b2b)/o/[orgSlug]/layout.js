@@ -15,7 +15,7 @@ import { decodeOrgSlug, getMembershipForSlug, isOrgAdmin } from '@/lib/org';
 
 function JoiningFallback() {
   return (
-    <div className="min-h-[40vh] flex items-center justify-center text-gray-500 text-sm rounded-2xl border border-slate-200/90 bg-white shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),0_12px_32px_-12px_rgba(15,23,42,0.12)]">
+    <div className={`min-h-[40vh] flex items-center justify-center text-muted-foreground text-sm ${workspaceNavbarCardClass}`}>
       Loading…
     </div>
   );
@@ -56,14 +56,14 @@ export default async function OrgSlugLayout({ children, params }) {
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm sm:text-base lg:justify-self-start leading-tight">
                 <Link
                   href="/o"
-                  className="font-normal text-gray-800 hover:text-[#5D3FD3] transition-colors"
+                  className="font-normal text-muted-foreground hover:text-[#5D3FD3] dark:hover:text-indigo-400 transition-colors"
                 >
                   Workspaces
                 </Link>
-                <span className="text-gray-400 select-none font-normal" aria-hidden>
+                <span className="text-muted-foreground select-none font-normal" aria-hidden>
                   /
                 </span>
-                <span className="font-bold text-gray-900 tracking-tight">{org.name}</span>
+                <span className="font-bold text-foreground tracking-tight">{org.name}</span>
               </div>
 
               <div className="flex justify-start lg:justify-center min-w-0">

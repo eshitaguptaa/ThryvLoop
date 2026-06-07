@@ -99,14 +99,6 @@ export const SPACES_CATALOG = [
     category: 'urban',
   },
   {
-    id: 12,
-    name: 'New York City Night',
-    image: 'https://img.youtube.com/vi/23uRPFhhwNU/maxresdefault.jpg',
-    videoId: '23uRPFhhwNU',
-    badge: '4K HDR',
-    category: 'urban',
-  },
-  {
     id: 13,
     name: 'Cherry Blossoms',
     image: 'https://img.youtube.com/vi/Q4MIOG1BpU0/maxresdefault.jpg',

@@ -7,7 +7,7 @@ import { workspacePrimaryButtonClass } from '@/components/b2b/workspaceShellClas
 const initialState = { error: null };
 
 const inputClass =
-  'w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#5D3FD3]/35';
+  'w-full rounded-xl border border-border bg-card px-4 py-2.5 text-foreground placeholder:text-muted-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-[#5D3FD3]/35';
 
 export default function CreateWorkspaceForm() {
   const [state, formAction, pending] = useActionState(createWorkspace, initialState);
@@ -15,7 +15,7 @@ export default function CreateWorkspaceForm() {
   return (
     <form action={formAction} className="space-y-4">
       <div>
-        <label htmlFor="workspace-name" className="block text-sm font-semibold text-gray-700 mb-1.5">
+        <label htmlFor="workspace-name" className="block text-sm font-semibold text-foreground mb-1.5">
           Company or team name
         </label>
         <input

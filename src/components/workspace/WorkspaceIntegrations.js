@@ -138,26 +138,26 @@ export default function WorkspaceIntegrations({
 
   const cardClass = embedded
     ? 'rounded-2xl border border-white/[0.06] bg-[#141416]/80 overflow-hidden backdrop-blur-sm'
-    : 'bg-white rounded-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.12)] border border-gray-100/80 overflow-hidden';
+    : 'bg-card rounded-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.12)] border border-border overflow-hidden';
 
   return (
     <section className={embedded ? cardClass : `max-w-lg mx-auto ${cardClass}`}>
-      <div className={embedded ? 'p-6 pb-4 border-b border-white/[0.06]' : 'px-6 sm:px-8 pt-8 pb-6 border-b border-gray-50'}>
+      <div className={embedded ? 'p-6 pb-4 border-b border-white/[0.06]' : 'px-6 sm:px-8 pt-8 pb-6 border-b border-border'}>
         <div className="flex items-start gap-4">
           <div
             className={
               embedded
                 ? 'shrink-0 w-12 h-12 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center'
-                : 'shrink-0 w-12 h-12 rounded-xl bg-white shadow-md border border-gray-100 flex items-center justify-center'
+                : 'shrink-0 w-12 h-12 rounded-xl bg-card shadow-md border border-border flex items-center justify-center'
             }
           >
             {GOOGLE_ICON}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className={`text-base font-semibold ${embedded ? 'text-white' : 'text-gray-900'}`}>
+            <h3 className={`text-base font-semibold ${embedded ? 'text-white' : 'text-foreground'}`}>
               Google Workspace
             </h3>
-            <p className={`text-sm mt-1 leading-relaxed ${embedded ? 'text-white/50' : 'text-gray-500'}`}>
+            <p className={`text-sm mt-1 leading-relaxed ${embedded ? 'text-white/50' : 'text-muted-foreground'}`}>
               Calendar meetings and unread Gmail on your dashboard.
             </p>
           </div>
@@ -181,23 +181,23 @@ export default function WorkspaceIntegrations({
       ) : null}
 
       {loading ? (
-        <div className={`flex justify-center py-12 ${embedded ? 'text-white/40' : 'text-gray-400'}`}>
+        <div className={`flex justify-center py-12 ${embedded ? 'text-white/40' : 'text-muted-foreground'}`}>
           <Loader2 className="w-7 h-7 animate-spin" />
         </div>
       ) : (
         <>
-          <div className={embedded ? 'px-6 py-4 border-b border-white/[0.06]' : 'px-6 sm:px-8 py-4 border-b border-gray-50'}>
+          <div className={embedded ? 'px-6 py-4 border-b border-white/[0.06]' : 'px-6 sm:px-8 py-4 border-b border-border'}>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className={`text-xs font-semibold uppercase tracking-wider ${embedded ? 'text-white/40' : 'text-gray-400'}`}>
+                <p className={`text-xs font-semibold uppercase tracking-wider ${embedded ? 'text-white/40' : 'text-muted-foreground'}`}>
                   Account
                 </p>
                 {isConnected ? (
-                  <p className={`text-sm font-semibold mt-1 truncate ${embedded ? 'text-white' : 'text-gray-900'}`}>
+                  <p className={`text-sm font-semibold mt-1 truncate ${embedded ? 'text-white' : 'text-foreground'}`}>
                     {connection.account_email}
                   </p>
                 ) : (
-                  <p className={`text-sm font-medium mt-1 ${embedded ? 'text-white/40' : 'text-gray-400'}`}>
+                  <p className={`text-sm font-medium mt-1 ${embedded ? 'text-white/40' : 'text-muted-foreground'}`}>
                     Not connected
                   </p>
                 )}
@@ -214,7 +214,7 @@ export default function WorkspaceIntegrations({
               ) : (
                 <span
                   className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full shrink-0 ${
-                    embedded ? 'text-white/50 bg-white/[0.06]' : 'text-gray-500 bg-gray-100'
+                    embedded ? 'text-white/50 bg-white/[0.06]' : 'text-muted-foreground bg-muted'
                   }`}
                 >
                   <Sparkles size={14} />
@@ -223,7 +223,7 @@ export default function WorkspaceIntegrations({
               )}
             </div>
             {connection?.last_synced_at ? (
-              <p className={`text-xs mt-3 ${embedded ? 'text-white/35' : 'text-gray-400'}`}>
+              <p className={`text-xs mt-3 ${embedded ? 'text-white/35' : 'text-muted-foreground'}`}>
                 Last synced {new Date(connection.last_synced_at).toLocaleString()}
               </p>
             ) : null}
@@ -248,10 +248,10 @@ export default function WorkspaceIntegrations({
               className={
                 embedded
                   ? 'px-6 py-3 bg-white/[0.03] border-b border-white/[0.06]'
-                  : 'px-6 sm:px-8 py-4 bg-gray-50/80 border-b border-gray-100'
+                  : 'px-6 sm:px-8 py-4 bg-muted/80 border-b border-border'
               }
             >
-              <p className={`text-sm leading-relaxed ${embedded ? 'text-white/70' : 'text-gray-700'}`}>
+              <p className={`text-sm leading-relaxed ${embedded ? 'text-white/70' : 'text-foreground'}`}>
                 {syncErrorDisplay}
               </p>
               {apiFixes.length > 0 ? (
@@ -295,7 +295,7 @@ export default function WorkspaceIntegrations({
                   className={`inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-medium disabled:opacity-50 transition-colors ${
                     embedded
                       ? 'border border-white/10 text-white/70 hover:bg-white/[0.06]'
-                      : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      : 'border border-border text-muted-foreground hover:bg-muted/60'
                   }`}
                 >
                   {disconnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink size={16} />}
@@ -308,7 +308,7 @@ export default function WorkspaceIntegrations({
                 className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-semibold transition-colors ${
                   embedded
                     ? 'bg-white text-gray-900 hover:bg-white/90'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                    : 'bg-foreground text-background hover:bg-foreground/90'
                 }`}
               >
                 Connect with Google
@@ -316,7 +316,7 @@ export default function WorkspaceIntegrations({
             )}
           </div>
 
-          <ul className={`px-6 pb-6 text-xs space-y-1 ${embedded ? 'text-white/35' : 'text-gray-400'}`}>
+          <ul className={`px-6 pb-6 text-xs space-y-1 ${embedded ? 'text-white/35' : 'text-muted-foreground'}`}>
             <li>· Calendar — meetings & availability</li>
             <li>· Gmail — unread messages in alerts</li>
           </ul>

@@ -24,6 +24,14 @@ import {
   localMinutesFromMidnight,
 } from '@/lib/calendarDateUtils';
 import { layoutDayEventsForGrid } from '@/lib/calendarEventLayout';
+import {
+  appSurfaceClass,
+  appSurfaceInsetClass,
+  appContentClass,
+  appPageTitleClass,
+  appEyebrowClass,
+  appMutedTextClass,
+} from '@/lib/appShellClasses';
 
 const HOUR_START = 0;
 const HOUR_END = 23;
@@ -348,13 +356,13 @@ export default function WorkspaceCalendarView() {
   const gridBodyHeight = gridHeight + TIME_GRID_INSET * 2;
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] text-[#1A1A1A] px-4 pt-2 pb-8 sm:px-6 sm:pt-4 md:px-8 lg:px-12 font-(--font-poppins)">
-      <div className="max-w-[1920px] mx-auto">
+    <div className={`${appSurfaceClass} ${appSurfaceInsetClass} font-(--font-poppins)`}>
+      <div className={`${appContentClass} max-w-[1920px]`}>
         <header className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <p className="text-indigo-500 text-xs font-semibold uppercase tracking-widest mb-2">Schedule</p>
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Calendar</h1>
-            <p className="text-sm text-gray-500 mt-1 font-medium">
+            <p className={appEyebrowClass}>Schedule</p>
+            <h1 className={`${appPageTitleClass} sm:text-4xl`}>Calendar</h1>
+            <p className="text-sm text-muted-foreground mt-1 font-medium">
               {hasConnection && accountEmail
                 ? `ThryvLoop events sync to Google (${accountEmail})`
                 : 'Schedule in ThryvLoop — connect Google to push events and import meetings'}
@@ -372,26 +380,26 @@ export default function WorkspaceCalendarView() {
             <button
               type="button"
               onClick={goToday}
-              className="px-4 py-2.5 rounded-xl border-2 border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm hover:shadow-md transition-all"
+              className="px-4 py-2.5 rounded-xl border-2 border-border bg-card text-sm font-semibold text-foreground hover:bg-muted/60 shadow-sm hover:shadow-md transition-all"
             >
               Today
             </button>
-            <div className="flex items-center rounded-xl border-2 border-gray-200 bg-white shadow-sm hover:shadow-md overflow-hidden transition-shadow">
+            <div className="flex items-center rounded-xl border-2 border-border bg-card shadow-sm hover:shadow-md overflow-hidden transition-shadow">
               <button
                 type="button"
                 onClick={() => setWeekStart((w) => addDays(w, -7))}
-                className="p-2.5 hover:bg-gray-50 text-gray-600 transition-colors"
+                className="p-2.5 hover:bg-muted/60 text-muted-foreground transition-colors"
                 aria-label="Previous week"
               >
                 <ChevronLeft size={18} />
               </button>
-              <span className="px-3 sm:px-4 text-sm font-semibold text-gray-800 min-w-[10rem] text-center">
+              <span className="px-3 sm:px-4 text-sm font-semibold text-foreground min-w-[10rem] text-center">
                 {formatWeekRange(weekStart)}
               </span>
               <button
                 type="button"
                 onClick={() => setWeekStart((w) => addDays(w, 7))}
-                className="p-2.5 hover:bg-gray-50 text-gray-600 transition-colors"
+                className="p-2.5 hover:bg-muted/60 text-muted-foreground transition-colors"
                 aria-label="Next week"
               >
                 <ChevronRight size={18} />
@@ -425,7 +433,7 @@ export default function WorkspaceCalendarView() {
           </div>
         ) : null}
 
-        <p className="mb-4 text-xs text-gray-500 font-medium hidden sm:block">
+        <p className="mb-4 text-xs text-muted-foreground font-medium hidden sm:block">
           Tip: click any empty time in the week view to schedule · ThryvLoop events push to Google when connected
         </p>
 
@@ -463,16 +471,16 @@ export default function WorkspaceCalendarView() {
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(168px,188px)_minmax(0,1fr)_minmax(220px,248px)] gap-4 sm:gap-5 xl:gap-4">
             {/* Mini month */}
-            <aside className="bg-white rounded-2xl border-2 border-gray-100/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-3 sm:p-4 h-fit self-start xl:sticky xl:top-6 xl:max-w-[188px]">
+            <aside className="bg-card rounded-2xl border-2 border-border/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-3 sm:p-4 h-fit self-start xl:sticky xl:top-6 xl:max-w-[188px]">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-sm font-bold text-gray-900">{formatMonthYear(selectedDay)}</p>
+                <p className="text-sm font-bold text-foreground">{formatMonthYear(selectedDay)}</p>
                 <div className="flex gap-0.5">
                   <button
                     type="button"
                     onClick={() =>
                       setSelectedDay((d) => new Date(d.getFullYear(), d.getMonth() - 1, d.getDate()))
                     }
-                    className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
+                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground"
                     aria-label="Previous month"
                   >
                     <ChevronLeft size={16} />
@@ -482,14 +490,14 @@ export default function WorkspaceCalendarView() {
                     onClick={() =>
                       setSelectedDay((d) => new Date(d.getFullYear(), d.getMonth() + 1, d.getDate()))
                     }
-                    className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
+                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground"
                     aria-label="Next month"
                   >
                     <ChevronRight size={16} />
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-7 gap-0.5 text-[10px] font-semibold text-gray-400 uppercase mb-1">
+              <div className="grid grid-cols-7 gap-0.5 text-[10px] font-semibold text-muted-foreground uppercase mb-1">
                 {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((l) => (
                   <span key={l} className="text-center py-1">
                     {l}
@@ -514,8 +522,8 @@ export default function WorkspaceCalendarView() {
                         selected
                           ? 'bg-[#615FFF] text-white shadow-md'
                           : inMonth
-                            ? 'text-gray-800 hover:bg-indigo-50'
-                            : 'text-gray-300 hover:bg-gray-50'
+                            ? 'text-foreground hover:bg-indigo-50'
+                            : 'text-muted-foreground/40 hover:bg-muted/60'
                       } ${isToday && !selected ? 'ring-2 ring-indigo-300 ring-offset-1' : ''}`}
                     >
                       {day.getDate()}
@@ -527,22 +535,22 @@ export default function WorkspaceCalendarView() {
                 })}
               </div>
               {lastSyncedAt ? (
-                <p className="text-[10px] text-gray-400 mt-4 text-center">
+                <p className="text-[10px] text-muted-foreground mt-4 text-center">
                   Last sync {new Date(lastSyncedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                 </p>
               ) : null}
             </aside>
 
             {/* Week grid — click empty cells to create at that time (30-min snap, 1 hr default) */}
-            <section className="bg-white rounded-2xl border-2 border-gray-100/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] overflow-hidden min-h-[480px]">
+            <section className="bg-card rounded-2xl border-2 border-border/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] overflow-hidden min-h-[480px]">
               {loading ? (
-                <div className="flex items-center justify-center py-32 text-gray-400">
+                <div className="flex items-center justify-center py-32 text-muted-foreground">
                   <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-[52px_repeat(7,1fr)] border-b border-gray-100 bg-gradient-to-r from-slate-50/80 to-white">
-                    <div className="border-r border-gray-100" />
+                  <div className="grid grid-cols-[52px_repeat(7,1fr)] border-b border-border bg-gradient-to-r from-muted/80 to-card">
+                    <div className="border-r border-border" />
                     {weekDays.map((day) => {
                       const isToday = isSameDay(day, now);
                       const selected = isSameDay(day, selectedDay);
@@ -551,16 +559,16 @@ export default function WorkspaceCalendarView() {
                           key={day.toISOString()}
                           type="button"
                           onClick={() => setSelectedDay(startOfDay(day))}
-                          className={`py-3 px-1 text-center border-r border-gray-100 last:border-r-0 transition-colors ${
-                            selected ? 'bg-indigo-50/80' : 'hover:bg-gray-50/80'
+                          className={`py-3 px-1 text-center border-r border-border last:border-r-0 transition-colors ${
+                            selected ? 'bg-indigo-50/80' : 'hover:bg-muted/60/80'
                           }`}
                         >
-                          <p className="text-[10px] font-semibold uppercase text-gray-400">
+                          <p className="text-[10px] font-semibold uppercase text-muted-foreground">
                             {day.toLocaleDateString([], { weekday: 'short' })}
                           </p>
                           <p
                             className={`text-lg font-bold mt-0.5 tabular-nums ${
-                              isToday ? 'text-[#615FFF]' : 'text-gray-900'
+                              isToday ? 'text-[#615FFF]' : 'text-foreground'
                             }`}
                           >
                             {day.getDate()}
@@ -571,14 +579,14 @@ export default function WorkspaceCalendarView() {
                   </div>
 
                   <div className="grid grid-cols-[52px_repeat(7,1fr)] overflow-x-auto overflow-y-auto max-h-[min(720px,70vh)] pb-1">
-                    <div className="border-r border-gray-100 relative" style={{ height: gridBodyHeight }}>
+                    <div className="border-r border-border relative" style={{ height: gridBodyHeight }}>
                       {HOURS.map((h) => {
                         const isFirst = h === HOUR_START;
                         const isLast = h === HOUR_END;
                         return (
                         <div
                           key={h}
-                          className={`absolute left-0 right-0 text-[10px] text-gray-400 font-medium pr-2 text-right leading-none ${
+                          className={`absolute left-0 right-0 text-[10px] text-muted-foreground font-medium pr-2 text-right leading-none ${
                             isFirst ? 'translate-y-0' : isLast ? '-translate-y-full' : '-translate-y-1/2'
                           }`}
                           style={{ top: TIME_GRID_INSET + (h - HOUR_START) * HOUR_HEIGHT }}
@@ -598,7 +606,7 @@ export default function WorkspaceCalendarView() {
                       return (
                         <div
                           key={day.toISOString()}
-                          className={`relative border-r border-gray-100 last:border-r-0 group/col cursor-pointer ${
+                          className={`relative border-r border-border last:border-r-0 group/col cursor-pointer ${
                             isSameDay(day, selectedDay) ? 'bg-indigo-50/20' : ''
                           }`}
                           style={{ height: gridBodyHeight }}
@@ -621,7 +629,7 @@ export default function WorkspaceCalendarView() {
                           {HOURS.map((h) => (
                             <div
                               key={h}
-                              className="absolute left-0 right-0 border-t border-gray-100/80 pointer-events-none"
+                              className="absolute left-0 right-0 border-t border-border/80 pointer-events-none"
                               style={{ top: TIME_GRID_INSET + (h - HOUR_START) * HOUR_HEIGHT }}
                             />
                           ))}
@@ -668,7 +676,7 @@ export default function WorkspaceCalendarView() {
                                 }}
                                 className={`absolute z-10 rounded-lg px-1 py-1 text-left overflow-hidden border transition-shadow hover:shadow-md hover:z-20 pointer-events-auto ${
                                   isFree
-                                    ? 'bg-gray-50/95 border-gray-200/80 border-dashed text-gray-600'
+                                    ? 'bg-gray-50/95 border-border/80 border-dashed text-muted-foreground'
                                     : isLive
                                       ? isApp
                                         ? 'bg-gradient-to-br from-violet-100 to-indigo-50 border-violet-300/80 text-violet-950 ring-1 ring-violet-200/60'
@@ -707,12 +715,12 @@ export default function WorkspaceCalendarView() {
             </section>
 
             {/* Day agenda */}
-            <aside className="bg-white rounded-2xl border-2 border-gray-100/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-3 sm:p-4 h-fit self-start xl:sticky xl:top-6 xl:max-w-[248px]">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Agenda</p>
-              <h2 className="text-lg font-bold text-gray-900">
+            <aside className="bg-card rounded-2xl border-2 border-border/60 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-3 sm:p-4 h-fit self-start xl:sticky xl:top-6 xl:max-w-[248px]">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Agenda</p>
+              <h2 className="text-lg font-bold text-foreground">
                 {selectedDay.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
               </h2>
-              <p className="text-xs text-gray-500 mt-1 mb-3">
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
                 {selectedDayEvents.length} event{selectedDayEvents.length === 1 ? '' : 's'}
                 {appEventCount > 0 ? ` · ${appEventCount} in ThryvLoop this week` : ''}
               </p>
@@ -726,7 +734,7 @@ export default function WorkspaceCalendarView() {
               </button>
 
               {selectedDayEvents.length === 0 ? (
-                <p className="text-sm text-gray-400 py-8 text-center">Nothing scheduled</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">Nothing scheduled</p>
               ) : (
                 <ul className="space-y-2.5 max-h-[min(70vh,520px)] overflow-y-auto scrollbar-none pr-0.5">
                   {selectedDayEvents.map((ev) => {
@@ -745,18 +753,18 @@ export default function WorkspaceCalendarView() {
                               ? 'border-violet-200/80 bg-violet-50/50'
                               : 'border-amber-200/80 bg-amber-50/50'
                             : ev.showAs === 'free'
-                              ? 'border-gray-200 bg-gray-50/50'
+                              ? 'border-border bg-gray-50/50'
                               : isApp
                                 ? 'border-violet-100/80 bg-violet-50/30'
                                 : 'border-indigo-100/80 bg-indigo-50/30'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-gray-900 leading-snug flex-1">{ev.title}</p>
+                          <p className="text-sm font-semibold text-foreground leading-snug flex-1">{ev.title}</p>
                           <button
                             type="button"
                             onClick={() => openEventModal(ev)}
-                            className="shrink-0 p-1.5 rounded-lg hover:bg-white/80 text-gray-500 hover:text-gray-800"
+                            className="shrink-0 p-1.5 rounded-lg hover:bg-card/80 text-muted-foreground hover:text-foreground"
                             aria-label={ev.editable ? 'Edit event' : 'View event'}
                           >
                             <Pencil size={14} />
@@ -765,10 +773,10 @@ export default function WorkspaceCalendarView() {
                         {isApp ? (
                           <p className="text-[10px] font-semibold text-violet-600 mt-0.5 uppercase tracking-wide">ThryvLoop</p>
                         ) : null}
-                        <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
                           <Clock size={12} className="shrink-0" />
                           {formatTime(ev.startsAt)} – {formatTime(ev.endsAt)}
-                          <span className="text-gray-400">· {duration}m</span>
+                          <span className="text-muted-foreground">· {duration}m</span>
                         </p>
                         {ev.isOnlineMeeting ? (
                           <p className="text-[10px] font-medium text-indigo-600 mt-1 flex items-center gap-1">

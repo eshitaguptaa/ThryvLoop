@@ -57,13 +57,13 @@ export default function MembersListClient({ members, title }) {
     <>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-4 sm:mb-5">
         {title ? (
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 shrink-0 tracking-tight">
+          <h2 className="text-base sm:text-lg font-semibold text-foreground shrink-0 tracking-tight">
             {title}
           </h2>
         ) : null}
         <div className="relative w-full lg:max-w-md lg:ml-auto">
           <Search
-            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden
           />
           <input
@@ -71,7 +71,7 @@ export default function MembersListClient({ members, title }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search members..."
-            className="w-full rounded-full border border-slate-200/90 bg-white py-2.5 pl-11 pr-4 text-sm text-gray-900 shadow-[0_1px_2px_rgba(15,23,42,0.05)] placeholder:text-gray-400 focus:border-[#5D3FD3]/40 focus:outline-none focus:ring-2 focus:ring-[#5D3FD3]/22"
+            className="w-full rounded-full border border-border bg-card py-2.5 pl-11 pr-4 text-sm text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)] placeholder:text-muted-foreground focus:border-[#5D3FD3]/40 focus:outline-none focus:ring-2 focus:ring-[#5D3FD3]/22"
             aria-label="Search members"
           />
         </div>
@@ -79,7 +79,7 @@ export default function MembersListClient({ members, title }) {
 
       {filtered.length > 0 ? (
         <div className={`${workspaceCardClass} overflow-hidden`}>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border">
             {filtered.map((m, i) => {
               const { name, email } = memberDisplayName(m);
               const roleLabel =
@@ -96,15 +96,15 @@ export default function MembersListClient({ members, title }) {
                       {initials(name, email || m.publicUserData?.userId)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm sm:text-base font-semibold text-gray-900 truncate">{name}</p>
+                      <p className="text-sm sm:text-base font-semibold text-foreground truncate">{name}</p>
                       {email ? (
-                        <p className="text-xs sm:text-sm text-gray-500 truncate mt-0.5">{email}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground truncate mt-0.5">{email}</p>
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-slate-50/90 px-3.5 py-2 text-sm font-medium text-gray-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                  <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-3.5 py-2 text-sm font-medium text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)]">
                     {roleLabel}
-                    <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" aria-hidden />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
                   </div>
                 </li>
               );
@@ -115,7 +115,7 @@ export default function MembersListClient({ members, title }) {
 
       {filtered.length === 0 ? (
         <div
-          className={`${workspaceCardClass} px-5 py-10 sm:px-6 text-center text-sm text-gray-500`}
+          className={`${workspaceCardClass} px-5 py-10 sm:px-6 text-center text-sm text-muted-foreground`}
         >
           {members.length > 0 ? 'No members match your search.' : 'No members in this workspace yet.'}
         </div>

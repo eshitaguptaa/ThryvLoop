@@ -7,7 +7,11 @@ import MembersListClient from '@/components/b2b/MembersListClient';
 import RevokeInviteButton from '@/components/b2b/RevokeInviteButton';
 import {
   workspaceCardClass,
+  workspaceEyebrowClass,
+  workspaceMutedLinkClass,
+  workspaceMutedTextClass,
   workspacePageTitleClass,
+  workspaceSectionTitleClass,
 } from '@/components/b2b/workspaceShellClasses';
 import {
   getMembershipForSlug,
@@ -57,11 +61,11 @@ export default async function MembersPage({ params }) {
 
   return (
     <div className="w-full">
-      <p className="text-[#5D3FD3] text-xs font-semibold uppercase tracking-widest mb-2">Workspace</p>
+      <p className={workspaceEyebrowClass}>Workspace</p>
       <h1 className={workspacePageTitleClass}>Members</h1>
-      <p className="text-gray-600 text-base sm:text-lg mt-3 max-w-3xl leading-relaxed">
+      <p className={`${workspaceMutedTextClass} text-base sm:text-lg mt-3 max-w-3xl leading-relaxed`}>
         Manage who has access to{' '}
-        <strong className="text-gray-900 font-semibold">{org.name}</strong>.
+        <strong className="text-foreground font-semibold">{org.name}</strong>.
       </p>
 
       {admin ? (
@@ -70,7 +74,7 @@ export default async function MembersPage({ params }) {
         </div>
       ) : (
         <p
-          className="mt-8 text-sm sm:text-base text-amber-900/90 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5 sm:px-5 sm:py-4 shadow-sm font-medium leading-relaxed max-w-3xl"
+          className="mt-8 text-sm sm:text-base text-amber-900/90 dark:text-amber-200 rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-950/40 px-4 py-3.5 sm:px-5 sm:py-4 shadow-sm font-medium leading-relaxed max-w-3xl"
         >
           Only admins can invite teammates. Ask a workspace admin to send you an invite or promote your
           role in Clerk.
@@ -79,10 +83,10 @@ export default async function MembersPage({ params }) {
 
       {admin && invitations.length > 0 ? (
         <section className="mt-10 sm:mt-12">
-          <h2 className="text-base font-semibold text-gray-900 mb-4 tracking-tight">
+          <h2 className={`${workspaceSectionTitleClass} text-base mb-4 tracking-tight`}>
             Pending invites ({invitations.length})
           </h2>
-          <div className={`${workspaceCardClass} divide-y divide-slate-100 overflow-hidden`}>
+          <div className={`${workspaceCardClass} divide-y divide-border overflow-hidden`}>
             {invitations.map((inv) => (
               <div
                 key={inv.id}
@@ -93,16 +97,16 @@ export default async function MembersPage({ params }) {
                     <Mail className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    <p className="text-sm sm:text-base font-semibold text-foreground truncate">
                       {inv.emailAddress}
                     </p>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                    <p className={`text-xs sm:text-sm ${workspaceMutedTextClass} mt-0.5`}>
                       {formatInvitedAgo(inv.createdAt)}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-gray-700 border border-slate-200/80">
+                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground border border-border">
                     {formatRole(inv.role)}
                   </span>
                   <RevokeInviteButton orgSlug={org.slug} invitationId={inv.id} />
@@ -122,7 +126,7 @@ export default async function MembersPage({ params }) {
 
       <Link
         href={`/o/${encodeURIComponent(org.slug)}`}
-        className="inline-block mt-10 sm:mt-12 text-sm sm:text-base font-medium text-gray-500 hover:text-[#5D3FD3] transition-colors"
+        className={`inline-block mt-10 sm:mt-12 text-sm sm:text-base font-medium ${workspaceMutedLinkClass}`}
       >
         ← Workspace overview
       </Link>

@@ -43,7 +43,7 @@ export default function GmailCalendarShowcase() {
   };
 
   return (
-    <div className="group relative overflow-hidden rounded-3xl bg-white border border-gray-100 shadow-xl shadow-gray-100/50 hover:shadow-2xl hover:shadow-blue-400/10 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
+    <div className="group relative overflow-hidden rounded-3xl bg-card border border-border shadow-xl shadow-gray-100/50 dark:shadow-black/30 hover:shadow-2xl hover:shadow-blue-400/10 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
       <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-3xl pointer-events-none group-hover:bg-blue-400/15 transition-colors" />
 
       <div className="p-8 pb-4 relative z-10">
@@ -53,8 +53,8 @@ export default function GmailCalendarShowcase() {
       </div>
 
       <div className="flex-grow px-6 pb-6 pt-0 relative z-10">
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col shadow-sm group-hover:shadow-md transition-shadow h-full">
-          <div className="h-9 bg-gray-50/90 border-b border-gray-100 flex items-center px-4 gap-2">
+        <div className="bg-card rounded-2xl border border-border overflow-hidden flex flex-col shadow-sm group-hover:shadow-md transition-shadow h-full">
+          <div className="h-9 bg-muted/90 border-b border-border flex items-center px-4 gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
             <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
@@ -176,31 +176,31 @@ export default function GmailCalendarShowcase() {
               <div
                 className={`flex-grow min-h-[52px] p-2.5 rounded-xl border shadow-sm transition-all duration-200 ${
                   mailOpen
-                    ? 'bg-white border-gray-200 translate-x-0.5 ring-1 ring-gray-100'
-                    : 'bg-white border-gray-100 group-hover/mail:translate-x-0.5 group-hover/mail:border-gray-200'
+                    ? 'bg-card border-border translate-x-0.5 ring-1 ring-border'
+                    : 'bg-card border-border group-hover/mail:translate-x-0.5 group-hover/mail:border-border'
                 }`}
               >
                 <div className="flex justify-between items-center gap-2 mb-1">
                   {mailOpen ? (
-                    <p className="text-xs font-bold text-gray-900 truncate">Sarah Chen</p>
+                    <p className="text-xs font-bold text-foreground truncate">Sarah Chen</p>
                   ) : (
                     <div className="h-2 w-16 bg-gray-800/80 rounded-full" />
                   )}
-                  <span className="text-[9px] text-gray-400 shrink-0 tabular-nums">10m ago</span>
+                  <span className="text-[9px] text-muted-foreground shrink-0 tabular-nums">10m ago</span>
                 </div>
                 {mailOpen ? (
                   <div className="space-y-1">
-                    <p className="text-[11px] font-semibold text-gray-800 leading-snug">
+                    <p className="text-[11px] font-semibold text-foreground leading-snug">
                       Re: Q4 roadmap review
                     </p>
-                    <p className="text-[10px] text-gray-500 leading-relaxed line-clamp-2">
+                    <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">
                       Can we sync before the client call tomorrow?
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    <div className="h-1.5 w-full bg-gray-100 rounded-full" />
-                    <div className="h-1.5 w-2/3 bg-gray-100 rounded-full" />
+                    <div className="h-1.5 w-full bg-muted rounded-full" />
+                    <div className="h-1.5 w-2/3 bg-muted rounded-full" />
                   </div>
                 )}
               </div>

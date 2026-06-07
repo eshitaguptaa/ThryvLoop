@@ -11,6 +11,7 @@ import FooterLanding from '@/components/landing_sections/FooterLanding';
 import Resources from '@/components/landing_sections/Resources';
 import Pricing from '@/components/landing_sections/Pricing';
 import { landingFont } from '@/lib/landingFont';
+import { scrollToLandingSection } from '@/lib/landingScroll';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -26,6 +27,16 @@ export default function LandingPage() {
       setIsAuthOpen(true);
     }
   }, [searchParams]);
+
+  // Scroll to section when landing with a hash (e.g. /#pricing)
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '');
+    if (!hash) return;
+    const timer = window.setTimeout(() => {
+      scrollToLandingSection(hash, 'auto');
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const openAuth = (mode) => {
     setInitialMode(mode);

@@ -1,14 +1,26 @@
 import Link from "next/link";
 import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
+import { SectionBlend } from '@/components/landing_sections/SectionBlend';
 
 // Define the custom structural classes, now relying on CSS variables for color values
-const cardClasses = "relative overflow-hidden bg-[var(--white)] border border-[var(--light)] rounded-4xl transition-all duration-300 ease-out hover:border-[var(--secondary)] hover:shadow-2xl hover:shadow-[var(--secondary)]/30 hover:-translate-y-2";
+const cardClasses = "relative overflow-hidden bg-card border border-border rounded-4xl transition-all duration-300 ease-out hover:border-[var(--secondary)] hover:shadow-2xl hover:shadow-[var(--secondary)]/30 hover:-translate-y-2";
 const iconBtnClasses = "flex items-center justify-center w-10 h-10 rounded-full bg-[var(--white)]/50 backdrop-blur-sm text-[var(--white)] transition-all duration-300 hover:bg-[var(--white)]/75 hover:scale-110";
 
 export default function Resources() {
   return (
     // Base colors using variables
-    <div className="relative min-h-screen w-full bg-[var(--white)] text-[var(--gray)] antialiased">
+    <div id="resources" className="relative w-full bg-background text-muted-foreground antialiased overflow-hidden">
+      {/* Top gradient wash */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[420px] z-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 90% 70% at 50% 0%, rgba(99,102,241,0.14), rgba(139,92,246,0.08), transparent 72%)',
+        }}
+      />
+      <SectionBlend position="top" fromColor="surface" toColor="transparent" size="md" />
+
       {/* Background Glows (Emphasizing Purple/Secondary) */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
         {/* Glow 1: Primary (Purple) */}
@@ -17,13 +29,13 @@ export default function Resources() {
         <div className="absolute bottom-0 right-0 w-[30rem] h-[30rem] bg-[var(--secondary)]/20 rounded-full blur-3xl opacity-50" />
       </div>
 
-      <main className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
+      <main className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-12 pb-12 sm:pt-14 sm:pb-14">
         {/* Header */}
-        <ScrollReveal as="header" className="text-center max-w-4xl mx-auto mb-20">
+        <ScrollReveal as="header" className="text-center max-w-4xl mx-auto mb-16">
           {/* UPDATED: LEARN & GET STARTED BADGE 
             The structure is replicated, using --primary for accent color and --light for borders/rings.
           */}
-          <div className="relative z-20 inline-flex items-center gap-2 rounded-full bg-[var(--white)]/70 px-4 py-1.5 text-xs font-semibold text-[var(--primary)] ring-1 ring-inset ring-[var(--light)] shadow-sm uppercase">
+          <div className="relative z-20 inline-flex items-center gap-2 rounded-full bg-card/70 px-4 py-1.5 text-xs font-semibold text-[var(--primary)] ring-1 ring-inset ring-border shadow-sm uppercase">
             <span className="relative flex h-2 w-2">
               {/* Pulsing effect using --primary */}
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--primary)] opacity-75"></span>
@@ -34,8 +46,11 @@ export default function Resources() {
           </div>
           
           {/* Header Gradient: Primary Dark via Secondary back to Primary Dark */}
-          <h1 className="mt-4 landing-display text-5xl sm:text-[3.5rem] text-neutral-900">
-            Unlock Your Potential
+          <h1 className="mt-4 landing-display text-5xl sm:text-[3.5rem] text-foreground">
+            Unlock Your{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5b4ded] to-[#3b82f6]">
+              Potential
+            </span>
           </h1>
           <p className="mt-6 landing-body text-lg sm:text-xl max-w-2xl mx-auto">
             Dive into our curated resources. Everything you need to master your
@@ -44,7 +59,7 @@ export default function Resources() {
         </ScrollReveal>
 
         {/* Main grid */}
-        <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" stagger={0.12}>
+        <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" stagger={0.07}>
           {/* Help Center Card */}
           <ScrollItem className="md:col-span-2 lg:col-span-2">
           <div className={`group h-full ${cardClasses} p-8 md:p-10 flex flex-col`}>
@@ -57,7 +72,7 @@ export default function Resources() {
               </div>
               <div>
                 {/* Title color: --dark */}
-                <h3 className="text-3xl font-bold tracking-tight text-[var(--dark)]">
+                <h3 className="text-3xl font-bold tracking-tight text-foreground">
                   Help Center
                 </h3>
                 {/* Secondary text color: --gray */}

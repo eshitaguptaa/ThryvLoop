@@ -304,16 +304,23 @@ export default function SpacesDrawer({ isOpen, onClose }) {
                 <h3 className="text-xl font-bold text-gray-900 mb-4 tracking-tight">
                   {selectedCategory === 'all' ? 'All Spaces' : `${categories.find(c => c.id === selectedCategory)?.name || ''} Spaces`}
                 </h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5 p-2">
                 {filteredSpaces.map((space) => {
                   const isSelected = backgroundVideoId === space.videoId;
                   return (
                     <div 
                       key={space.id} 
-                      className={`relative group cursor-pointer transition-all duration-200 ${isSelected ? 'ring-2 ring-[#5043F3] ring-offset-2 rounded-lg' : 'hover:scale-[1.02]'}`}
+                      className="group cursor-pointer"
                       onClick={() => handleVideoClick(space.videoId)}
                     >
-                      <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 shadow-md group-hover:shadow-xl transition-all duration-300">
+                      <div className={isSelected ? 'rounded-xl p-1.5' : 'rounded-xl p-0.5'}>
+                        <div
+                          className={`relative aspect-video rounded-lg overflow-hidden bg-gray-100 transition-all duration-300 ${
+                            isSelected
+                              ? 'ring-2 ring-[#5043F3] shadow-[0_0_0_1px_#5043F3,0_0_16px_4px_rgba(80,67,243,0.9),0_0_32px_8px_rgba(124,58,237,0.55)]'
+                              : 'shadow-md group-hover:scale-[1.02] group-hover:shadow-xl'
+                          }`}
+                        >
                         <img
                           src={getYouTubeThumbnail(space.videoId)}
                           alt={space.name}
@@ -321,20 +328,6 @@ export default function SpacesDrawer({ isOpen, onClose }) {
                           loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                        {space.badge && (
-                          <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-md shadow-lg">
-                            {space.badge}
-                          </div>
-                        )}
-                        {isSelected && (
-                          <div className="absolute inset-0 bg-[#5043F3]/30 flex items-center justify-center backdrop-blur-[2px]">
-                            <div className="bg-[#5043F3] rounded-full p-2.5 shadow-lg animate-pulse">
-                              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          </div>
-                        )}
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -356,8 +349,9 @@ export default function SpacesDrawer({ isOpen, onClose }) {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                           </svg>
                         </button>
+                        </div>
                       </div>
-                      <p className={`mt-2.5 text-sm font-semibold line-clamp-1 transition-colors ${isSelected ? 'text-[#5043F3]' : 'text-gray-900'}`}>{space.name}</p>
+                      <p className={`mt-2 text-sm font-semibold line-clamp-1 transition-colors ${isSelected ? 'text-[#5043F3]' : 'text-gray-900'}`}>{space.name}</p>
                     </div>
                   );
                 })}
@@ -382,16 +376,23 @@ export default function SpacesDrawer({ isOpen, onClose }) {
               <div className="mb-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-4 tracking-tight">Favorite Spaces</h3>
                 {filteredSpaces.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-5 p-2">
                     {filteredSpaces.map((space) => {
                       const isSelected = backgroundVideoId === space.videoId;
                       return (
                         <div 
                           key={space.id} 
-                          className={`relative group cursor-pointer transition-all duration-200 ${isSelected ? 'ring-2 ring-[#5043F3] ring-offset-2 rounded-lg' : 'hover:scale-[1.02]'}`}
+                          className="group cursor-pointer"
                           onClick={() => handleVideoClick(space.videoId)}
                         >
-                          <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 shadow-md group-hover:shadow-xl transition-all duration-300">
+                          <div className={isSelected ? 'rounded-xl p-1.5' : 'rounded-xl p-0.5'}>
+                            <div
+                              className={`relative aspect-video rounded-lg overflow-hidden bg-gray-100 transition-all duration-300 ${
+                                isSelected
+                                  ? 'ring-2 ring-[#5043F3] shadow-[0_0_0_1px_#5043F3,0_0_16px_4px_rgba(80,67,243,0.9),0_0_32px_8px_rgba(124,58,237,0.55)]'
+                                  : 'shadow-md group-hover:scale-[1.02] group-hover:shadow-xl'
+                              }`}
+                            >
                             <img
                               src={getYouTubeThumbnail(space.videoId)}
                               alt={space.name}
@@ -399,20 +400,6 @@ export default function SpacesDrawer({ isOpen, onClose }) {
                               loading="lazy"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                            {space.badge && (
-                              <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-md shadow-lg">
-                                {space.badge}
-                              </div>
-                            )}
-                            {isSelected && (
-                              <div className="absolute inset-0 bg-[#5043F3]/30 flex items-center justify-center backdrop-blur-[2px]">
-                                <div className="bg-[#5043F3] rounded-full p-2.5 shadow-lg animate-pulse">
-                                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                </div>
-                              </div>
-                            )}
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -429,8 +416,9 @@ export default function SpacesDrawer({ isOpen, onClose }) {
                                 <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                               </svg>
                             </button>
+                            </div>
                           </div>
-                          <p className={`mt-2.5 text-sm font-semibold line-clamp-1 transition-colors ${isSelected ? 'text-[#5043F3]' : 'text-gray-900'}`}>{space.name}</p>
+                          <p className={`mt-2 text-sm font-semibold line-clamp-1 transition-colors ${isSelected ? 'text-[#5043F3]' : 'text-gray-900'}`}>{space.name}</p>
                         </div>
                       );
                     })}
@@ -455,51 +443,9 @@ export default function SpacesDrawer({ isOpen, onClose }) {
           {currentSpace ? (
             <>
               {/* Current Video Info */}
-              <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2.5">
-                  <span className="text-sm font-bold text-gray-900">{currentSpace.name}</span>
-                  {currentSpace.badge && (
-                    <span className="bg-[#5043F3] text-white text-xs font-semibold px-2.5 py-1 rounded-md shadow-sm">{currentSpace.badge}</span>
-                  )}
-            </div>
-            <div className="flex items-center gap-3">
-              <button className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg p-1.5 transition-all duration-200">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-              </button>
-              <button 
-                onClick={() => {
-                  if (currentSpace) {
-                    toggleFavorite(currentSpace.videoId);
-                  }
-                }}
-                className={`p-1.5 rounded-lg transition-all duration-200 ${
-                  currentSpace && isFavorite(currentSpace.videoId)
-                    ? 'text-red-500 hover:text-red-600 hover:bg-red-50'
-                    : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
-                }`}
-                title={currentSpace && isFavorite(currentSpace.videoId) ? "Remove from favorites" : "Add to favorites"}
-              >
-                <svg 
-                  className="w-5 h-5" 
-                  fill={currentSpace && isFavorite(currentSpace.videoId) ? "currentColor" : "none"} 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-[#5043F3] font-medium mb-4">
-            <span>@Community</span>
-            <button className="text-gray-400 hover:text-gray-600 transition-colors">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-              </svg>
-            </button>
-          </div>
+              <div className="flex items-center gap-2.5 mb-4">
+                <span className="text-sm font-bold text-gray-900">{currentSpace.name}</span>
+              </div>
               {/* Volume Controls */}
           <div className="flex items-center gap-4">
                 <button 
@@ -519,7 +465,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
                 </button>
                 <div className="flex-1 flex items-center gap-4">
                   <div 
-                    className="flex-1 h-0.5 bg-slate-200 rounded-full relative cursor-pointer group"
+                    className="group relative h-0.5 flex-1 cursor-pointer rounded-full bg-slate-200"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       const slider = e.currentTarget;
@@ -547,19 +493,19 @@ export default function SpacesDrawer({ isOpen, onClose }) {
                     }}
                   >
                     <div 
-                      className="absolute left-0 top-0 h-full bg-[#5043F3] rounded-full"
+                      className="absolute left-0 top-0 h-full rounded-full bg-[#5043F3] shadow-[0_0_8px_rgba(80,67,243,0.75),0_0_16px_rgba(80,67,243,0.4)]"
                       style={{ width: `${volume}%`, transition: 'none' }}
-                    ></div>
+                    />
                     <div 
-                      className="absolute w-3.5 h-3.5 bg-[#5043F3] rounded-full -translate-y-1/2 top-1/2 cursor-pointer hover:bg-[#3d35c4] hover:scale-110 transition-transform opacity-0 group-hover:opacity-100 shadow-sm border border-white"
+                      className="absolute top-1/2 w-3.5 h-3.5 -translate-y-1/2 cursor-pointer rounded-full border border-white bg-[#5043F3] opacity-0 shadow-[0_0_8px_rgba(80,67,243,0.8)] transition-transform hover:scale-110 hover:bg-[#3d35c4] group-hover:opacity-100"
                       style={{ left: `calc(${volume}% - 7px)`, transition: 'left 0s' }}
-                    ></div>
+                    />
                     <div 
-                      className="absolute w-2.5 h-2.5 bg-[#5043F3] rounded-full -translate-y-1/2 top-1/2 cursor-pointer"
+                      className="absolute top-1/2 w-2.5 h-2.5 -translate-y-1/2 cursor-pointer rounded-full bg-[#5043F3] shadow-[0_0_6px_rgba(80,67,243,0.7)]"
                       style={{ left: `calc(${volume}% - 5px)`, transition: 'none' }}
-                    ></div>
+                    />
                   </div>
-                  <span className="flex-shrink-0 text-base font-medium text-slate-900 tabular-nums min-w-[3rem] text-right tracking-tight">{Math.round(volume)}%</span>
+                  <span className="min-w-[3rem] shrink-0 text-right text-base font-medium tabular-nums tracking-tight text-slate-900">{Math.round(volume)}%</span>
                 </div>
           </div>
             </>

@@ -3,7 +3,7 @@
 import { useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import Landing from '@/pages/Landing.js';
+import Landing from '@/components/landing/LandingPage';
 
 function LandingWrapper() {
   const router = useRouter();

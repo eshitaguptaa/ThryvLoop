@@ -169,14 +169,14 @@ export default function TasksShowcase() {
   };
 
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-3xl bg-white border border-gray-200 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-yellow-500/10 hover:-translate-y-1 transition-all duration-300 h-full">
+    <div className="group relative flex flex-col overflow-hidden rounded-3xl bg-card border border-border shadow-xl shadow-gray-200/50 dark:shadow-black/30 hover:shadow-2xl hover:shadow-yellow-500/10 hover:-translate-y-1 transition-all duration-300 h-full">
       <div className="absolute -top-10 -right-10 w-40 h-40 bg-yellow-400/30 rounded-full blur-3xl pointer-events-none group-hover:bg-yellow-400/40 transition-colors" />
 
       <div className="p-6 pb-2 relative z-10 flex justify-between items-start">
         <div className="flex items-center gap-3">
           <FeatureCardIcon icon="notifications" tone="amber" size="sm" fill={1} />
           <div>
-            <h3 className="text-base font-bold text-gray-900 leading-tight">Task Reminders</h3>
+            <h3 className="text-base font-bold text-foreground leading-tight">Task Reminders</h3>
             <p className="text-[#534f96] text-[10px] font-bold uppercase tracking-wider mt-0.5">
               {activeDay.focusLabel}
             </p>
@@ -185,7 +185,7 @@ export default function TasksShowcase() {
         <div className="relative h-12 w-12 flex items-center justify-center">
           <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 36 36">
             <path
-              className="text-gray-100"
+              className="text-gray-100 dark:text-muted"
               d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               fill="none"
               stroke="currentColor"
@@ -202,7 +202,7 @@ export default function TasksShowcase() {
             />
           </svg>
           <div className="absolute flex flex-col items-center justify-center leading-none">
-            <span className="text-[10px] font-black text-gray-900 tabular-nums">
+            <span className="text-[10px] font-black text-foreground tabular-nums">
               {doneCount}/{totalCount}
             </span>
           </div>
@@ -221,18 +221,18 @@ export default function TasksShowcase() {
                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 rounded-lg py-2 cursor-pointer transition-colors ${
                   active
                     ? 'bg-yellow-500 text-white shadow-md'
-                    : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 group/day'
+                    : 'bg-muted border border-border hover:bg-muted/80 group/day'
                 }`}
               >
                 <span
                   className={`text-[8px] font-bold uppercase tracking-wider ${
-                    active ? 'text-white' : 'text-gray-500 group-hover/day:text-gray-700'
+                    active ? 'text-white' : 'text-muted-foreground group-hover/day:text-foreground'
                   }`}
                 >
                   {day.label}
                 </span>
                 <span
-                  className={`${active ? 'text-sm font-black' : 'text-xs font-bold text-gray-700'}`}
+                  className={`${active ? 'text-sm font-black' : 'text-xs font-bold text-foreground'}`}
                 >
                   {day.dayNum}
                 </span>
@@ -251,14 +251,14 @@ export default function TasksShowcase() {
                 <button
                   type="button"
                   onClick={() => toggleTask(task.id)}
-                  className={`relative w-full text-left bg-white p-3 rounded-xl border-y border-r border-gray-200 shadow-sm transition-all hover:shadow-md ${
+                  className={`relative w-full text-left bg-card p-3 rounded-xl border-y border-r border-border shadow-sm transition-all hover:shadow-md ${
                     isDone ? 'border-l-[3px] border-l-gray-300 opacity-70' : 'border-l-[3px] border-l-red-500'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <div
                       className={`mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        isDone ? 'border-yellow-500 bg-yellow-500' : 'border-gray-300'
+                        isDone ? 'border-yellow-500 bg-yellow-500' : 'border-border'
                       }`}
                     >
                       {isDone && (
@@ -271,7 +271,7 @@ export default function TasksShowcase() {
                       <div className="flex justify-between items-start">
                         <span
                           className={`text-xs font-bold truncate pr-2 ${
-                            isDone ? 'text-gray-400 line-through' : 'text-gray-800'
+                            isDone ? 'text-muted-foreground line-through' : 'text-foreground'
                           }`}
                         >
                           {task.title}
@@ -292,12 +292,12 @@ export default function TasksShowcase() {
                             <div className="flex -space-x-1.5">
                               <img
                                 alt=""
-                                className="w-4 h-4 rounded-full border-2 border-white"
+                                className="w-4 h-4 rounded-full border-2 border-card"
                                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuAseiFl0rSt5HMITynLYhO0Ombv-FcnLQzh_FiYrY7VloTeq2sRz5lMMiEhpu4U9vdE9HWcSn1167d13uHLffdrGfZuL-pnrTip0JhuKwkuZEzYqtlcM5PFgnLyEgN-aod9F-YK569KsfnftAiVGvB099w_SQn967aAgY6SSwRoiXQJnsSAu3f6TyyQZrLr03V_nKOWa9NRVquX_W_3HDt5bdI13bNzF74zQOPFs0hQFkzZW0RrAIdTlv5q3hDuWa0N90bg_Im4gmU"
                               />
                               <img
                                 alt=""
-                                className="w-4 h-4 rounded-full border-2 border-white"
+                                className="w-4 h-4 rounded-full border-2 border-card"
                                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNmdYyH1_WPqA_X7UXNAXEZ9cBL9_WPv9ofLATXvfI-At0TcqHdHfANnSg_PYCt1D9Gs0tsh_15G6ZjHEWPV_l4vYUUbW7Z4J32pXhsICvT3a24DWjqJY4PI020QOXPN8iSjB_xcoN6DnUJ6Ve7hl4py3Qyrqlcus97KKfOGbP_r1vyguyI6bvlOnt6xv7MFSBXr2EogyTomXDjnkBRBGwtJ_t8jY3I4cCdz3T9UVm2NHTcYa76491T1pzikkjDFrtvmuEucTTNPY"
                               />
                             </div>
@@ -323,8 +323,8 @@ export default function TasksShowcase() {
                 onClick={() => toggleTask(task.id)}
                 className={`relative w-full text-left p-3 rounded-xl border transition-colors ${
                   isDone
-                    ? 'bg-gray-50 border-gray-200'
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    ? 'bg-muted border-border'
+                    : 'bg-muted border-border hover:bg-muted/80'
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -344,15 +344,15 @@ export default function TasksShowcase() {
                       <span
                         className={`text-xs font-semibold transition-all ${
                           isDone
-                            ? 'text-gray-500 line-through decoration-gray-400 decoration-2 group-hover/task:no-underline group-hover/task:text-gray-700'
-                            : 'text-gray-700'
+                            ? 'text-muted-foreground line-through decoration-muted-foreground decoration-2 group-hover/task:no-underline group-hover/task:text-foreground'
+                            : 'text-foreground'
                         }`}
                       >
                         {task.title}
                       </span>
                     </div>
                   </div>
-                  <div className="text-[10px] text-gray-500 font-medium flex items-center gap-1 shrink-0">
+                  <div className="text-[10px] text-muted-foreground font-medium flex items-center gap-1 shrink-0">
                     <MaterialSymbol icon={task.timeIcon} className="text-[12px]" fill={0} /> {task.time}
                   </div>
                 </div>
@@ -366,7 +366,7 @@ export default function TasksShowcase() {
         <div className="relative flex items-center gap-2">
           <div className="relative flex-grow">
             <input
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 pl-3 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500 text-gray-800 placeholder-gray-400 transition-shadow"
+              className="w-full bg-muted border border-border rounded-lg py-2 pl-3 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500 text-foreground placeholder-muted-foreground transition-shadow"
               placeholder="+ Add task..."
               type="text"
               value={draft}

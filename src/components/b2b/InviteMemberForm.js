@@ -7,7 +7,7 @@ import { workspacePrimaryButtonClass } from '@/components/b2b/workspaceShellClas
 const initialState = { error: null, success: false, message: null };
 
 const fieldClass =
-  'rounded-xl border border-white/80 bg-white text-sm px-3.5 py-2.5 text-gray-900 placeholder:text-gray-400 shadow-[0_1px_2px_rgba(15,23,42,0.06)] focus:outline-none focus:ring-2 focus:ring-[#5D3FD3]/30';
+  'rounded-xl border border-border bg-card text-sm px-3.5 py-2.5 text-foreground placeholder:text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.06)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)] focus:outline-none focus:ring-2 focus:ring-[#5D3FD3]/30';
 
 export default function InviteMemberForm({ orgSlug }) {
   const boundInvite = inviteMember.bind(null, orgSlug);
@@ -15,12 +15,12 @@ export default function InviteMemberForm({ orgSlug }) {
 
   return (
     <div
-      className={`rounded-2xl border border-[#5D3FD3]/12 bg-[#F3F0FF] p-5 sm:p-6 md:p-7 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),0_8px_24px_-8px_rgba(93,63,211,0.08)]`}
+      className="rounded-2xl border border-[#5D3FD3]/12 bg-[#F3F0FF] dark:bg-[#5D3FD3]/10 p-5 sm:p-6 md:p-7 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06),0_8px_24px_-8px_rgba(93,63,211,0.08)] dark:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.3),0_8px_24px_-8px_rgba(93,63,211,0.12)]"
     >
       <form action={formAction} className="space-y-5">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">Invite by email</h2>
-          <p className="text-sm text-gray-600 leading-relaxed mt-2 max-w-3xl">
+          <h2 className="text-lg sm:text-xl font-bold text-foreground tracking-tight">Invite by email</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mt-2 max-w-3xl">
             Clerk sends the invite link. After they sign up or sign in, they land in this workspace
             automatically.
           </p>

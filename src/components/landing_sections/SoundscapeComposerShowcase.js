@@ -90,7 +90,7 @@ export default function SoundscapeComposerShowcase() {
         }
       `}</style>
 
-      <div className="group relative flex flex-col overflow-hidden rounded-3xl bg-white border border-gray-100 shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:shadow-violet-500/10 hover:-translate-y-1 transition-all duration-300 h-full">
+      <div className="group relative flex flex-col overflow-hidden rounded-3xl bg-card border border-border shadow-xl shadow-gray-100/60 dark:shadow-black/30 hover:shadow-2xl hover:shadow-violet-500/10 hover:-translate-y-1 transition-all duration-300 h-full">
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-violet-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-violet-500/18 transition-colors duration-500" />
 
         <div className="p-8 pb-6 relative z-10">

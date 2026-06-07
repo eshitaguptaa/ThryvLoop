@@ -66,9 +66,9 @@ const DEFAULT_BAR = 'thu';
 
 function barGradient(selected, height) {
   if (selected) return 'bg-gradient-to-b from-purple-500 to-indigo-500 shadow-md';
-  if (height >= 60) return 'bg-gradient-to-t from-purple-200 to-purple-300';
-  if (height >= 40) return 'bg-gradient-to-t from-purple-100 to-purple-300';
-  return 'bg-gradient-to-t from-purple-100 to-purple-200';
+  if (height >= 60) return 'bg-gradient-to-t from-purple-200 to-purple-300 dark:from-purple-800 dark:to-purple-600';
+  if (height >= 40) return 'bg-gradient-to-t from-purple-100 to-purple-300 dark:from-purple-900 dark:to-purple-700';
+  return 'bg-gradient-to-t from-purple-100 to-purple-200 dark:from-purple-950 dark:to-purple-800';
 }
 
 export default function AnalysisTrackerShowcase() {
@@ -88,7 +88,7 @@ export default function AnalysisTrackerShowcase() {
   const changePositive = activeBar.change >= 0;
 
   return (
-    <div className="group relative overflow-hidden rounded-3xl bg-white border border-gray-200 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
+    <div className="group relative overflow-hidden rounded-3xl bg-card border border-border shadow-xl shadow-gray-200/50 dark:shadow-black/30 hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
       <div className="p-8 pb-2 relative z-10">
         <FeatureCardIcon icon="monitoring" tone="purple" className="mb-5" fill={1} />
         <h3 className="landing-card-title mb-1">Analysis Tracker</h3>
@@ -96,19 +96,19 @@ export default function AnalysisTrackerShowcase() {
       </div>
 
       <div className="flex-grow p-6 pt-2 relative z-10">
-        <div className="bg-gray-50 rounded-2xl border border-gray-200 p-5 h-full flex flex-col relative overflow-hidden shadow-inner min-h-[220px]">
+        <div className="bg-muted rounded-2xl border border-border p-5 h-full flex flex-col relative overflow-hidden shadow-inner min-h-[220px]">
           <div className="flex justify-between items-start mb-4 gap-3">
             <div>
-              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+              <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">
                 {metric.label}
               </div>
               <div
                 key={`${metricId}-${selectedBar}`}
-                className="text-3xl font-black text-gray-900 tabular-nums transition-all duration-300"
+                className="text-3xl font-black text-foreground tabular-nums transition-all duration-300"
               >
                 {displayValue}
               </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">{activeBar.label}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{activeBar.label}</p>
             </div>
             <div
               className={`px-2 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 shrink-0 transition-colors duration-300 ${
@@ -140,7 +140,7 @@ export default function AnalysisTrackerShowcase() {
                 className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all duration-200 ${
                   metricId === tab.id
                     ? 'bg-purple-600 text-white shadow-sm'
-                    : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                    : 'bg-card border border-border text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {tab.short}

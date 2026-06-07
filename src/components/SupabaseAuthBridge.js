@@ -3,6 +3,10 @@
 import { useAuth } from '@clerk/nextjs';
 import { useEffect } from 'react';
 import { setSupabaseAuthToken } from '@/utils/userStorage';
+import {
+  getClerkSupabaseToken,
+  resumeClerkAuthRequests,
+} from '@/lib/clerkSupabaseToken';
 
 /**
  * When the user is signed in, fetches the Clerk Supabase JWT and stores it
@@ -12,17 +16,18 @@ export default function SupabaseAuthBridge() {
   const { getToken, isSignedIn } = useAuth();
 
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!isSignedIn) {
+      setSupabaseAuthToken(null);
+      return;
+    }
+
+    resumeClerkAuthRequests();
 
     let cancelled = false;
     (async () => {
-      try {
-        const token = await getToken({ template: 'supabase' });
-        if (!cancelled && token) {
-          setSupabaseAuthToken(token);
-        }
-      } catch {
-        if (!cancelled) setSupabaseAuthToken(null);
+      const token = await getClerkSupabaseToken(getToken, isSignedIn);
+      if (!cancelled) {
+        setSupabaseAuthToken(token);
       }
     })();
 

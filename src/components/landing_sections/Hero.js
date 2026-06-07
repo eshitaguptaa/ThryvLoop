@@ -3,23 +3,19 @@
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { HeroReveal } from '@/components/landing_sections/ScrollReveal';
+import { SectionBlend } from '@/components/landing_sections/SectionBlend';
 import { heroContent, heroImage, heroLine } from '@/lib/landingMotion';
+
+/** White-background PNG mockups blend into dark hero surface without changing the artwork. */
+const mockupBlendClass =
+  'object-contain dark:mix-blend-multiply dark:opacity-[0.98]';
 
 export default function Hero({ onGetStartedClick }) {
   return (
-    <section className="mt-6 px-6 py-10 flex justify-center bg-white relative overflow-visible min-h-screen">
-      <div className="max-w-[1280px] w-full relative bg-gray-100 rounded-3xl min-h-[600px] border border-gray-300">
-        <div
-          className="absolute inset-0 opacity-100 pointer-events-none rounded-3xl"
-          style={{
-            backgroundImage: `
-              radial-gradient(circle, rgba(0, 0, 0, 0.05) 2px, transparent 2px),
-              radial-gradient(circle, rgba(0, 0, 0, 0.05) 2px, transparent 2px)
-            `,
-            backgroundSize: '16px 16px, 16px 16px',
-            backgroundPosition: '0 0, 8px 8px',
-          }}
-        />
+    <section className="pt-20 px-6 py-10 flex justify-center bg-background relative overflow-visible min-h-screen">
+      <SectionBlend position="bottom" fromColor="transparent" toColor="surface" size="lg" />
+      <div className="max-w-[1280px] w-full relative bg-surface rounded-3xl min-h-[600px] border border-border">
+        <div className="absolute inset-0 hero-dot-grid pointer-events-none rounded-3xl opacity-100" />
 
         <HeroReveal className="absolute top-0 right-0 z-20" variants={heroImage} delay={0.35}>
           <Image
@@ -38,7 +34,7 @@ export default function Hero({ onGetStartedClick }) {
             alt="Analytics"
             width={290}
             height={240}
-            className="object-contain rounded-tl-3xl"
+            className={`${mockupBlendClass} rounded-tl-3xl`}
             unoptimized
           />
         </HeroReveal>
@@ -49,7 +45,7 @@ export default function Hero({ onGetStartedClick }) {
             alt="Integrations"
             width={280}
             height={200}
-            className="object-contain rounded-br-3xl"
+            className={`${mockupBlendClass} rounded-br-3xl`}
             unoptimized
           />
         </HeroReveal>
@@ -60,20 +56,14 @@ export default function Hero({ onGetStartedClick }) {
             alt="Tasks"
             width={270}
             height={200}
-            className="object-contain rounded-bl-3xl"
+            className={`${mockupBlendClass} rounded-bl-3xl`}
             unoptimized
           />
         </HeroReveal>
 
         <div className="relative z-10 p-12">
           <HeroReveal className="flex justify-center mb-10 mt-8" variants={heroLine}>
-            <div
-              className="bg-white/70 rounded-xl p-3"
-              style={{
-                boxShadow:
-                  '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 15px 30px -10px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
-              }}
-            >
+            <div className="bg-card/70 rounded-xl p-3 border border-border shadow-lg shadow-black/5 dark:shadow-black/30">
               <Image
                 src="/LandingPageImages/logo.png"
                 alt="ThryvLoop Logo"
@@ -98,7 +88,7 @@ export default function Hero({ onGetStartedClick }) {
               <button
                 type="button"
                 onClick={onGetStartedClick}
-                className="px-8 py-3 rounded-full font-medium bg-neutral-900 text-white hover:bg-neutral-800 transition-colors"
+                className="px-8 py-3 rounded-full font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-purple-700 hover:shadow-indigo-500/35 transition-all hover:-translate-y-0.5"
               >
                 Get free demo
               </button>

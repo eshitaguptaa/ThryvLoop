@@ -11,6 +11,7 @@ import SupabaseAuthBridge from '@/components/SupabaseAuthBridge';
 import UserPreferencesHydrator from '@/components/UserPreferencesHydrator';
 import AuthenticatedAppShell from '@/components/AuthenticatedAppShell';
 import CalendarReminderHost from '@/components/workspace/CalendarReminderHost';
+import { AssistantProvider } from '@/contexts/AssistantContext';
 
 /** Routes that should not show the app sidebar / focus shell (marketing + auth). */
 function isPublicAppRoute(pathname) {
@@ -27,29 +28,45 @@ export default function AppSessionProviders({ children }) {
   const { isSignedIn, isLoaded } = useAuth();
   const pathname = usePathname();
 
-  if (!isLoaded || !isSignedIn) {
-    return children;
+  if (!isLoaded) {
+    return (
+      <>
+        <UserPreferencesHydrator />
+        {children}
+      </>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <>
+        <UserPreferencesHydrator />
+        {children}
+      </>
+    );
   }
 
   const showAppShell = !isPublicAppRoute(pathname);
 
   return (
     <>
-      <SupabaseAuthBridge />
       <UserPreferencesHydrator />
+      <SupabaseAuthBridge />
       <CelebrationProvider>
         <CelebrationModal />
         <CelebrationToast />
         <CalendarReminderHost />
-        <FocusProvider>
-          <TimerProvider>
-            {showAppShell ? (
-              <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
-            ) : (
-              children
-            )}
-          </TimerProvider>
-        </FocusProvider>
+        <AssistantProvider>
+          <FocusProvider>
+            <TimerProvider>
+              {showAppShell ? (
+                <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
+              ) : (
+                children
+              )}
+            </TimerProvider>
+          </FocusProvider>
+        </AssistantProvider>
       </CelebrationProvider>
     </>
   );

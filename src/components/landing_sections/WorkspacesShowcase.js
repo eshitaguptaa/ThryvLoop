@@ -47,7 +47,7 @@ export default function WorkspacesShowcase() {
   };
 
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-3xl bg-white border border-gray-100 shadow-xl shadow-gray-100/60 hover:shadow-2xl hover:shadow-[#5D3FD3]/10 hover:-translate-y-1 transition-all duration-300 h-full">
+    <div className="group relative flex flex-col overflow-hidden rounded-3xl bg-card border border-border shadow-xl shadow-gray-100/60 dark:shadow-black/30 hover:shadow-2xl hover:shadow-[#5D3FD3]/10 hover:-translate-y-1 transition-all duration-300 h-full">
       <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#5D3FD3]/12 rounded-full blur-3xl pointer-events-none group-hover:bg-[#5D3FD3]/20 transition-colors duration-500" />
 
       <div className="p-8 pb-6 relative z-10">
@@ -60,7 +60,7 @@ export default function WorkspacesShowcase() {
 
       <div className="px-8 pb-8 relative z-10 flex-1 flex flex-col min-h-[280px]">
         {/* Single spotlight — fixed size, no layout shift */}
-        <div className="relative flex-1 min-h-[220px] rounded-2xl border border-gray-100/90 bg-gradient-to-br from-[#5D3FD3]/[0.05] via-white to-violet-50/40 overflow-hidden">
+        <div className="relative flex-1 min-h-[220px] rounded-2xl border border-border bg-gradient-to-br from-[#5D3FD3]/[0.08] via-card to-violet-500/10 dark:to-violet-950/30 overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-44 h-44 bg-[#5D3FD3]/15 rounded-full blur-3xl pointer-events-none" />
 
           <div
@@ -72,8 +72,8 @@ export default function WorkspacesShowcase() {
               <FolderIcon className="h-7 w-7" />
             </div>
 
-            <p className="text-lg font-semibold tracking-tight text-neutral-900">{active.name}</p>
-            <p className="text-sm text-neutral-500 mt-2 font-normal">{active.members} team members</p>
+            <p className="text-lg font-semibold tracking-tight text-foreground">{active.name}</p>
+            <p className="text-sm text-muted-foreground mt-2 font-normal">{active.members} team members</p>
 
             <div className="w-full max-w-[200px] mt-8 flex items-center gap-3">
               <div className="flex-1 h-1.5 rounded-full bg-[#5D3FD3]/12 overflow-hidden">
@@ -101,7 +101,7 @@ export default function WorkspacesShowcase() {
               className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 ${
                 i === activeIndex
                   ? 'bg-[#5D3FD3] text-white shadow-md shadow-[#5D3FD3]/20'
-                  : 'bg-gray-100/90 text-gray-500 hover:bg-gray-200/90 hover:text-gray-700'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
               }`}
             >
               {ws.name.split(' ')[0]}

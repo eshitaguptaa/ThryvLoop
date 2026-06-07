@@ -13,7 +13,7 @@ function IntegrationsRedirect() {
   }, [router, searchParams]);
 
   return (
-    <div className="min-h-[40vh] flex items-center justify-center text-gray-400 text-sm">
+    <div className="min-h-[40vh] flex items-center justify-center text-muted-foreground text-sm">
       Opening settings…
     </div>
   );
@@ -22,7 +22,7 @@ function IntegrationsRedirect() {
 /** Legacy route — redirects to home and opens the Integrations settings panel. */
 export default function IntegrationsPage() {
   return (
-    <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-gray-400 text-sm">Loading…</div>}>
+    <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-muted-foreground text-sm">Loading…</div>}>
       <IntegrationsRedirect />
     </Suspense>
   );

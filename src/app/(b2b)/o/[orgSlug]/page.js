@@ -5,7 +5,9 @@ import {
   workspaceCardClass,
   workspaceContentClass,
   workspaceEyebrowClass,
+  workspaceMutedTextClass,
   workspacePageTitleClass,
+  workspaceSectionTitleClass,
 } from '@/components/b2b/workspaceShellClasses';
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getMembershipForSlug, isOrgAdmin } from '@/lib/org';
@@ -83,8 +85,8 @@ export default async function OrgWorkspaceHome({ params }) {
     <div className={workspaceContentClass}>
       <p className={workspaceEyebrowClass}>Overview</p>
       <h1 className={workspacePageTitleClass}>Workspace overview</h1>
-      <p className="text-gray-500 text-sm sm:text-base mt-3 leading-relaxed max-w-2xl">
-        Team workspace for <strong className="text-gray-800 font-semibold">{org.name}</strong>.
+      <p className={`${workspaceMutedTextClass} text-sm sm:text-base mt-3 leading-relaxed max-w-2xl`}>
+        Team workspace for <strong className="text-foreground font-semibold">{org.name}</strong>.
         {admin
           ? ' Switch between Tasks, Analytics, and Members using the workspace navigation above.'
           : ' Open Tasks or Analytics from the navigation above.'}
@@ -92,21 +94,21 @@ export default async function OrgWorkspaceHome({ params }) {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.85fr)]">
         <section className={`${workspaceCardClass} p-6 sm:p-8`}>
-          <h2 className="text-lg font-semibold text-gray-900">User profile</h2>
+          <h2 className={workspaceSectionTitleClass}>User profile</h2>
           <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start">
             <div className="flex gap-4 min-w-0">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#5D3FD3] text-white shadow-md">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#5D3FD3] text-white shadow-md shadow-indigo-500/25 dark:shadow-indigo-900/40">
                 <User className="h-8 w-8 opacity-90" aria-hidden />
               </div>
               <div className="min-w-0">
-                <p className="text-lg font-semibold text-gray-900 truncate">{profileName}</p>
-                <p className="text-sm text-gray-500 mt-0.5">{joinedLabel}</p>
+                <p className="text-lg font-semibold text-foreground truncate">{profileName}</p>
+                <p className={`text-sm ${workspaceMutedTextClass} mt-0.5`}>{joinedLabel}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#5D3FD3]/10 px-2.5 py-1 text-xs font-semibold text-[#5D3FD3]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#5D3FD3]/10 dark:bg-[#5D3FD3]/20 px-2.5 py-1 text-xs font-semibold text-[#5D3FD3] dark:text-indigo-400">
                     {membership.role}
                   </span>
                   {email ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800 border border-sky-100/80">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 text-xs font-semibold text-sky-800 dark:text-sky-200 border border-sky-100/80 dark:border-sky-500/30">
                       <Mail className="h-3 w-3 shrink-0" aria-hidden />
                       <span className="truncate max-w-[200px]">{email}</span>
                     </span>
@@ -115,75 +117,75 @@ export default async function OrgWorkspaceHome({ params }) {
               </div>
             </div>
             <div className="sm:ml-auto flex sm:justify-end w-full sm:w-auto">
-              <div className="rounded-2xl border border-slate-200/90 bg-slate-50/90 px-5 py-4 text-center min-w-[140px] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_14px_-6px_rgba(15,23,42,0.08)]">
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#5D3FD3]">
+              <div className="rounded-2xl border border-border bg-muted/50 dark:bg-muted/30 px-5 py-4 text-center min-w-[140px] shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#5D3FD3] dark:text-indigo-400">
                   Active tasks
                 </p>
-                <p className="text-3xl font-bold text-[#5D3FD3] mt-1 tabular-nums">{activeTaskCount}</p>
+                <p className="text-3xl font-bold text-[#5D3FD3] dark:text-indigo-400 mt-1 tabular-nums">{activeTaskCount}</p>
               </div>
             </div>
           </div>
 
-          <div className="mt-8 border-t border-gray-100 pt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+          <div className="mt-8 border-t border-border pt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Recent completions
               </p>
-              <p className="mt-1 font-semibold text-gray-900">{doneLast7} in last 7 days</p>
+              <p className="mt-1 font-semibold text-foreground">{doneLast7} in last 7 days</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Last active
               </p>
-              <p className="mt-1 font-semibold text-gray-900">{lastActive ?? '—'}</p>
+              <p className="mt-1 font-semibold text-foreground">{lastActive ?? '—'}</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Workspace</p>
-              <p className="mt-1 font-semibold text-gray-900 truncate">{org.name}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Workspace</p>
+              <p className="mt-1 font-semibold text-foreground truncate">{org.name}</p>
             </div>
           </div>
         </section>
 
         <section className={`${workspaceCardClass} p-6 sm:p-7 flex flex-col`}>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-gray-900">Recent activity</h2>
+            <h2 className={workspaceSectionTitleClass}>Recent activity</h2>
           </div>
           <ul className="mt-5 space-y-4 flex-1 text-sm">
             <li className="flex gap-3">
               <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#5D3FD3]" />
               <div>
-                <p className="text-gray-800 leading-snug">
+                <p className="text-foreground leading-snug">
                   You have{' '}
-                  <span className="font-semibold text-gray-900">{activeTaskCount}</span> active
+                  <span className="font-semibold text-foreground">{activeTaskCount}</span> active
                   task{activeTaskCount === 1 ? '' : 's'} in this workspace.
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Personal summary</p>
+                <p className={`text-xs ${workspaceMutedTextClass} mt-1`}>Personal summary</p>
               </div>
             </li>
             <li className="flex gap-3">
-              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-gray-300" />
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
               <div>
-                <p className="text-gray-800 leading-snug">
-                  Open <span className="font-medium text-[#5D3FD3]">Tasks</span> to move cards across
+                <p className="text-foreground leading-snug">
+                  Open <span className="font-medium text-[#5D3FD3] dark:text-indigo-400">Tasks</span> to move cards across
                   columns; updates sync for your whole team.
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Tip</p>
+                <p className={`text-xs ${workspaceMutedTextClass} mt-1`}>Tip</p>
               </div>
             </li>
             <li className="flex gap-3">
               <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-400" />
               <div>
-                <p className="text-gray-800 leading-snug">
+                <p className="text-foreground leading-snug">
                   {admin
                     ? 'Invite people under Members and assign work from any kanban column.'
                     : 'Ask an admin if you need access to more assignments.'}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Workspace</p>
+                <p className={`text-xs ${workspaceMutedTextClass} mt-1`}>Workspace</p>
               </div>
             </li>
           </ul>
-          <div className="mt-6 pt-4 border-t border-gray-50">
-            <p className="text-xs text-center text-gray-400">More activity will appear as your team works.</p>
+          <div className="mt-6 pt-4 border-t border-border">
+            <p className={`text-xs text-center ${workspaceMutedTextClass}`}>More activity will appear as your team works.</p>
           </div>
         </section>
       </div>

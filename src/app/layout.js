@@ -2,6 +2,7 @@ import './globals.css';
 import { ClerkProvider } from '@clerk/nextjs';
 import { Poppins } from 'next/font/google';
 import AppSessionProviders from '@/components/AppSessionProviders';
+import ThemeProvider from '@/components/ThemeProvider';
 
 const poppins = Poppins({
   weight: ['400', '500', '600', '700', '800', '900'],
@@ -22,11 +23,13 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${poppins.className} ${poppins.variable}`}>
-        <ClerkProvider>
-          <AppSessionProviders>{children}</AppSessionProviders>
-        </ClerkProvider>
+        <ThemeProvider>
+          <ClerkProvider>
+            <AppSessionProviders>{children}</AppSessionProviders>
+          </ClerkProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

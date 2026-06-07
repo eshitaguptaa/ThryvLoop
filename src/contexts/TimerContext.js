@@ -13,6 +13,7 @@ import {
 } from '@/utils/userStorage';
 import { localDateKey } from '@/lib/dateRanges';
 import { fetchTodayAndYesterdayFocusSeconds } from '@/lib/focusSessions';
+import { getClerkSupabaseToken } from '@/lib/clerkSupabaseToken';
 
 export const TimerContext = createContext(null);
 
@@ -103,9 +104,14 @@ function getRunSegmentElapsed(timerMode, phase, currentTime, runStartTime) {
 
 export function TimerProvider({ children }) {
   const { user } = useUser();
-  const { getToken } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
   const userId = user?.id || null;
   const initialLoadDoneRef = useRef(false);
+
+  const getSupabaseToken = useCallback(
+    () => getClerkSupabaseToken(getToken, isSignedIn),
+    [getToken, isSignedIn]
+  );
 
   const [timerMode, setTimerMode] = useState('pomodoro');
   const [phase, setPhase] = useState('session');
@@ -147,21 +153,21 @@ export function TimerProvider({ children }) {
   phaseRef.current = phase;
 
   const refreshLoggedFocusTotals = useCallback(async () => {
-    if (!userId) {
+    if (!userId || !isSignedIn) {
       setTodayLoggedFocusSeconds(0);
       setYesterdayLoggedFocusSeconds(0);
       return;
     }
-    const totals = await fetchTodayAndYesterdayFocusSeconds(userId, getToken);
+    const totals = await fetchTodayAndYesterdayFocusSeconds(userId, getSupabaseToken);
     setTodayLoggedFocusSeconds(totals.today);
     setYesterdayLoggedFocusSeconds(totals.yesterday);
     loggedDayRef.current = localDateKey();
-  }, [userId, getToken]);
+  }, [userId, isSignedIn, getSupabaseToken]);
 
   const logSession = useCallback(
     async (options) => {
-      if (!userId) return;
-      const token = await getToken({ template: 'supabase' }).catch(() => null);
+      if (!userId || !isSignedIn) return;
+      const token = await getSupabaseToken();
       if (token) setSupabaseAuthToken(token);
       const err = await logFocusSessionToSupabase(userId, options, token);
       if (!err) {
@@ -172,7 +178,7 @@ export function TimerProvider({ children }) {
         }
       }
     },
-    [userId, getToken, refreshLoggedFocusTotals]
+    [userId, isSignedIn, getSupabaseToken, refreshLoggedFocusTotals]
   );
 
   const logRunSegment = useCallback(
@@ -315,13 +321,11 @@ export function TimerProvider({ children }) {
   }, [tickSound, alarmVolume]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !userId) return;
+    if (typeof window === 'undefined' || !userId || !isSignedIn) return;
     let cancelled = false;
     const load = async () => {
-      try {
-        const token = await getToken({ template: 'supabase' });
-        if (token) setSupabaseAuthToken(token);
-      } catch (_) {}
+      const token = await getSupabaseToken();
+      if (token) setSupabaseAuthToken(token);
       const remote = await getFocusTimerStateFromSupabase(userId);
       if (cancelled) return;
       const today = localDateKey();
@@ -451,7 +455,7 @@ export function TimerProvider({ children }) {
     };
     load();
     return () => { cancelled = true; };
-  }, [userId, getToken, loadSettingsFromStorage]);
+  }, [userId, isSignedIn, getSupabaseToken, loadSettingsFromStorage]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

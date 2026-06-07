@@ -9,6 +9,8 @@ import SpacesDrawer from '@/components/focus/SpacesDrawer';
 import SoundscapeComposer from '@/components/focus/SoundscapeComposer';
 import { normalizeSettingsPanel } from '@/lib/openFocusSettings';
 import { getUserStorageJson, removeUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
+import { suspendClerkAuthRequests } from '@/lib/clerkSupabaseToken';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const navigationItems = [
   {
@@ -348,11 +350,12 @@ export default function Sidebar({ className = '' }) {
       removeUserStorageItem(userId, 'soundscape-session-active');
       removeUserStorageItem(userId, 'focus-spaces-paused');
     }
+    suspendClerkAuthRequests();
     await signOut({ redirectUrl: '/' });
   };
 
   return (
-    <div className={`fixed left-0 top-0 h-full w-24 bg-white flex flex-col items-center py-5 z-40 border-r border-gray-200 font-(--font-poppins) ${className}`}>
+    <div className={`fixed left-0 top-0 h-full w-24 bg-card flex flex-col items-center py-5 z-40 border-r border-border font-(--font-poppins) ${className}`}>
       {/* Logo/Brand Section */}
       <Link href="/home" className="mb-10 no-underline">
         <div className="w-10 h-10 flex items-center justify-center">
@@ -399,7 +402,7 @@ export default function Sidebar({ className = '' }) {
                       ${
                         isParentActive
                           ? 'bg-[#5043F3]/10 text-[#5043F3]'
-                          : 'bg-transparent text-gray-400 group-hover:bg-gray-100'
+                          : 'bg-transparent text-muted-foreground group-hover:bg-muted'
                       }
                     `}
                   >
@@ -411,7 +414,7 @@ export default function Sidebar({ className = '' }) {
                       ${
                         isParentActive
                           ? 'text-[#5043F3]'
-                          : 'text-gray-500 group-hover:text-gray-700'
+                          : 'text-muted-foreground group-hover:text-foreground'
                       }
                     `}
                   >
@@ -431,7 +434,7 @@ export default function Sidebar({ className = '' }) {
                       ${
                         isActive
                           ? 'bg-[#5043F3]/10 text-[#5043F3]'
-                          : 'bg-transparent text-gray-400 group-hover:bg-gray-100'
+                          : 'bg-transparent text-muted-foreground group-hover:bg-muted'
                       }
                     `}
                   >
@@ -443,7 +446,7 @@ export default function Sidebar({ className = '' }) {
                       ${
                         isActive
                           ? 'text-[#5043F3]'
-                          : 'text-gray-500 group-hover:text-gray-700'
+                          : 'text-muted-foreground group-hover:text-foreground'
                       }
                     `}
                   >
@@ -503,7 +506,7 @@ export default function Sidebar({ className = '' }) {
                           className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-full transition-all duration-200 ${
                             isSubActive 
                               ? 'bg-[#5043F3]' 
-                              : 'bg-transparent group-hover:bg-gray-300'
+                              : 'bg-transparent group-hover:bg-border'
                           }`}
                         ></div>
                         <div
@@ -512,7 +515,7 @@ export default function Sidebar({ className = '' }) {
                             ${
                               isSubActive
                                 ? 'bg-[#5043F3]/10 text-[#5043F3]'
-                                : 'bg-gray-100 text-gray-400 group-hover:bg-gray-200 group-hover:text-gray-600'
+                                : 'bg-muted text-muted-foreground group-hover:bg-muted group-hover:text-foreground'
                             }
                           `}
                         >
@@ -524,7 +527,7 @@ export default function Sidebar({ className = '' }) {
                             ${
                               isSubActive
                                 ? 'text-[#5043F3]'
-                                : 'text-gray-500 group-hover:text-gray-700'
+                                : 'text-muted-foreground group-hover:text-foreground'
                             }
                           `}
                         >
@@ -542,8 +545,10 @@ export default function Sidebar({ className = '' }) {
 
       {/* Separator above logout */}
       <div className="w-full px-4 mt-auto mb-3">
-        <div className="h-px bg-gray-200"></div>
+        <div className="h-px bg-border"></div>
       </div>
+
+      <ThemeToggle variant="sidebar" className="mb-2" userId={user?.id ?? null} />
 
       {/* Settings (Soundscape/Timer) Button */}
       <button
@@ -552,10 +557,10 @@ export default function Sidebar({ className = '' }) {
           setComposerInitialPanel('composer');
           setShowSoundscapeComposer(true);
         }}
-        className="flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 transition-all duration-200 mb-2 group"
+        className="flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 mb-2 group"
         title="Settings"
       >
-        <div className="w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-gray-100 transition-all duration-200 mb-1.5">
+        <div className="w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-muted transition-all duration-200 mb-1.5">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -567,10 +572,10 @@ export default function Sidebar({ className = '' }) {
       {/* Logout Button */}
       <button
         onClick={handleLogout}
-        className="flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 transition-all duration-200 mb-2 group"
+        className="flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 mb-2 group"
         title="Logout"
       >
-        <div className="w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-gray-100 transition-all duration-200 mb-1.5">
+        <div className="w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-muted transition-all duration-200 mb-1.5">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" fill="none" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M14 8l4 4-4 4" />

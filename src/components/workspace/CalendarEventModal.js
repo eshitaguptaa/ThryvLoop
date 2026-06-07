@@ -18,9 +18,9 @@ import {
 import { findOverlappingEvents } from '@/lib/calendarEventLayout';
 
 const inputClass =
-  'w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm text-gray-700 shadow-sm hover:shadow-md transition-shadow disabled:bg-gray-50 disabled:opacity-70';
+  'w-full px-4 py-3 border-2 border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm text-foreground shadow-sm hover:shadow-md transition-shadow disabled:bg-muted disabled:opacity-70';
 
-const labelClass = 'block text-sm font-semibold text-gray-700 mb-2';
+const labelClass = 'block text-sm font-semibold text-foreground mb-2';
 
 function defaultRangeForDay(day) {
   const start = new Date(day);
@@ -207,8 +207,8 @@ export default function CalendarEventModal({
       <div className="flex items-start gap-3 min-w-0">
         <Bell size={18} className="text-indigo-600 shrink-0 mt-0.5" aria-hidden />
         <div>
-          <p className="text-sm font-semibold text-gray-900">Remind me</p>
-          <p className="text-xs text-gray-600 mt-0.5">
+          <p className="text-sm font-semibold text-foreground">Remind me</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
             {DEFAULT_CALENDAR_REMIND_MINUTES} minutes before · in-app alert
             {typeof Notification !== 'undefined' && Notification.permission === 'granted'
               ? ' + notification'
@@ -224,11 +224,11 @@ export default function CalendarEventModal({
         disabled={saving}
         onClick={() => void handleRemindToggle(!remindEnabled)}
         className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 ${
-          remindEnabled ? 'bg-indigo-600 border-indigo-600' : 'bg-gray-200 border-gray-200'
+          remindEnabled ? 'bg-indigo-600 border-indigo-600' : 'bg-muted border-border'
         }`}
       >
         <span
-          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-card shadow ring-0 transition-transform mt-0.5 ${
             remindEnabled ? 'translate-x-5' : 'translate-x-0.5'
           }`}
         />
@@ -260,10 +260,10 @@ export default function CalendarEventModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-event-modal-title"
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-gray-100/80"
+        className="bg-card rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-border/80"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10 rounded-t-2xl">
+        <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between z-10 rounded-t-2xl">
           <div className="flex items-center gap-3 min-w-0">
             <div
               className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
@@ -279,7 +279,7 @@ export default function CalendarEventModal({
               <p className="text-indigo-500 text-[10px] font-semibold uppercase tracking-widest">
                 {modalSubtitle}
               </p>
-              <h2 id="calendar-event-modal-title" className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
+              <h2 id="calendar-event-modal-title" className="text-xl sm:text-2xl font-bold text-foreground truncate">
                 {modalTitle}
               </h2>
             </div>
@@ -288,7 +288,7 @@ export default function CalendarEventModal({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 shrink-0"
+            className="text-muted-foreground hover:text-muted-foreground transition-colors p-1 shrink-0"
             aria-label="Close"
           >
             <X className="w-6 h-6" />
@@ -297,13 +297,13 @@ export default function CalendarEventModal({
 
         {isGoogleView && event?.source === 'google' ? (
           <div className="p-6 space-y-5">
-            <div className="rounded-xl border-2 border-gray-100 bg-gradient-to-br from-indigo-50/80 to-violet-50/50 p-4">
-              <p className="text-lg font-bold text-gray-900 leading-snug">{event.title}</p>
-              <p className="text-sm text-gray-600 mt-2 font-medium">
+            <div className="rounded-xl border-2 border-border bg-gradient-to-br from-indigo-50/80 to-violet-50/50 p-4">
+              <p className="text-lg font-bold text-foreground leading-snug">{event.title}</p>
+              <p className="text-sm text-muted-foreground mt-2 font-medium">
                 {formatEventWhen(event.startsAt, event.endsAt)}
               </p>
               {event.showAs === 'free' ? (
-                <span className="inline-block mt-3 text-xs font-semibold text-gray-600 bg-white/80 border border-gray-200 rounded-lg px-2.5 py-1">
+                <span className="inline-block mt-3 text-xs font-semibold text-muted-foreground bg-card/80 border border-border rounded-lg px-2.5 py-1">
                   Shown as free
                 </span>
               ) : null}
@@ -314,15 +314,15 @@ export default function CalendarEventModal({
                 </p>
               ) : null}
             </div>
-            <p className="text-sm text-slate-600 leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               This event is managed in Google Calendar. Make changes there, then use{' '}
-              <span className="font-semibold text-gray-800">Sync</span> on the calendar page to refresh.
+              <span className="font-semibold text-foreground">Sync</span> on the calendar page to refresh.
             </p>
             {remindToggle}
             <button
               type="button"
               onClick={onClose}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              className="w-full px-4 py-3 border-2 border-border rounded-xl text-foreground font-medium hover:bg-muted/60 transition-colors"
             >
               Close
             </button>
@@ -436,7 +436,7 @@ export default function CalendarEventModal({
                   disabled={!isEditable || saving}
                   className={inputClass}
                 />
-                <p className="mt-1.5 text-xs text-gray-500">
+                <p className="mt-1.5 text-xs text-muted-foreground">
                   For overnight events (e.g. 11 PM–midnight), set the end <span className="font-medium">date</span> to the next day.
                 </p>
               </div>
@@ -465,7 +465,7 @@ export default function CalendarEventModal({
                 Location
               </label>
               <div className="relative">
-                <MapPin size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <MapPin size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <input
                   id="cal-location"
                   type="text"
@@ -494,7 +494,7 @@ export default function CalendarEventModal({
             </div>
 
             {mode === 'edit' && onDelete ? (
-              <div className="pt-2 border-t border-gray-100">
+              <div className="pt-2 border-t border-border">
                 {confirmDelete ? (
                   <div className="rounded-xl border-2 border-red-100 bg-red-50/80 p-4 space-y-3">
                     <p className="text-sm font-semibold text-red-800">Delete this event permanently?</p>
@@ -511,7 +511,7 @@ export default function CalendarEventModal({
                       <button
                         type="button"
                         onClick={() => setConfirmDelete(false)}
-                        className="flex-1 px-4 py-2.5 rounded-xl font-medium text-gray-700 bg-white border-2 border-gray-200 hover:bg-gray-50"
+                        className="flex-1 px-4 py-2.5 rounded-xl font-medium text-foreground bg-card border-2 border-border hover:bg-muted/60"
                       >
                         Cancel
                       </button>
@@ -535,7 +535,7 @@ export default function CalendarEventModal({
                 type="button"
                 onClick={onClose}
                 disabled={saving}
-                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-3 border-2 border-border rounded-xl text-foreground font-medium hover:bg-muted/60 transition-colors"
               >
                 Cancel
               </button>
