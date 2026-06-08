@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import { useTheme } from 'next-themes';
 import { motion } from 'framer-motion';
 import { HeroReveal } from '@/components/landing_sections/ScrollReveal';
 import { SectionBlend } from '@/components/landing_sections/SectionBlend';
@@ -10,11 +12,82 @@ import { heroContent, heroImage, heroLine } from '@/lib/landingMotion';
 const mockupBlendClass =
   'object-contain dark:mix-blend-multiply dark:opacity-[0.98]';
 
+/** Bottom hero mockups — dark PNGs have extra canvas padding; use explicit render sizes. */
+const BOTTOM_MOCKUPS = {
+  tasks: {
+    light: { src: '/LandingPageImages/tasks.png', width: 270, height: 200 },
+    dark: {
+      src: '/LandingPageImages/landing-dark-image-2.png',
+      width: 400,
+      offsetY: 32,
+      offsetX: -40,
+    },
+    alt: 'Tasks',
+    position: 'left',
+    delay: 0.3,
+    rounded: 'rounded-bl-3xl',
+  },
+  integrations: {
+    light: { src: '/LandingPageImages/Integrations.png', width: 280, height: 200 },
+    dark: {
+      src: '/LandingPageImages/landing-dark-image-1.png',
+      width: 350,
+      offsetY: 40,
+      offsetX: 40,
+    },
+    alt: 'Integrations',
+    position: 'right',
+    delay: 0.45,
+    rounded: 'rounded-br-3xl',
+  },
+};
+
+function BottomHeroMockup({ config }) {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const isLeft = config.position === 'left';
+  const isDark = mounted && resolvedTheme === 'dark';
+  const positionClass = isLeft
+    ? 'absolute bottom-0 left-0 z-20'
+    : 'absolute bottom-0 right-0 z-20';
+
+  return (
+    <HeroReveal className={positionClass} variants={heroImage} delay={config.delay}>
+      {isDark ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={config.dark.src}
+          alt={config.alt}
+          width={config.dark.width}
+          height={Math.round(config.dark.width * (1024 / 1536))}
+          className={`block h-auto max-w-none ${config.rounded}`}
+          style={{
+            width: config.dark.width,
+            transform: `translate(${config.dark.offsetX ?? 0}px, ${config.dark.offsetY ?? 0}px)`,
+          }}
+          draggable={false}
+        />
+      ) : (
+        <Image
+          src={config.light.src}
+          alt={config.alt}
+          width={config.light.width}
+          height={config.light.height}
+          className={`object-contain ${mockupBlendClass} ${config.rounded}`}
+          unoptimized
+        />
+      )}
+    </HeroReveal>
+  );
+}
+
 export default function Hero({ onGetStartedClick }) {
   return (
     <section className="pt-20 px-6 py-10 flex justify-center bg-background relative overflow-visible min-h-screen">
       <SectionBlend position="bottom" fromColor="transparent" toColor="surface" size="lg" />
-      <div className="max-w-[1280px] w-full relative bg-surface rounded-3xl min-h-[600px] border border-border">
+      <div className="max-w-[1280px] w-full relative bg-surface rounded-3xl min-h-[600px] border border-border overflow-visible">
         <div className="absolute inset-0 hero-dot-grid pointer-events-none rounded-3xl opacity-100" />
 
         <HeroReveal className="absolute top-0 right-0 z-20" variants={heroImage} delay={0.35}>
@@ -39,27 +112,8 @@ export default function Hero({ onGetStartedClick }) {
           />
         </HeroReveal>
 
-        <HeroReveal className="absolute bottom-0 right-4 z-20" variants={heroImage} delay={0.45}>
-          <Image
-            src="/LandingPageImages/Integrations.png"
-            alt="Integrations"
-            width={280}
-            height={200}
-            className={`${mockupBlendClass} rounded-br-3xl`}
-            unoptimized
-          />
-        </HeroReveal>
-
-        <HeroReveal className="absolute bottom-0 left-4 z-20" variants={heroImage} delay={0.3}>
-          <Image
-            src="/LandingPageImages/tasks.png"
-            alt="Tasks"
-            width={270}
-            height={200}
-            className={`${mockupBlendClass} rounded-bl-3xl`}
-            unoptimized
-          />
-        </HeroReveal>
+        <BottomHeroMockup config={BOTTOM_MOCKUPS.integrations} />
+        <BottomHeroMockup config={BOTTOM_MOCKUPS.tasks} />
 
         <div className="relative z-10 p-12">
           <HeroReveal className="flex justify-center mb-10 mt-8" variants={heroLine}>
