@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
+  CLERK_SECRET_KEY: sk_test_ci_placeholder
+  NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci_anon_key_placeholder
+  SUPABASE_SERVICE_ROLE_KEY: ci_service_role_placeholder
+  NEXT_PUBLIC_APP_URL: https://example.com
+  GEMINI_API_KEY: ci_gemini_placeholder
+  WORKSPACE_TOKEN_ENCRYPTION_KEY: ci_encryption_key_32_chars_min
+
+jobs:
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+  lint:
+    name: ESLint (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint

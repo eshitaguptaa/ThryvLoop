@@ -4,6 +4,8 @@ import { getWorkspaceStatus } from '@/lib/workspace/status';
 import { getWorkspaceUserId } from '@/lib/workspace/requireAuth';
 import { rateLimitResponse } from '@/lib/security/rateLimit';
 
+export const maxDuration = 60;
+
 export async function POST() {
   const userId = await getWorkspaceUserId();
   if (!userId) {

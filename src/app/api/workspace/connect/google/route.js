@@ -5,11 +5,12 @@ import {
   createOAuthState,
   WORKSPACE_OAUTH_COOKIE,
 } from '@/lib/workspace/oauth';
+import { getAppOrigin } from '@/lib/org';
 import { rateLimitResponse } from '@/lib/security/rateLimit';
 
 export async function GET() {
   const { userId } = await auth();
-  const base = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim().replace(/\/$/, '');
+  const base = getAppOrigin();
   if (!userId) {
     return NextResponse.redirect(new URL('/signin', base));
   }

@@ -14,6 +14,7 @@ import {
 import { localDateKey } from '@/lib/dateRanges';
 import { fetchTodayAndYesterdayFocusSeconds } from '@/lib/focusSessions';
 import { getClerkSupabaseToken } from '@/lib/clerkSupabaseToken';
+import { getFocusContentCenter } from '@/lib/focusWidgetLayout';
 
 export const TimerContext = createContext(null);
 
@@ -102,6 +103,24 @@ function getRunSegmentElapsed(timerMode, phase, currentTime, runStartTime) {
   return 0;
 }
 
+function computeResponsiveTimerSize() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const baseWidth = 450;
+  const baseHeight = 450;
+  const minWidth = Math.min(350, vw * 0.8);
+  const maxWidth = Math.min(550, vw * 0.9);
+  const minHeight = Math.min(350, vh * 0.4);
+  const maxHeight = Math.min(550, vh * 0.6);
+  const widthScale = Math.min(1, vw / 1440);
+  const heightScale = Math.min(1, vh / 900);
+  const scale = Math.min(widthScale, heightScale, 1.2);
+  return {
+    width: Math.max(minWidth, Math.min(maxWidth, baseWidth * scale)),
+    height: Math.max(minHeight, Math.min(maxHeight, baseHeight * scale)),
+  };
+}
+
 export function TimerProvider({ children }) {
   const { user } = useUser();
   const { getToken, isSignedIn } = useAuth();
@@ -139,6 +158,7 @@ export function TimerProvider({ children }) {
 
   const [position, setPosition] = useState(null);
   const [size, setSize] = useState({ width: 450, height: 450 });
+  const userPositionedRef = useRef(false);
 
   const audioContextRef = useRef(null);
   /** `time` value when the current play segment started. */
@@ -370,9 +390,6 @@ export function TimerProvider({ children }) {
         setFocusRunDate(discarded.focusRunDate);
         setTime(timeVal);
         setIsRunning(false);
-        if (remote.position && typeof remote.position.x === 'number' && typeof remote.position.y === 'number') {
-          setPosition(remote.position);
-        }
         if (remote.size && typeof remote.size.width === 'number' && typeof remote.size.height === 'number') {
           setSize(remote.size);
         }
@@ -498,26 +515,27 @@ export function TimerProvider({ children }) {
     return () => window.removeEventListener('focus-settings-applied', handler);
   }, [loadSettingsFromStorage, getDurationSeconds]);
 
+  const applyDefaultTimerLayout = useCallback(() => {
+    setSize(computeResponsiveTimerSize());
+    setPosition(getFocusContentCenter());
+  }, []);
+
+  const markTimerPositionCustomized = useCallback(() => {
+    userPositionedRef.current = true;
+  }, []);
+
+  const resetTimerWidgetLayout = useCallback(() => {
+    userPositionedRef.current = false;
+    applyDefaultTimerLayout();
+  }, [applyDefaultTimerLayout]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const updatePositionAndSize = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const baseWidth = 450;
-      const baseHeight = 450;
-      const minWidth = Math.min(350, vw * 0.8);
-      const maxWidth = Math.min(550, vw * 0.9);
-      const minHeight = Math.min(350, vh * 0.4);
-      const maxHeight = Math.min(550, vh * 0.6);
-      const widthScale = Math.min(1, vw / 1440);
-      const heightScale = Math.min(1, vh / 900);
-      const scale = Math.min(widthScale, heightScale, 1.2);
-      const responsiveWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * scale));
-      const responsiveHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight * scale));
-      const centerX = vw / 2;
-      const centerY = vh / 2 - Math.max(30, vh * 0.05);
-      setPosition({ x: centerX, y: centerY });
-      setSize({ width: responsiveWidth, height: responsiveHeight });
+      setSize(computeResponsiveTimerSize());
+      if (!userPositionedRef.current) {
+        setPosition(getFocusContentCenter());
+      }
     };
     updatePositionAndSize();
     const handleFullscreenChange = () => setTimeout(updatePositionAndSize, 100);
@@ -763,6 +781,8 @@ export function TimerProvider({ children }) {
     setPosition,
     size,
     setSize,
+    markTimerPositionCustomized,
+    resetTimerWidgetLayout,
     getDurationSeconds,
     getInitialTimeForCurrentState,
     loadSettingsFromStorage,

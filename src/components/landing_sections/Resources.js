@@ -46,7 +46,7 @@ export default function Resources() {
           </div>
           
           {/* Header Gradient: Primary Dark via Secondary back to Primary Dark */}
-          <h1 className="mt-4 landing-display text-5xl sm:text-[3.5rem] text-foreground">
+          <h1 className="mt-4 landing-display text-4xl sm:text-5xl lg:text-[3.5rem] text-foreground">
             Unlock Your{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5b4ded] to-[#3b82f6]">
               Potential
@@ -108,7 +108,7 @@ export default function Resources() {
             </div>
 
             {/* FAQ */}
-            <div className="mt-10 flex-grow grid grid-cols-2 gap-x-8 gap-y-6">
+            <div className="mt-10 flex-grow grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
               {[
                 { q: "How do I reset my password?", a: 'Go to the login page and click "Forgot Password". Follow the instructions sent to your email to create a new one.' },
                 { q: "Where can I find my invoices?", a: "You can find all your past and current invoices under the 'Billing' section in your account settings." },
@@ -133,7 +133,7 @@ export default function Resources() {
               ))}
             </div>
 
-            <div className="mt-8 pt-6 border-t border-[var(--light)] flex justify-between items-center">
+            <div className="mt-8 pt-6 border-t border-[var(--light)] flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center">
               <p className="text-sm text-[var(--gray)]">
                 Can't find what you're looking for?
               </p>
@@ -152,7 +152,7 @@ export default function Resources() {
           </ScrollItem>
 
           {/* Right column: Video Tutorials & Productivity Tips */}
-          <ScrollItem className="lg:col-start-3">
+          <ScrollItem className="md:col-span-2 lg:col-span-1 lg:col-start-3">
           <div className="grid grid-cols-1 gap-8 h-full">
             {/* Video Tutorials */}
             <div className={`group ${cardClasses} flex flex-col p-0`}>

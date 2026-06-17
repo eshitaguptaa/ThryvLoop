@@ -242,7 +242,7 @@ export default function TasksShowcase() {
         </div>
       </div>
 
-      <div className="px-6 flex-grow flex flex-col gap-3 relative z-10 overflow-hidden min-h-[168px]">
+      <div className="px-6 flex flex-col gap-3 relative z-10 overflow-hidden">
         {tasks.map((task) => {
           const isDone = completed.has(task.id);
           if (task.style === 'urgent') {
@@ -362,7 +362,7 @@ export default function TasksShowcase() {
         })}
       </div>
 
-      <div className="p-6 pt-3 mt-auto relative z-10">
+      <div className="p-6 pt-3 relative z-10">
         <div className="relative flex items-center gap-2">
           <div className="relative flex-grow">
             <input

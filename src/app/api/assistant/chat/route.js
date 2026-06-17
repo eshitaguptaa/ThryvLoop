@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { getWorkspaceUserId } from '@/lib/workspace/requireAuth';
-import { rateLimitResponse } from '@/lib/security/rateLimit';
+import { geminiRateLimitResponse } from '@/lib/assistant/geminiRateLimit';
 import { runAssistantChat } from '@/lib/assistant/gemini';
 import { formatGeminiError } from '@/lib/assistant/errors';
+
+export const maxDuration = 60;
 import {
   createConversation,
   getConversation,
@@ -18,7 +20,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const limited = rateLimitResponse(userId, 'assistant-chat', { limit: 20, windowMs: 60_000 });
+  const limited = geminiRateLimitResponse(userId);
   if (limited) return limited;
 
   let body;
@@ -83,7 +85,8 @@ export async function POST(request) {
       },
     });
   } catch (err) {
-    const { message, status } = formatGeminiError(err);
-    return NextResponse.json({ error: message }, { status });
+    const { message, status, retryAfterSec } = formatGeminiError(err);
+    const headers = retryAfterSec ? { 'Retry-After': String(retryAfterSec) } : undefined;
+    return NextResponse.json({ error: message }, { status, headers });
   }
 }

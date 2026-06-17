@@ -29,21 +29,8 @@ export function useClerkAppearance() {
 }
 
 export default function AuthPageShell({ children }) {
-  const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
-
-  const isDark = mounted && resolvedTheme === 'dark';
-
   return (
-    <div
-      className={`min-h-screen flex items-center justify-center ${
-        isDark
-          ? 'bg-linear-to-br from-slate-900 via-purple-900 to-slate-900'
-          : 'bg-surface'
-      }`}
-    >
+    <div className="min-h-screen flex items-center justify-center bg-background">
       {children}
     </div>
   );

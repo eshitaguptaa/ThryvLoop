@@ -68,6 +68,8 @@ export default function TimerWidget() {
     setPosition,
     size,
     setSize,
+    markTimerPositionCustomized,
+    resetTimerWidgetLayout,
     getDurationSeconds,
     handlePlayPause,
     handleReset,
@@ -100,12 +102,14 @@ export default function TimerWidget() {
       removeUserStorageItem(userId, 'focus-timer-position');
       removeUserStorageItem(userId, 'focus-timer-size');
     }
+    resetTimerWidgetLayout();
     setShowTimer(false);
   };
 
   const handleMouseDown = (e) => {
     if (e.target.closest('button') || e.target.closest('.resize-handle')) return;
     if (!position) return;
+    markTimerPositionCustomized();
     setIsDragging(true);
     const rect = widgetRef.current?.getBoundingClientRect();
     if (rect) {
@@ -119,6 +123,7 @@ export default function TimerWidget() {
   const handleResizeStart = (e, handle) => {
     e.stopPropagation();
     e.preventDefault();
+    markTimerPositionCustomized();
     setIsResizing(true);
     setResizeHandle(handle);
     const rect = widgetRef.current?.getBoundingClientRect();

@@ -67,6 +67,10 @@ body {
     overflow-x: hidden;
 }
 
+html {
+    scrollbar-gutter: stable;
+}
+
 /* ========== SHARED BUTTONS ========== */
 .btn {
     padding: 0.75rem 1.5rem;
@@ -309,6 +313,39 @@ body {
 .landing-page #resources,
 .landing-page #pricing {
   scroll-margin-top: 4rem;
+}
+
+/* Compact feature cards — aligned heights on large screens */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .landing-page .feature-tablet-pair {
+    min-height: 26rem;
+  }
+
+  .landing-page .feature-tablet-pair > * {
+    height: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-page .feature-compact-card {
+    min-height: 29rem;
+  }
+
+  .landing-page .feature-compact-card > * {
+    height: 100%;
+    min-height: 29rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .landing-page .feature-compact-card {
+    height: 32.5rem;
+    min-height: 32.5rem;
+  }
+
+  .landing-page .feature-compact-card > * {
+    min-height: 32.5rem;
+  }
 }
 
 .landing-display {

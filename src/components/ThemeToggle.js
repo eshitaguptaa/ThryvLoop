@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
+import { useUser } from '@clerk/nextjs';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { saveThemePreference } from '@/lib/themePreferences';
 
@@ -16,6 +17,8 @@ const OPTIONS = [
  */
 export default function ThemeToggle({ variant = 'compact', className = '', userId = null }) {
   const { theme, setTheme } = useTheme();
+  const { user } = useUser();
+  const resolvedUserId = userId ?? user?.id ?? null;
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const menuRef = useRef(null);
@@ -47,7 +50,7 @@ export default function ThemeToggle({ variant = 'compact', className = '', userI
 
   const handleSelect = (value) => {
     setTheme(value);
-    saveThemePreference(userId, value);
+    saveThemePreference(resolvedUserId, value);
     setOpen(false);
   };
 

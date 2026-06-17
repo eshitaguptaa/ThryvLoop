@@ -8,8 +8,10 @@ import {
   getMembershipForSlug,
   isOrgAdmin,
 } from '@/lib/org';
+import { assertB2BWorkspacesEnabled } from '@/lib/featureFlags';
 
 export async function createWorkspace(_prevState, formData) {
+  assertB2BWorkspacesEnabled();
   const { userId } = await auth();
   if (!userId) redirect('/signin');
 
@@ -28,6 +30,7 @@ export async function createWorkspace(_prevState, formData) {
 }
 
 export async function inviteMember(orgSlug, _prevState, formData) {
+  assertB2BWorkspacesEnabled();
   const { userId } = await auth();
   if (!userId) return { error: 'You must be signed in.' };
 
@@ -71,6 +74,7 @@ export async function inviteMember(orgSlug, _prevState, formData) {
 }
 
 export async function revokeInvitation(orgSlug, invitationId) {
+  assertB2BWorkspacesEnabled();
   const { userId } = await auth();
   if (!userId) return { error: 'You must be signed in.' };
 

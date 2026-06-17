@@ -2,11 +2,15 @@
   "name": "thryvloop",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "validate:env": "node scripts/validate-env.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.0",

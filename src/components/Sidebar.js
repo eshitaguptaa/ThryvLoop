@@ -11,6 +11,7 @@ import { normalizeSettingsPanel } from '@/lib/openFocusSettings';
 import { getUserStorageJson, removeUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 import { suspendClerkAuthRequests } from '@/lib/clerkSupabaseToken';
 import ThemeToggle from '@/components/ThemeToggle';
+import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 
 const navigationItems = [
   {
@@ -131,6 +132,10 @@ const navigationItems = [
   },
 ];
 
+const visibleNavigationItems = B2B_WORKSPACES_ENABLED
+  ? navigationItems
+  : navigationItems.filter((item) => item.name !== 'Workspaces');
+
 export default function Sidebar({ className = '' }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -163,6 +168,7 @@ export default function Sidebar({ className = '' }) {
   const [showSoundscapeComposer, setShowSoundscapeComposer] = useState(false);
   const [composerInitialPanel, setComposerInitialPanel] = useState('composer');
   const [integrationsOAuth, setIntegrationsOAuth] = useState(null);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const searchParams = useSearchParams();
 
   // Save expanded items to localStorage whenever they change
@@ -342,6 +348,7 @@ export default function Sidebar({ className = '' }) {
   };
 
   const handleLogout = async () => {
+    setMobileMoreOpen(false);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('soundscape-stop-all'));
       removeUserStorageItem(userId, 'soundscape-active-sounds');
@@ -354,8 +361,34 @@ export default function Sidebar({ className = '' }) {
     await signOut({ redirectUrl: '/' });
   };
 
+  const mobilePrimaryItems = visibleNavigationItems.filter((item) =>
+    ['Home', 'Focus', 'Calendar', 'Tasks'].includes(item.name)
+  );
+
+  const mobileMoreItems = visibleNavigationItems.filter((item) =>
+    ['Analysis', 'Workspaces'].includes(item.name)
+  );
+
+  const renderNavIcon = (item, isActive) => (
+    <div
+      className={`
+        flex items-center justify-center transition-all duration-200
+        md:w-12 md:h-12 md:rounded-full md:mb-1.5
+        w-10 h-10 rounded-xl
+        ${
+          isActive
+            ? 'bg-[#5043F3]/10 text-[#5043F3]'
+            : 'bg-transparent text-muted-foreground group-hover:bg-muted'
+        }
+      `}
+    >
+      {item.icon}
+    </div>
+  );
+
   return (
-    <div className={`fixed left-0 top-0 h-full w-24 bg-card flex flex-col items-center py-5 z-40 border-r border-border font-(--font-poppins) ${className}`}>
+    <>
+    <div className={`hidden lg:flex fixed left-0 top-0 h-full w-24 bg-card flex-col items-center py-5 z-40 border-r border-border font-(--font-poppins) ${className}`}>
       {/* Logo/Brand Section */}
       <Link href="/home" className="mb-10 no-underline">
         <div className="w-10 h-10 flex items-center justify-center">
@@ -370,8 +403,8 @@ export default function Sidebar({ className = '' }) {
       </Link>
 
       {/* Navigation Items */}
-      <nav className="flex-1 flex flex-col items-center space-y-2 w-full overflow-y-auto px-2 sidebar-scroll">
-        {navigationItems.map((item) => {
+      <nav className="flex-1 flex flex-col items-center space-y-2 w-full overflow-y-auto px-2 pb-6 sidebar-scroll">
+        {visibleNavigationItems.map((item) => {
           const isActive =
             pathname === item.href
             || (item.href === '/o' && !!pathname && pathname.startsWith('/o/'))
@@ -583,23 +616,174 @@ export default function Sidebar({ className = '' }) {
         </div>
         <span className="text-xs font-medium">Logout</span>
       </button>
-
-      {/* Spaces Drawer */}
-      <SpacesDrawer isOpen={showSpacesDrawer} onClose={() => setShowSpacesDrawer(false)} />
-      
-      {/* Soundscape Composer Modal */}
-      <SoundscapeComposer
-        isOpen={showSoundscapeComposer}
-        onClose={() => {
-          setShowSoundscapeComposer(false);
-          setComposerInitialPanel('composer');
-          setIntegrationsOAuth(null);
-        }}
-        initialPanel={composerInitialPanel}
-        integrationsOAuth={integrationsOAuth}
-        onIntegrationsOAuthConsumed={() => setIntegrationsOAuth(null)}
-      />
     </div>
+
+    {/* Mobile bottom navigation */}
+    <nav
+      className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 ${className}`}
+      aria-label="Mobile navigation"
+    >
+      <div className="flex items-center justify-around gap-1">
+        {mobilePrimaryItems.map((item) => {
+          const isActive =
+            pathname === item.href
+            || (item.href === '/focus' && !!pathname && pathname.startsWith('/focus'));
+
+          if (item.name === 'Focus') {
+            return (
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => {
+                  if (pathname !== '/focus') router.push('/focus');
+                }}
+                className="group flex flex-1 flex-col items-center justify-center min-w-0 py-1"
+              >
+                {renderNavIcon(item, isActive || pathname?.startsWith('/focus'))}
+                <span
+                  className={`text-[10px] font-medium truncate ${
+                    isActive || pathname?.startsWith('/focus')
+                      ? 'text-[#5043F3]'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {item.name}
+                </span>
+              </button>
+            );
+          }
+
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className="group flex flex-1 flex-col items-center justify-center min-w-0 py-1 no-underline"
+            >
+              {renderNavIcon(item, isActive)}
+              <span
+                className={`text-[10px] font-medium truncate ${
+                  isActive ? 'text-[#5043F3]' : 'text-muted-foreground'
+                }`}
+              >
+                {item.name}
+              </span>
+            </Link>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={() => setMobileMoreOpen(true)}
+          className="group flex flex-1 flex-col items-center justify-center min-w-0 py-1"
+          aria-label="More navigation options"
+        >
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl text-muted-foreground group-hover:bg-muted transition-all duration-200">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </div>
+          <span className="text-[10px] font-medium text-muted-foreground">More</span>
+        </button>
+      </div>
+    </nav>
+
+    {mobileMoreOpen && (
+      <div className="lg:hidden fixed inset-0 z-50">
+        <button
+          type="button"
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={() => setMobileMoreOpen(false)}
+          aria-label="Close menu"
+        />
+        <div className="absolute bottom-0 left-0 right-0 bg-card border-t border-border rounded-t-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl max-h-[70vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-foreground">More</h2>
+            <button
+              type="button"
+              onClick={() => setMobileMoreOpen(false)}
+              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground"
+              aria-label="Close"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {mobileMoreItems.map((item) => {
+              const isActive =
+                pathname === item.href
+                || (item.href === '/o' && !!pathname && pathname.startsWith('/o/'));
+
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setMobileMoreOpen(false)}
+                  className={`flex items-center gap-3 rounded-xl border px-3 py-3 no-underline transition-colors ${
+                    isActive
+                      ? 'border-[#5043F3]/30 bg-[#5043F3]/10 text-[#5043F3]'
+                      : 'border-border text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {item.icon}
+                  <span className="text-sm font-medium">{item.name}</span>
+                </Link>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMoreOpen(false);
+                setComposerInitialPanel('composer');
+                setShowSoundscapeComposer(true);
+              }}
+              className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-foreground hover:bg-muted transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-sm font-medium">Settings</span>
+            </button>
+
+            <div className="flex items-center gap-3 rounded-xl border border-border px-3 py-3">
+              <ThemeToggle variant="sidebar" userId={user?.id ?? null} />
+              <span className="text-sm font-medium text-foreground">Theme</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 text-foreground hover:bg-muted transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" fill="none" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14 8l4 4-4 4" />
+            </svg>
+            <span className="text-sm font-medium">Logout</span>
+          </button>
+        </div>
+      </div>
+    )}
+
+    <SpacesDrawer isOpen={showSpacesDrawer} onClose={() => setShowSpacesDrawer(false)} />
+
+    <SoundscapeComposer
+      isOpen={showSoundscapeComposer}
+      onClose={() => {
+        setShowSoundscapeComposer(false);
+        setComposerInitialPanel('composer');
+        setIntegrationsOAuth(null);
+      }}
+      initialPanel={composerInitialPanel}
+      integrationsOAuth={integrationsOAuth}
+      onIntegrationsOAuthConsumed={() => setIntegrationsOAuth(null)}
+    />
+    </>
   );
 }
 

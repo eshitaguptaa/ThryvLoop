@@ -10,6 +10,7 @@ import ForestRainControls from '@/components/landing_sections/ForestRainControls
 import FeatureCardIcon from '@/components/landing_sections/FeatureCardIcon';
 import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
 import { SectionBlend } from '@/components/landing_sections/SectionBlend';
+import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 
 // ====================================================================
 // 1. Icon Components for React/Next.js
@@ -139,10 +140,10 @@ export default function Features() {
                </div>
 
               {/* Features Grid */}
-              <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr" stagger={0.06}>
+              <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start md:items-stretch lg:items-start" stagger={0.06}>
 
                 {/* Feature Card 1: Ambience & Pomodoro (Large Card) */}
-                <ScrollItem className="col-span-1 md:col-span-2 lg:row-span-2">
+                <ScrollItem className="col-span-1 md:col-span-2 lg:row-span-2 self-stretch">
                 <div className="group relative h-full overflow-hidden rounded-3xl bg-[#2f1952] border-0 shadow-2xl shadow-gray-900/20 dark:shadow-black/40 hover:shadow-primary/10 transition-all duration-500">
                   <div className="absolute inset-0 z-0 overflow-hidden rounded-3xl">
                     <SpacesCrossfadeBackground />
@@ -153,7 +154,7 @@ export default function Features() {
                     <div className="flex items-start justify-between">
                       <div className="space-y-3 max-w-lg z-30 relative">
                         <FeatureCardIcon icon="timer" tone="dark" className="mb-1" fill={1} />
-                        <h3 className="text-4xl font-black tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                        <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                           Ambience & Pomodoro
                         </h3>
                         <p className="text-white/90 text-lg leading-relaxed font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] max-w-md">
@@ -169,20 +170,20 @@ export default function Features() {
                       </div>
                     </div>
                     <div className="flex-grow flex items-center justify-center mt-8 mb-4">
-                      <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+                      <div className="w-full max-w-3xl grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-center">
                         <div className="relative flex justify-center py-6">
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-72 h-72 border border-white/5 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite]" />
-                            <div className="absolute w-64 h-64 border border-white/10 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite_0.5s]" />
+                            <div className="w-48 h-48 sm:w-60 sm:h-60 lg:w-72 lg:h-72 border border-white/5 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite]" />
+                            <div className="absolute w-40 h-40 sm:w-52 sm:h-52 lg:w-64 lg:h-64 border border-white/10 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite_0.5s]" />
                           </div>
-                          <div className="relative w-72 h-72 backdrop-blur-2xl bg-black/30 rounded-full border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex items-center justify-center z-10 group-hover:scale-105 transition-transform duration-500 ring-1 ring-white/20">
+                          <div className="relative w-48 h-48 sm:w-60 sm:h-60 lg:w-72 lg:h-72 backdrop-blur-2xl bg-black/30 rounded-full border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex items-center justify-center z-10 group-hover:scale-105 transition-transform duration-500 ring-1 ring-white/20">
                             <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-3">
                               <circle className="text-white/5" cx="50%" cy="50%" fill="transparent" r="46%" stroke="currentColor" strokeLinecap="round" strokeWidth="4" />
                               <circle className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.6)] transition-all duration-1000" cx="50%" cy="50%" fill="transparent" r="46%" stroke="currentColor" strokeDasharray="800" strokeDashoffset="200" strokeLinecap="round" strokeWidth="6" />
                             </svg>
                             <div className="flex flex-col items-center justify-center z-20 text-center space-y-2">
                               <div className="text-[10px] font-bold tracking-[0.4em] uppercase text-white/60">Time Left</div>
-                              <div className="text-7xl font-semibold text-white tracking-tighter tabular-nums drop-shadow-2xl leading-none">25:00</div>
+                              <div className="text-5xl sm:text-6xl lg:text-7xl font-semibold text-white tracking-tighter tabular-nums drop-shadow-2xl leading-none">25:00</div>
                               <div className="flex items-center gap-2 mt-2 px-3 py-1 rounded-full bg-white/10 border border-white/5">
                                 <MaterialSymbol icon="laptop_chromebook" className="text-[16px] text-white/80" />
                                 <span className="text-xs font-semibold text-white/80">Deep Work</span>
@@ -198,36 +199,38 @@ export default function Features() {
                 </ScrollItem>
 
                 {/* Feature Card 2: Task Reminders (interactive) */}
-                <ScrollItem className="h-full">
+                <ScrollItem>
                 <TasksShowcase />
                 </ScrollItem>
 
                 {/* Feature Card 3: Analysis Tracker (interactive) */}
-                <ScrollItem className="h-full">
+                <ScrollItem className="feature-compact-card">
                 <AnalysisTrackerShowcase />
                 </ScrollItem>
 
 
 
                {/* Feature Card 4: Team Workspaces (interactive) */}
-                <ScrollItem className="h-full">
+                {B2B_WORKSPACES_ENABLED ? (
+                <ScrollItem className="feature-compact-card feature-tablet-pair h-full">
                 <WorkspacesShowcase />
                 </ScrollItem>
+                ) : null}
                {/* Feature Card 5: Soundscape Composer */}
-                <ScrollItem className="h-full">
+                <ScrollItem className="feature-compact-card feature-tablet-pair h-full">
                 <SoundscapeComposerShowcase />
                 </ScrollItem>
 
 
 
                 {/* Feature Card 6: Gmail & Calendar (interactive) */}
-                <ScrollItem className="h-full">
+                <ScrollItem className="feature-compact-card md:col-span-2 lg:col-span-1 h-full">
                 <GmailCalendarShowcase />
                 </ScrollItem>
 
                {/* Feature Card 7: AI Chatbot Assistant (Wide Card) */}
                 <ScrollItem className="col-span-1 md:col-span-2 lg:col-span-3">
-<div className="group relative overflow-hidden rounded-3xl bg-card border border-border shadow-2xl shadow-gray-200/50 dark:shadow-black/30 hover:shadow-[0_20px_60px_-15px_rgba(99,72,193,0.15)] transition-all duration-300 p-8 sm:p-12 flex flex-col md:flex-row items-center gap-10">
+<div className="group relative overflow-hidden rounded-3xl bg-card border border-border shadow-2xl shadow-gray-200/50 dark:shadow-black/30 hover:shadow-[0_20px_60px_-15px_rgba(99,72,193,0.15)] transition-all duration-300 p-8 sm:p-10 lg:p-12 flex flex-col lg:flex-row items-center gap-8 lg:gap-10">
 
   {/* subtle grid + mask (keeps same behavior) */}
   <div
@@ -248,16 +251,16 @@ export default function Features() {
       Your personal productivity concierge. Start your day with clarity as our AI summarizes your agenda, prioritizes tasks, and handles quick queries instantly.
     </p>
 
-    <div className="flex gap-4">
+    <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
       <Link
         href="/home"
-        className="px-7 py-3 rounded-full bg-foreground text-background font-bold shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 hover:-translate-y-1 transition-all flex items-center gap-2"
+        className="px-7 py-3 rounded-full bg-foreground text-background font-bold shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 hover:-translate-y-1 transition-all flex items-center justify-center gap-2"
       >
         Chat with AI <MaterialSymbol icon="arrow_forward" className="text-sm" />
       </Link>
       <Link
         href="/signup"
-        className="px-7 py-3 rounded-full bg-card border border-border text-foreground font-semibold hover:bg-muted transition-colors"
+        className="px-7 py-3 rounded-full bg-card border border-border text-foreground font-semibold hover:bg-muted transition-colors text-center"
       >
         View Demo
       </Link>
@@ -269,7 +272,7 @@ export default function Features() {
     {/* purple glow background (indigo→purple, softer opacity + blur) */}
     <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-r from-indigo-500 to-purple-600 opacity-20 blur-3xl group-hover:opacity-30 transition-opacity duration-500 pointer-events-none"></div>
 
-    <div className="relative bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col h-[400px] transform transition-transform duration-500 ease-out">
+    <div className="relative bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col h-[320px] sm:h-[360px] lg:h-[400px] transform transition-transform duration-500 ease-out">
       {/* Header */}
       <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/80 backdrop-blur-md sticky top-0 z-10">
         <div className="flex items-center gap-4">

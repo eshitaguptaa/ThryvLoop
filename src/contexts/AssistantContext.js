@@ -10,8 +10,9 @@ import {
   useState,
 } from 'react';
 import { useAuth, useUser } from '@clerk/nextjs';
-import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
+import { getUserStorageItem, setUserStorageItem, removeUserStorageItem } from '@/utils/userStorage';
 import { parseApiJson } from '@/lib/assistant/clientApi';
+import { getFriendlyAssistantReply, getNewChatWelcome } from '@/lib/assistant/fallbackReplies';
 
 const AssistantContext = createContext(null);
 
@@ -33,7 +34,6 @@ export function AssistantProvider({ children }) {
   const [messages, setMessages] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
   const briefingLoadedRef = useRef(false);
   const openInitRef = useRef(false);
 
@@ -52,12 +52,48 @@ export function AssistantProvider({ children }) {
   const setConversationId = useCallback(
     (id) => {
       setConversationIdState(id);
-      if (userId && id) {
+      if (!userId) return;
+      if (id) {
         setUserStorageItem(userId, CONVERSATION_KEY, id);
+      } else {
+        removeUserStorageItem(userId, CONVERSATION_KEY);
       }
     },
     [userId]
   );
+
+  const appendAssistantMessage = useCallback((content, metadata = {}) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content,
+        metadata,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+  }, []);
+
+  const loadBriefingMessage = useCallback(async () => {
+    try {
+      const res = await fetch('/api/assistant/briefing');
+      const json = await parseApiJson(res);
+      if (!res.ok || !json.reply) return false;
+      setMessages([
+        {
+          id: `briefing-${Date.now()}`,
+          role: 'assistant',
+          content: json.reply,
+          metadata: json.metadata || {},
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => {
@@ -68,54 +104,66 @@ export function AssistantProvider({ children }) {
 
   const loadConversations = useCallback(async () => {
     if (!isSignedIn) return [];
-    const res = await fetch('/api/assistant/conversations');
-    const json = await parseApiJson(res);
-    if (!res.ok) throw new Error(json.error || 'Failed to load history');
-    setConversations(json.conversations || []);
-    return json.conversations || [];
+    try {
+      const res = await fetch('/api/assistant/conversations');
+      const json = await parseApiJson(res);
+      if (!res.ok) return [];
+      setConversations(json.conversations || []);
+      return json.conversations || [];
+    } catch {
+      return [];
+    }
   }, [isSignedIn]);
 
   const loadConversation = useCallback(
     async (id) => {
       if (!id) return;
       setIsLoading(true);
-      setError('');
       try {
         const res = await fetch(`/api/assistant/conversations/${id}`);
         const json = await parseApiJson(res);
-        if (!res.ok) throw new Error(json.error || 'Failed to load conversation');
+        if (!res.ok) {
+          setConversationId(null);
+          setMessages([]);
+          await loadBriefingMessage();
+          return;
+        }
         setConversationId(id);
         setMessages(json.messages || []);
         setShowHistory(false);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load conversation');
+      } catch {
+        setConversationId(null);
+        setMessages([]);
+        await loadBriefingMessage();
       } finally {
         setIsLoading(false);
       }
     },
-    [setConversationId]
+    [loadBriefingMessage, setConversationId]
   );
 
   const startNewConversation = useCallback(async () => {
+    setConversationId(null);
+    setMessages([]);
+    setShowHistory(false);
     setIsLoading(true);
-    setError('');
     try {
-      const res = await fetch('/api/assistant/conversations', { method: 'POST' });
-      const json = await parseApiJson(res);
-      if (!res.ok) throw new Error(json.error || 'Failed to start chat');
-      const id = json.conversation?.id;
-      if (id) {
-        setConversationId(id);
-        setMessages([]);
-        setShowHistory(false);
-        await loadConversations();
+      const gotBriefing = await loadBriefingMessage();
+      if (!gotBriefing) {
+        setMessages([
+          {
+            id: `welcome-${Date.now()}`,
+            role: 'assistant',
+            content: getNewChatWelcome(),
+            metadata: {},
+            created_at: new Date().toISOString(),
+          },
+        ]);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start chat');
     } finally {
       setIsLoading(false);
     }
-  }, [loadConversations, setConversationId]);
+  }, [loadBriefingMessage, setConversationId]);
 
   const fetchBriefing = useCallback(async () => {
     if (!isSignedIn || briefingLoadedRef.current) return;
@@ -176,7 +224,6 @@ export function AssistantProvider({ children }) {
       };
       setMessages((prev) => [...prev, userMsg]);
       setIsLoading(true);
-      setError('');
 
       try {
         const res = await fetch('/api/assistant/chat', {
@@ -188,7 +235,13 @@ export function AssistantProvider({ children }) {
           }),
         });
         const json = await parseApiJson(res);
-        if (!res.ok) throw new Error(json.error || 'Failed to send message');
+
+        if (!res.ok) {
+          appendAssistantMessage(getFriendlyAssistantReply({ status: res.status }), {
+            isFallback: true,
+          });
+          return;
+        }
 
         if (json.conversationId && json.conversationId !== conversationId) {
           setConversationId(json.conversationId);
@@ -197,25 +250,15 @@ export function AssistantProvider({ children }) {
         if (json.message) {
           setMessages((prev) => [...prev, json.message]);
         } else if (json.reply) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `assistant-${Date.now()}`,
-              role: 'assistant',
-              content: json.reply,
-              metadata: json.metadata || {},
-              created_at: new Date().toISOString(),
-            },
-          ]);
+          appendAssistantMessage(json.reply, json.metadata || {});
         }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to send message');
-        setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+      } catch {
+        appendAssistantMessage(getFriendlyAssistantReply(), { isFallback: true });
       } finally {
         setIsLoading(false);
       }
     },
-    [conversationId, isLoading, setConversationId]
+    [appendAssistantMessage, conversationId, isLoading, setConversationId]
   );
 
   const value = useMemo(
@@ -227,7 +270,6 @@ export function AssistantProvider({ children }) {
       messages,
       conversations,
       isLoading,
-      error,
       open,
       close,
       toggle,
@@ -243,7 +285,6 @@ export function AssistantProvider({ children }) {
       messages,
       conversations,
       isLoading,
-      error,
       open,
       close,
       toggle,

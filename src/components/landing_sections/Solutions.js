@@ -4,6 +4,7 @@ import TeamsNotifyForm from '@/components/landing_sections/TeamsNotifyForm';
 import WorkspaceEnvironment from '@/components/landing_sections/WorkspaceEnvironment';
 import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
 import { SectionBlend, gridFadeStyle } from '@/components/landing_sections/SectionBlend';
+import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 
 export default function Solutions() {
   const featuresLeft = [
@@ -137,7 +138,7 @@ export default function Solutions() {
             border: "1px solid rgba(99,102,241,0.15)",
           }}
         >
-          <ScrollStagger className="p-10 md:p-14 grid grid-cols-1 lg:grid-cols-2 gap-16" stagger={0.1}>
+          <ScrollStagger className="p-8 md:p-10 lg:p-14 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16" stagger={0.1}>
             {/* LEFT */}
             <ScrollItem>
             <div>
@@ -233,6 +234,7 @@ export default function Solutions() {
       </section>
 
       {/* ================= TEAMS ================= */}
+      {B2B_WORKSPACES_ENABLED ? (
 <section className="relative px-6 py-14 text-center overflow-hidden bg-background">
 
   {/* GRID BACKGROUND */}
@@ -302,8 +304,9 @@ export default function Solutions() {
     <TeamsNotifyForm />
   </ScrollReveal>
 </section>
+      ) : null}
 
-      <WorkspaceEnvironment />
+      {B2B_WORKSPACES_ENABLED ? <WorkspaceEnvironment /> : null}
 
     </main>
   );

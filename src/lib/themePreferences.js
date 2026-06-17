@@ -4,6 +4,9 @@ import {
   setUserStorageItem,
 } from '@/utils/userStorage';
 
+/** Must match `storageKey` on next-themes ThemeProvider. */
+export const NEXT_THEMES_STORAGE_KEY = 'thryvloop-theme';
+
 export const THEME_STORAGE_KEY = 'ui-theme';
 export const THEME_PREF_KEY = 'ui-theme';
 
@@ -14,13 +17,25 @@ export function isValidTheme(value) {
   return THEME_OPTIONS.includes(value);
 }
 
+/** Read theme from next-themes localStorage (shared across signed-out pages). */
+export function readBrowserTheme() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(NEXT_THEMES_STORAGE_KEY);
+    if (isValidTheme(stored)) return stored;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 /**
- * Load theme preference — localStorage first, then Supabase.
+ * Load theme preference — user-scoped storage, Supabase, then global browser storage.
  * @param {string|null} userId
  * @returns {Promise<'light'|'dark'|'system'>}
  */
 export async function loadThemePreference(userId) {
-  if (typeof window !== 'undefined' && userId) {
+  if (typeof window !== 'undefined') {
     const local = getUserStorageItem(userId, THEME_STORAGE_KEY);
     if (isValidTheme(local)) return local;
   }
@@ -48,6 +63,9 @@ export async function loadThemePreference(userId) {
       // ignore
     }
   }
+
+  const browser = readBrowserTheme();
+  if (browser) return browser;
 
   return 'system';
 }

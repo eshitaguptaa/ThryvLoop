@@ -14,6 +14,7 @@ import {
   removeUserStorageItem,
   setUserStorageJson,
 } from '@/utils/userStorage';
+import { getDefaultTaskBarPosition } from '@/lib/focusWidgetLayout';
 
 const FOCUS_TASK_ID_KEY = 'focus-current-task-id';
 
@@ -41,6 +42,7 @@ export default function FocusTaskBar() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0, left: 0, top: 0 });
   const widgetRef = useRef(null);
+  const userPositionedRef = useRef(false);
 
   const fetchTasks = useCallback(async () => {
     if (!userId) return;
@@ -171,6 +173,26 @@ export default function FocusTaskBar() {
   const currentTask = tasks.find((t) => String(t.id) === String(currentTaskId));
   const displayTitle = currentTask?.title ?? (tasksLoading ? 'Loading…' : 'No task selected');
 
+  const applyDefaultLayout = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const baseWidth = 450;
+    const baseHeight = 56;
+    const minWidth = Math.min(300, vw * 0.7);
+    const maxWidth = Math.min(550, vw * 0.85);
+    const minHeight = Math.min(48, vh * 0.06);
+    const maxHeight = Math.min(80, vh * 0.09);
+    const widthScale = Math.min(1, vw / 1440);
+    const heightScale = Math.min(1, vh / 900);
+    const scale = Math.min(widthScale, heightScale, 1.2);
+    setSize({
+      width: Math.max(minWidth, Math.min(maxWidth, baseWidth * scale)),
+      height: Math.max(minHeight, Math.min(maxHeight, baseHeight * scale)),
+    });
+    setPosition(getDefaultTaskBarPosition());
+  }, []);
+
   // Initialize default position and size
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -186,12 +208,13 @@ export default function FocusTaskBar() {
       const widthScale = Math.min(1, vw / 1440);
       const heightScale = Math.min(1, vh / 900);
       const scale = Math.min(widthScale, heightScale, 1.2);
-      const responsiveWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * scale));
-      const responsiveHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight * scale));
-      const centerX = vw / 2;
-      const topMargin = Math.max(30, Math.min(60, vh * 0.05));
-      setPosition({ x: centerX, y: topMargin });
-      setSize({ width: responsiveWidth, height: responsiveHeight });
+      setSize({
+        width: Math.max(minWidth, Math.min(maxWidth, baseWidth * scale)),
+        height: Math.max(minHeight, Math.min(maxHeight, baseHeight * scale)),
+      });
+      if (!userPositionedRef.current) {
+        setPosition(getDefaultTaskBarPosition());
+      }
     };
     updatePositionAndSize();
     const handleFullscreenChange = () => setTimeout(updatePositionAndSize, 100);
@@ -229,6 +252,8 @@ export default function FocusTaskBar() {
       removeUserStorageItem(userId, 'focus-taskbar-position');
       removeUserStorageItem(userId, 'focus-taskbar-size');
     }
+    userPositionedRef.current = false;
+    applyDefaultLayout();
     setShowTaskBar(false);
     setShowTask(false);
   };
@@ -236,6 +261,7 @@ export default function FocusTaskBar() {
   const handleMouseDown = (e) => {
     if (e.target.closest('button') || e.target.closest('.resize-handle') || e.target.closest('a')) return;
     if (!position) return;
+    userPositionedRef.current = true;
     setIsDragging(true);
     const rect = widgetRef.current?.getBoundingClientRect();
     if (rect) {
@@ -249,6 +275,7 @@ export default function FocusTaskBar() {
   const handleResizeStart = (e, handle) => {
     e.stopPropagation();
     e.preventDefault();
+    userPositionedRef.current = true;
     setIsResizing(true);
     setResizeHandle(handle);
     const rect = widgetRef.current?.getBoundingClientRect();

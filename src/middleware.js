@@ -1,7 +1,10 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 
 const WORKSPACE_OAUTH_COOKIE = 'workspace_oauth_state';
+
+const isB2BWorkspaceRoute = createRouteMatcher(['/o(.*)']);
 
 const isProtectedRoute = createRouteMatcher([
   '/home(.*)',
@@ -30,6 +33,17 @@ const isPublicWorkspaceApi = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId } = await auth();
+
+  if (!B2B_WORKSPACES_ENABLED) {
+    if (isB2BWorkspaceRoute(req)) {
+      const destination = userId ? '/home' : '/';
+      return NextResponse.redirect(new URL(destination, req.url));
+    }
+
+    if (req.nextUrl.pathname === '/api/teams-notify') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+  }
 
   if (!userId && req.cookies.get(WORKSPACE_OAUTH_COOKIE)) {
     const res = NextResponse.next();

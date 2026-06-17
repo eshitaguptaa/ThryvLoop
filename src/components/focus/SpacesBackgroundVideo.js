@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
 import { DEFAULT_SPACES_VIDEO_ID } from '@/lib/spacesConstants';
+import { isSpacesPausedByUser, isSpacesPlaybackIntent } from '@/lib/spacesPlayback';
+import { loadYouTubeIframeApi } from '@/lib/youtubeIframeApi';
 
 const DEFAULT_VIDEO_ID = DEFAULT_SPACES_VIDEO_ID;
 
@@ -27,32 +29,6 @@ function getYouTubeEmbedUrl(videoId) {
     playsinline: '1',
   });
   return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
-}
-
-function loadYouTubeIframeApi() {
-  return new Promise((resolve) => {
-    if (typeof window === 'undefined') return;
-    if (window.YT?.Player) {
-      resolve();
-      return;
-    }
-    const previous = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
-      previous?.();
-      if (window.YT?.Player) resolve();
-    };
-    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      document.head.appendChild(tag);
-    }
-    const poll = setInterval(() => {
-      if (window.YT?.Player) {
-        clearInterval(poll);
-        resolve();
-      }
-    }, 100);
-  });
 }
 
 export default function SpacesBackgroundVideo() {
@@ -80,6 +56,7 @@ export default function SpacesBackgroundVideo() {
   const applyPlayerVolumeRef = useRef(null);
   const startPlaybackRef = useRef(null);
   const restoreAudioAfterVideoSwitchRef = useRef(null);
+  const audioSyncTimeoutRef = useRef(null);
 
   volumeRef.current = volume;
   userIdRef.current = userId;
@@ -89,31 +66,26 @@ export default function SpacesBackgroundVideo() {
   }, [currentVideoId]);
 
   useEffect(() => {
-    const activate = () => setPlayerActivated(true);
+    const activate = () => {
+      setPlayerActivated(true);
+      void loadYouTubeIframeApi();
+    };
     window.addEventListener('focus-spaces-activate', activate);
     return () => window.removeEventListener('focus-spaces-activate', activate);
   }, []);
 
-  const isSpacesPausedByUser = useCallback(() => {
-    if (typeof window === 'undefined') return false;
-    return (
-      getUserStorageItem(userIdRef.current, 'focus-spaces-paused', 'focus-spaces-paused') ===
-      'true'
-    );
+  const isSpacesPaused = useCallback(() => {
+    return isSpacesPausedByUser(userIdRef.current);
   }, []);
 
   const isSpacesPlaybackActive = useCallback(() => {
-    if (typeof window === 'undefined') return false;
-    return (
-      getUserStorageItem(userIdRef.current, 'focus-spaces-paused', 'focus-spaces-paused') ===
-      'false'
-    );
+    return isSpacesPlaybackIntent(userIdRef.current);
   }, []);
 
   const shouldRunPlayer = () => playerActivated;
 
   const resolvePlaybackVolume = useCallback(() => {
-    if (isSpacesPausedByUser()) return 0;
+    if (isSpacesPaused()) return 0;
     const ducked = playbackVolumeRef.current;
     const activeViaPreference = isSpacesPlaybackActive();
     const activeViaPlayback =
@@ -123,7 +95,7 @@ export default function SpacesBackgroundVideo() {
     // Session duck-to-zero must not silence Spaces unless the user paused/muted
     if (ducked === 0) return volumeRef.current;
     return ducked;
-  }, [isSpacesPausedByUser, isSpacesPlaybackActive]);
+  }, [isSpacesPaused, isSpacesPlaybackActive]);
 
   const getPlaybackVolume = useCallback(() => {
     if (!shouldRunPlayer()) return 0;
@@ -165,18 +137,57 @@ export default function SpacesBackgroundVideo() {
   }, [applyPlayerVolume, getPlaybackVolume]);
 
   const syncSpacesPlayback = useCallback(() => {
-    if (!isSpacesPlaybackActive() || isSpacesPausedByUser()) return;
+    if (!isSpacesPlaybackActive() || isSpacesPaused()) return;
     playbackVolumeRef.current = volumeRef.current;
     if (playerRef.current) {
       applyPlayerVolume(playerRef.current, volumeRef.current);
       startPlayback(playerRef.current);
     }
-  }, [applyPlayerVolume, isSpacesPausedByUser, isSpacesPlaybackActive, startPlayback]);
+  }, [applyPlayerVolume, isSpacesPaused, isSpacesPlaybackActive, startPlayback]);
+
+  const scheduleAudioSync = useCallback(
+    (player = playerRef.current) => {
+      if (!player) return;
+      if (audioSyncTimeoutRef.current) {
+        clearTimeout(audioSyncTimeoutRef.current);
+        audioSyncTimeoutRef.current = null;
+      }
+      if (!isSpacesPlaybackActive() || isSpacesPaused()) return;
+
+      let attempts = 0;
+      const maxAttempts = 16;
+
+      const tick = () => {
+        audioSyncTimeoutRef.current = null;
+        if (!playerRef.current || !isSpacesPlaybackActive() || isSpacesPaused()) return;
+
+        const vol = resolvePlaybackVolume();
+        if (vol > 0) {
+          playbackVolumeRef.current = vol;
+          applyPlayerVolume(playerRef.current, vol);
+          try {
+            if (typeof playerRef.current.unMute === 'function') playerRef.current.unMute();
+            if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
+          } catch (e) {
+            console.error('Error syncing Spaces audio:', e);
+          }
+        }
+
+        attempts += 1;
+        if (attempts < maxAttempts && vol > 0) {
+          audioSyncTimeoutRef.current = setTimeout(tick, 200);
+        }
+      };
+
+      tick();
+    },
+    [applyPlayerVolume, isSpacesPaused, isSpacesPlaybackActive, resolvePlaybackVolume]
+  );
 
   const restoreAudioAfterVideoSwitch = useCallback(
     (player = playerRef.current) => {
       if (!player) return;
-      if (isSpacesPausedByUser()) {
+      if (isSpacesPaused()) {
         applyPlayerVolume(player, 0);
         return;
       }
@@ -196,8 +207,9 @@ export default function SpacesBackgroundVideo() {
       } catch (e) {
         console.error('Error restoring audio after video switch:', e);
       }
+      scheduleAudioSync(player);
     },
-    [applyPlayerVolume, isSpacesPausedByUser]
+    [applyPlayerVolume, isSpacesPaused, scheduleAudioSync]
   );
 
   applyPlayerVolumeRef.current = applyPlayerVolume;
@@ -243,6 +255,10 @@ export default function SpacesBackgroundVideo() {
   };
 
   const destroyPlayer = () => {
+    if (audioSyncTimeoutRef.current) {
+      clearTimeout(audioSyncTimeoutRef.current);
+      audioSyncTimeoutRef.current = null;
+    }
     if (playbackPositionIntervalRef.current) {
       clearInterval(playbackPositionIntervalRef.current);
       playbackPositionIntervalRef.current = null;
@@ -280,6 +296,7 @@ export default function SpacesBackgroundVideo() {
               }
             }
             startPlaybackRef.current?.(event.target);
+            scheduleAudioSync(event.target);
             window.dispatchEvent(new CustomEvent('focus-spaces-player-ready'));
             if (playbackPositionIntervalRef.current) {
               clearInterval(playbackPositionIntervalRef.current);
@@ -304,6 +321,7 @@ export default function SpacesBackgroundVideo() {
                 restoreAudioAfterVideoSwitchRef.current?.(event.target);
               } else {
                 applyPlayerVolumeRef.current?.(event.target);
+                scheduleAudioSync(event.target);
               }
             } else if (
               event.data === window.YT.PlayerState.BUFFERING ||
@@ -314,7 +332,7 @@ export default function SpacesBackgroundVideo() {
               if (
                 shouldRunPlayer() &&
                 isSpacesPlaybackActive() &&
-                !isSpacesPausedByUser() &&
+                !isSpacesPaused() &&
                 (event.data === window.YT.PlayerState.PAUSED ||
                   event.data === window.YT.PlayerState.CUED)
               ) {
@@ -339,15 +357,17 @@ export default function SpacesBackgroundVideo() {
     } catch (e) {
       console.error('Error attaching YouTube player API:', e);
     }
-  }, [isSpacesPausedByUser, isSpacesPlaybackActive]);
+  }, [isSpacesPaused, isSpacesPlaybackActive, scheduleAudioSync]);
 
   attachPlayerApiRef.current = attachPlayerApi;
 
   useEffect(() => {
-    if (isSpacesPlaybackActive()) {
+    if (!userId || typeof window === 'undefined') return;
+    if (isSpacesPlaybackIntent(userId)) {
       setPlayerActivated(true);
+      void loadYouTubeIframeApi();
     }
-  }, [userId, isSpacesPlaybackActive]);
+  }, [userId]);
 
   useEffect(() => {
     if (!playerActivated) return undefined;
@@ -379,7 +399,7 @@ export default function SpacesBackgroundVideo() {
     const handleVolumeChange = (e) => {
       if (e.detail?.playbackOnly) {
         if (e.detail?.volume !== undefined) {
-          if (e.detail.volume === 0 && !isSpacesPausedByUser()) {
+          if (e.detail.volume === 0 && !isSpacesPaused()) {
             return;
           }
           if (e.detail.volume > 0) {
@@ -399,7 +419,7 @@ export default function SpacesBackgroundVideo() {
     };
     window.addEventListener('focus-volume-changed', handleVolumeChange);
     return () => window.removeEventListener('focus-volume-changed', handleVolumeChange);
-  }, [applyPlayerVolume, startPlayback, isSpacesPausedByUser]);
+  }, [applyPlayerVolume, startPlayback, isSpacesPaused]);
 
   useEffect(() => {
     const resume = () => {
@@ -416,11 +436,12 @@ export default function SpacesBackgroundVideo() {
 
   useEffect(() => {
     const handlePauseChanged = () => {
-      if (!isSpacesPlaybackActive() || isSpacesPausedByUser()) {
+      if (!isSpacesPlaybackActive() || isSpacesPaused()) {
         applyPlayerVolume(playerRef.current, 0);
       } else {
         setPlayerActivated(true);
         syncSpacesPlayback();
+        scheduleAudioSync(playerRef.current);
       }
     };
     window.addEventListener('soundscape-state-changed', handlePauseChanged);
@@ -429,14 +450,15 @@ export default function SpacesBackgroundVideo() {
       window.removeEventListener('soundscape-state-changed', handlePauseChanged);
       window.removeEventListener('soundscape-play-pause-changed', handlePauseChanged);
     };
-  }, [applyPlayerVolume, isSpacesPausedByUser, isSpacesPlaybackActive, syncSpacesPlayback]);
+  }, [applyPlayerVolume, isSpacesPaused, isSpacesPlaybackActive, syncSpacesPlayback, scheduleAudioSync]);
 
   useEffect(() => {
     if (!playerReady) return;
     const unlockAudio = () => {
-      if (!isSpacesPlaybackActive() || isSpacesPausedByUser()) return;
+      if (!isSpacesPlaybackActive() || isSpacesPaused()) return;
       playbackVolumeRef.current = volumeRef.current;
       syncSpacesPlayback();
+      scheduleAudioSync(playerRef.current);
     };
     window.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
     window.addEventListener('keydown', unlockAudio, { once: true, capture: true });
@@ -444,7 +466,7 @@ export default function SpacesBackgroundVideo() {
       window.removeEventListener('pointerdown', unlockAudio, { capture: true });
       window.removeEventListener('keydown', unlockAudio, { capture: true });
     };
-  }, [playerReady, syncSpacesPlayback, isSpacesPausedByUser, isSpacesPlaybackActive]);
+  }, [playerReady, syncSpacesPlayback, isSpacesPaused, isSpacesPlaybackActive, scheduleAudioSync]);
 
   const handleIframeLoad = () => {
     setIsVideoPlaying(true);
@@ -459,7 +481,7 @@ export default function SpacesBackgroundVideo() {
 
   return (
     <div
-      className="fixed inset-0 z-[1] w-screen h-screen overflow-hidden bg-black"
+      className="fixed inset-0 z-[1] overflow-hidden bg-black"
       style={{
         pointerEvents: isOnFocusRoute ? 'auto' : 'none',
         visibility: isOnFocusRoute ? 'visible' : 'hidden',

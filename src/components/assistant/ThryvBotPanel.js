@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, History, X } from 'lucide-react';
+import { Loader2, History, Plus, X } from 'lucide-react';
 import { useAssistant } from '@/contexts/AssistantContext';
 import ThryvBotMessage from '@/components/assistant/ThryvBotMessage';
 import ThryvBotHistory from '@/components/assistant/ThryvBotHistory';
@@ -24,10 +24,10 @@ export default function ThryvBotPanel({ userInitial = 'ME' }) {
     close,
     messages,
     isLoading,
-    error,
     sendMessage,
     setShowHistory,
     showHistory,
+    startNewConversation,
   } = useAssistant();
 
   if (!isOpen) return null;
@@ -66,6 +66,16 @@ export default function ThryvBotPanel({ userInitial = 'ME' }) {
           <div className="flex items-center gap-1">
             <button
               type="button"
+              onClick={() => void startNewConversation()}
+              disabled={isLoading}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+              aria-label="New chat"
+              title="New chat"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
               onClick={() => setShowHistory(!showHistory)}
               className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-label="Chat history"
@@ -93,9 +103,6 @@ export default function ThryvBotPanel({ userInitial = 'ME' }) {
             <ThryvBotMessage key={msg.id} message={msg} userInitial={userInitial} />
           ))}
           {isLoading && <TypingIndicator />}
-          {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs text-red-600 dark:bg-red-950/50 dark:text-red-300">{error}</p>
-          )}
         </div>
 
         <form onSubmit={handleSubmit} className="border-t border-border bg-card p-4">

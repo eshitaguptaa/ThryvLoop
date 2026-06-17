@@ -89,15 +89,15 @@ export default function AnalysisTrackerShowcase() {
 
   return (
     <div className="group relative overflow-hidden rounded-3xl bg-card border border-border shadow-xl shadow-gray-200/50 dark:shadow-black/30 hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
-      <div className="p-8 pb-2 relative z-10">
-        <FeatureCardIcon icon="monitoring" tone="purple" className="mb-5" fill={1} />
+      <div className="p-6 lg:p-7 pb-2 relative z-10 shrink-0">
+        <FeatureCardIcon icon="monitoring" tone="purple" className="mb-4" fill={1} />
         <h3 className="landing-card-title mb-1">Analysis Tracker</h3>
         <p className="landing-card-desc">Visualize trends & optimize.</p>
       </div>
 
-      <div className="flex-grow p-6 pt-2 relative z-10">
-        <div className="bg-muted rounded-2xl border border-border p-5 h-full flex flex-col relative overflow-hidden shadow-inner min-h-[220px]">
-          <div className="flex justify-between items-start mb-4 gap-3">
+      <div className="flex-1 flex flex-col px-5 pb-5 pt-1 lg:px-6 lg:pb-6 relative z-10 min-h-0">
+        <div className="flex-1 flex flex-col bg-muted rounded-2xl border border-border p-4 lg:p-5 relative shadow-inner min-h-0">
+          <div className="flex justify-between items-start mb-3 gap-3 shrink-0">
             <div>
               <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">
                 {metric.label}
@@ -128,7 +128,7 @@ export default function AnalysisTrackerShowcase() {
             </div>
           </div>
 
-          <div className="flex gap-1.5 mb-4">
+          <div className="flex gap-1.5 mb-3 shrink-0">
             {METRIC_TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -148,55 +148,68 @@ export default function AnalysisTrackerShowcase() {
             ))}
           </div>
 
-          <div className="flex items-end justify-between gap-2 h-24 sm:h-28 md:h-36 w-full mt-auto">
+          {/* Mobile — bars only, no tooltips */}
+          <div className="flex md:hidden items-end justify-between gap-2 h-24 sm:h-28 w-full mt-auto shrink-0">
             {bars.map((bar) => {
               const selected = selectedBar === bar.id;
               const barHeight = selected ? Math.min(bar.height + 8, 100) : bar.height;
 
               return (
-                <div key={bar.id} className="w-full relative flex items-end justify-center h-full">
+                <div key={bar.id} className="w-full relative flex items-end justify-center h-full min-w-0">
                   <button
                     type="button"
                     onClick={() => setSelectedBar(bar.id)}
                     aria-label={`${bar.label}: ${bar.value}${metric.suffix}`}
                     aria-pressed={selected}
-                    className={`peer relative w-full rounded-t-md transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-violet-200/40 ${barGradient(
+                    className={`w-full rounded-t-md transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-violet-200/40 ${barGradient(
                       selected,
                       bar.height
                     )} ${selected ? 'hover:brightness-105' : 'hover:brightness-[0.97]'}`}
                     style={{ height: `${barHeight}%` }}
                   />
+                </div>
+              );
+            })}
+          </div>
 
+          {/* Desktop — bars fill remaining space; tooltips float above */}
+          <div className="hidden md:grid md:grid-cols-6 md:gap-2 md:flex-1 md:min-h-[9.5rem] md:items-end md:w-full md:pt-8 md:pb-1 min-h-0">
+            {bars.map((bar) => {
+              const selected = selectedBar === bar.id;
+              const barHeight = selected ? Math.min(bar.height + 8, 100) : bar.height;
+
+              return (
+                <div key={bar.id} className="relative flex flex-col justify-end h-full min-h-0 min-w-0 group/bar">
                   <div
-                    className={`absolute -top-14 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none transition-opacity duration-200 ${
-                      selected
-                        ? 'opacity-100'
-                        : 'opacity-0 peer-hover:opacity-100 peer-focus:opacity-100'
-                    }`}
+                    className="absolute bottom-full left-1/2 z-10 mb-1.5 flex -translate-x-1/2 flex-col items-center pointer-events-none opacity-0 transition-opacity duration-200 group-hover/bar:opacity-100"
                   >
-                    <div
-                      className={`absolute -bottom-2 left-1/2 -translate-x-1/2 w-16 h-5 rounded-xl bg-gradient-to-r from-violet-400/24 to-indigo-500/18 blur-lg transition-opacity ${
-                        selected ? 'opacity-100' : 'opacity-0 peer-hover:opacity-100 peer-focus:opacity-100'
-                      }`}
-                    />
-                    <div className="relative z-10">
-                      <div className="bg-gray-900 text-white font-semibold text-[10px] sm:text-xs px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
-                        {bar.label} · {bar.value}
-                        {metric.suffix}
-                      </div>
-                      <svg
-                        className="mx-auto mt-1"
-                        width="16"
-                        height="8"
-                        viewBox="0 0 20 10"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        aria-hidden
-                      >
-                        <path d="M10 10L0 0H20L10 10Z" fill="#111827" />
-                      </svg>
+                    <div className="bg-gray-900 text-white font-semibold text-xs px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
+                      {bar.label} · {bar.value}
+                      {metric.suffix}
                     </div>
+                    <svg
+                      className="mx-auto mt-1"
+                      width="16"
+                      height="8"
+                      viewBox="0 0 20 10"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden
+                    >
+                      <path d="M10 10L0 0H20L10 10Z" fill="#111827" />
+                    </svg>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBar(bar.id)}
+                    aria-label={`${bar.label}: ${bar.value}${metric.suffix}`}
+                    aria-pressed={selected}
+                    className={`w-full rounded-t-md transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-violet-200/40 ${barGradient(
+                      selected,
+                      bar.height
+                    )} ${selected ? 'hover:brightness-105' : 'hover:brightness-[0.97]'}`}
+                    style={{ height: `${barHeight}%` }}
+                  />
                 </div>
               );
             })}

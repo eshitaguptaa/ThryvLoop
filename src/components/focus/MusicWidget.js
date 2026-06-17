@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { useFocus } from '@/contexts/FocusContext';
 import { getUserStorageItem, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
+import { getDefaultMusicWidgetPosition } from '@/lib/focusWidgetLayout';
 
 export default function MusicWidget() {
   const { setShowMusic } = useFocus();
@@ -20,6 +21,7 @@ export default function MusicWidget() {
   const [spacesPaused, setSpacesPaused] = useState(false);
   const widgetRef = useRef(null);
   const globalVolumeRef = useRef(75);
+  const userPositionedRef = useRef(false);
 
   // Helper to check if Spaces is configured for playback
   const checkSpacesPlaying = () => {
@@ -162,30 +164,29 @@ export default function MusicWidget() {
 
   // Play/pause is dispatched from the widget toggle and SoundscapeComposer — not on every state sync.
 
+  const applyDefaultLayout = () => {
+    setPosition(getDefaultMusicWidgetPosition());
+  };
+
   // Initialize position
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     const updatePosition = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      
-      const centerX = vw / 2;
-      const bottomMargin = Math.max(50, Math.min(120, vh * 0.1));
-      const musicCenterY = vh - bottomMargin;
-      
-      setPosition({ x: centerX, y: musicCenterY });
+      if (!userPositionedRef.current) {
+        setPosition(getDefaultMusicWidgetPosition());
+      }
     };
-    
+
     updatePosition();
-    
+
     const handleFullscreenChange = () => {
       setTimeout(updatePosition, 100);
     };
-    
+
     window.addEventListener('focus-fullscreen-change', handleFullscreenChange);
     window.addEventListener('resize', updatePosition);
-    
+
     return () => {
       window.removeEventListener('focus-fullscreen-change', handleFullscreenChange);
       window.removeEventListener('resize', updatePosition);
@@ -202,13 +203,16 @@ export default function MusicWidget() {
     if (typeof window !== 'undefined') {
       removeUserStorageItem(userId, 'focus-music-position');
     }
+    userPositionedRef.current = false;
+    applyDefaultLayout();
     setShowMusic(false);
   };
 
   const handleMouseDown = (e) => {
     if (e.target.closest('button')) return;
     if (!position) return;
-    
+
+    userPositionedRef.current = true;
     setIsDragging(true);
     const rect = widgetRef.current?.getBoundingClientRect();
     if (rect) {
@@ -290,7 +294,18 @@ export default function MusicWidget() {
     }
 
     if (checkSpacesPlaying()) {
+      setUserStorageItem(userId, 'focus-spaces-paused', 'false');
+      setUserStorageItem(userId, 'soundscape-session-active', 'true');
+      setUserStorageItem(userId, 'soundscape-is-playing', 'true');
+      setSpacesPaused(false);
+      setIsPlaying(true);
+      setSessionActive(true);
+      window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
       window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
+      window.dispatchEvent(
+        new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: true } })
+      );
+      return;
     }
   };
 

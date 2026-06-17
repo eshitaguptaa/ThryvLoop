@@ -38,7 +38,7 @@ export default function ThryvBotWidget() {
         onClick={toggle}
         aria-label={isOpen ? 'Close ThryvBot' : 'Open ThryvBot'}
         aria-expanded={isOpen}
-        className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30 transition-all hover:scale-105 hover:shadow-xl hover:shadow-indigo-500/40 ${
+        className={`fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30 transition-all hover:scale-105 hover:shadow-xl hover:shadow-indigo-500/40 lg:bottom-6 lg:right-6 ${
           isOpen ? 'ring-2 ring-white/50' : ''
         }`}
       >

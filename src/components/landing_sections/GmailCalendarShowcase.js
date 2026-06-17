@@ -46,14 +46,14 @@ export default function GmailCalendarShowcase() {
     <div className="group relative overflow-hidden rounded-3xl bg-card border border-border shadow-xl shadow-gray-100/50 dark:shadow-black/30 hover:shadow-2xl hover:shadow-blue-400/10 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
       <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-3xl pointer-events-none group-hover:bg-blue-400/15 transition-colors" />
 
-      <div className="p-8 pb-4 relative z-10">
+      <div className="p-8 pb-2 relative z-10 shrink-0">
         <FeatureCardIcon icon="stacked_email" tone="blue" className="mb-5" fill={1} />
         <h3 className="landing-card-title mb-1">Gmail & Calendar</h3>
         <p className="landing-card-desc">Unified inbox & schedule view.</p>
       </div>
 
-      <div className="flex-grow px-6 pb-6 pt-0 relative z-10">
-        <div className="bg-card rounded-2xl border border-border overflow-hidden flex flex-col shadow-sm group-hover:shadow-md transition-shadow h-full">
+      <div className="flex-1 flex flex-col px-6 pb-6 pt-0 relative z-10 min-h-0">
+        <div className="bg-card rounded-2xl border border-border overflow-hidden flex flex-col shadow-sm group-hover:shadow-md transition-shadow h-full min-h-[220px] lg:min-h-0">
           <div className="h-9 bg-muted/90 border-b border-border flex items-center px-4 gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
@@ -67,7 +67,7 @@ export default function GmailCalendarShowcase() {
             </div>
           </div>
 
-          <div className="p-4 space-y-3 relative">
+          <div className="p-4 space-y-3 relative flex-1">
             <div className="absolute left-[1.15rem] top-5 bottom-5 w-px bg-gradient-to-b from-blue-200 via-gray-200 to-red-200 z-0" />
 
             {/* Calendar row */}

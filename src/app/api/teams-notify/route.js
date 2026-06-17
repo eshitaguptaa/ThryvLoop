@@ -1,7 +1,6 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { checkRateLimit } from '@/lib/security/rateLimit';
-
-const DEFAULT_NOTIFY_TO = 'arjundevraj05@gmail.com';
+import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -13,7 +12,11 @@ async function sendNotifyEmail(subscriberEmail) {
     return { ok: false, reason: 'missing_api_key' };
   }
 
-  const to = process.env.TEAMS_NOTIFY_TO || DEFAULT_NOTIFY_TO;
+  const to = process.env.TEAMS_NOTIFY_TO?.trim();
+  if (!to) {
+    return { ok: false, reason: 'missing_notify_to' };
+  }
+
   const from = process.env.TEAMS_NOTIFY_FROM || 'ThryvLoop <onboarding@resend.dev>';
 
   const res = await fetch('https://api.resend.com/emails', {
@@ -58,6 +61,10 @@ async function saveToWaitlist(email) {
 }
 
 export async function POST(request) {
+  if (!B2B_WORKSPACES_ENABLED) {
+    return Response.json({ error: 'Not found' }, { status: 404 });
+  }
+
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||

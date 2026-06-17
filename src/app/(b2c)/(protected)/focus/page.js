@@ -155,7 +155,7 @@ export default function FocusPage() {
       {/* Fullscreen button */}
       <button
         onClick={toggleFullscreen}
-        className="fixed bottom-6 right-6 z-30 w-12 h-12 rounded-2xl bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/[0.08] hover:border-white/20 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-30 w-12 h-12 rounded-2xl bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/[0.08] hover:border-white/20 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
         aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
       >
         {isFullscreen ? (

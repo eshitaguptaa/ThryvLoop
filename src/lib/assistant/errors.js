@@ -1,8 +1,14 @@
+import { GeminiRateLimitError } from '@/lib/assistant/geminiRateLimit';
+
 /**
  * User-friendly message for Gemini API failures.
  * @param {unknown} err
  */
 export function formatGeminiError(err) {
+  if (err instanceof GeminiRateLimitError) {
+    return { message: err.message, status: 429, retryAfterSec: err.retryAfterSec };
+  }
+
   const raw = err instanceof Error ? err.message : String(err);
 
   if (raw.includes('429') || raw.includes('quota') || raw.includes('Quota exceeded')) {

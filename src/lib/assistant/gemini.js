@@ -7,6 +7,7 @@ import {
 } from '@/lib/assistant/tools';
 import { toGeminiHistory } from '@/lib/assistant/conversations';
 import { formatGeminiError } from '@/lib/assistant/errors';
+import { assertGeminiApiAllowed } from '@/lib/assistant/geminiRateLimit';
 
 /** Override via GEMINI_MODEL in .env.local if you hit quota limits */
 const DEFAULT_MODEL = 'gemini-2.5-flash';
@@ -33,7 +34,8 @@ function getModel() {
   });
 }
 
-async function sendChatMessage(chat, content) {
+async function sendChatMessage(chat, content, userId) {
+  assertGeminiApiAllowed(userId);
   try {
     return await chat.sendMessage(content);
   } catch (err) {
@@ -79,7 +81,7 @@ export async function runAssistantChat({ messages, userMessage, userId, userName
   const toolTrace = [];
   let cards = [];
 
-  let response = await sendChatMessage(chat, `${contextMsg}\n\nUser: ${userMessage}`);
+  let response = await sendChatMessage(chat, `${contextMsg}\n\nUser: ${userMessage}`, userId);
   let rounds = 0;
 
   while (rounds < MAX_TOOL_ROUNDS) {
@@ -111,7 +113,7 @@ export async function runAssistantChat({ messages, userMessage, userId, userName
 
     cards = collectCardsFromToolResults(toolTrace.map((t) => t.result));
 
-    response = await sendChatMessage(chat, functionResponses);
+    response = await sendChatMessage(chat, functionResponses, userId);
   }
 
   let reply = getResponseText(response);
@@ -221,7 +223,8 @@ function parseAnalyticsInsightJson(text) {
  * Generate analytics tips from dashboard metrics via Gemini.
  * @param {{ metrics: Record<string, unknown>, userName?: string }} params
  */
-export async function buildAnalyticsInsight({ metrics, userName }) {
+export async function buildAnalyticsInsight({ metrics, userName, userId }) {
+  assertGeminiApiAllowed(userId);
   const genAI = getGeminiClient();
   const model = genAI.getGenerativeModel({
     model: getModelName(),

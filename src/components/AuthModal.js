@@ -1,17 +1,54 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useSignIn, useSignUp } from '@clerk/nextjs';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const inputClass =
   'w-full px-3 py-1.25 rounded-lg sm:py-1.5 bg-muted border border-border focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-sm sm:text-base text-foreground placeholder:text-muted-foreground';
 
 const labelClass = 'block text-sm font-semibold text-foreground mb-1';
 
+const modalEase = [0.32, 0.72, 0, 1];
+const modalTransition = { duration: 0.34, ease: modalEase };
+
+const backdropVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+};
+
+function useMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 639px)').matches;
+  });
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  return isMobile;
+}
+
+function lockBodyScroll() {
+  document.body.style.overflow = 'hidden';
+  document.body.dataset.authModalOpen = 'true';
+}
+
+function unlockBodyScroll() {
+  document.body.style.overflow = '';
+  delete document.body.dataset.authModalOpen;
+}
+
 export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const router = useRouter();
+  const isMobile = useMobileViewport();
   const { isLoaded: isSignInLoaded, signIn, setActive } = useSignIn();
   const { isLoaded: isSignUpLoaded, signUp, setActive: setActiveSignUp } = useSignUp();
   const [mode, setMode] = useState(initialMode);
@@ -33,16 +70,34 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
+      lockBodyScroll();
     }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  useEffect(() => () => unlockBodyScroll(), []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
+  const unlockScroll = useCallback(() => {
+    unlockBodyScroll();
+  }, []);
+
+  const modalVariants = isMobile
+    ? {
+        hidden: { y: '100%' },
+        visible: { y: 0 },
+      }
+    : {
+        hidden: { opacity: 0, scale: 0.96, y: 16 },
+        visible: { opacity: 1, scale: 1, y: 0 },
+      };
 
   const handleOauth = async (strategy) => {
     setErrorMessage('');
@@ -163,25 +218,42 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       : 'cursor-pointer text-muted-foreground hover:text-foreground';
 
   return (
-    <>
-      <div
-        className="fixed inset-0 bg-black/40 dark:bg-black/70 backdrop-blur-md z-9998 transition-opacity duration-300"
-        onClick={onClose}
-        aria-hidden
-      />
+    <AnimatePresence onExitComplete={unlockScroll}>
+      {isOpen && (
+        <>
+          <motion.button
+            type="button"
+            className="fixed inset-0 z-9998 bg-black/50 sm:bg-black/40 dark:sm:bg-black/70"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            onClick={onClose}
+            aria-label="Close sign in dialog"
+          />
 
-      <div className="fixed inset-0 z-9999 flex items-center justify-center p-2 sm:p-2.5 pointer-events-none">
-        <div
-          className="relative w-full max-w-sm sm:max-w-md pointer-events-auto"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="auth-modal-title"
-        >
-          <div className="relative rounded-3xl overflow-hidden bg-card border border-border shadow-2xl shadow-black/10 dark:shadow-black/40">
-            <div className="absolute inset-0 bg-linear-to-br from-indigo-500/8 via-purple-500/8 to-pink-500/5 pointer-events-none" />
+          <div className="fixed inset-0 z-9999 flex items-end sm:items-center justify-center p-0 sm:p-2.5 pointer-events-none">
+            <motion.div
+              className="relative w-full max-w-sm sm:max-w-md pointer-events-auto transform-gpu max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto overscroll-contain"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="auth-modal-title"
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              transition={modalTransition}
+              style={{ willChange: 'transform, opacity' }}
+            >
+              <div className="relative rounded-t-3xl sm:rounded-3xl overflow-hidden bg-card border border-border shadow-2xl shadow-black/10 dark:shadow-black/40">
+                <div className="absolute inset-0 bg-linear-to-br from-indigo-500/8 via-purple-500/8 to-pink-500/5 pointer-events-none" />
 
-            <div className="relative p-3 sm:p-4">
+                <div className="relative p-3 sm:p-4 pt-5 sm:pt-4">
+                  {isMobile && (
+                    <div className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-border sm:hidden" aria-hidden />
+                  )}
               <button
                 type="button"
                 onClick={onClose}
@@ -216,18 +288,18 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
               </div>
 
               {!isVerifying && (
-                <div className="flex gap-2 mb-2.5 p-1 bg-muted rounded-xl">
+                <div className="flex gap-2 mb-2.5 p-1.5 bg-muted rounded-xl">
                   <button
                     type="button"
                     onClick={() => setMode('signin')}
-                    className={`flex-1 py-1.5 sm:py-1.75 px-2.5 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 ${tabClass(mode === 'signin')}`}
+                    className={`flex-1 min-h-11 py-3 sm:py-2.5 px-3 rounded-lg text-base sm:text-sm font-semibold transition-all duration-200 ${tabClass(mode === 'signin')}`}
                   >
                     Sign In
                   </button>
                   <button
                     type="button"
                     onClick={() => setMode('signup')}
-                    className={`flex-1 py-1.5 sm:py-1.75 px-2.5 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 ${tabClass(mode === 'signup')}`}
+                    className={`flex-1 min-h-11 py-3 sm:py-2.5 px-3 rounded-lg text-base sm:text-sm font-semibold transition-all duration-200 ${tabClass(mode === 'signup')}`}
                   >
                     Sign Up
                   </button>
@@ -240,7 +312,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                     <button
                       type="button"
                       onClick={() => handleOauth('oauth_google')}
-                      className="w-full py-2 rounded-lg sm:py-2.5 text-sm sm:text-base font-semibold bg-muted border border-border text-foreground hover:bg-muted/80 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full min-h-11 py-3 rounded-lg sm:py-2.5 text-base sm:text-sm font-semibold bg-muted border border-border text-foreground hover:bg-muted/80 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24">
                         <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -253,7 +325,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                     <button
                       type="button"
                       onClick={() => handleOauth('oauth_microsoft')}
-                      className="w-full py-2 rounded-lg sm:py-2.5 text-sm sm:text-base font-semibold bg-muted border border-border text-foreground hover:bg-muted/80 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full min-h-11 py-3 rounded-lg sm:py-2.5 text-base sm:text-sm font-semibold bg-muted border border-border text-foreground hover:bg-muted/80 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24">
                         <path fill="currentColor" d="M2 3h9v9H2zM13 3h9v9h-9zM2 13h9v9H2zM13 13h9v9h-9z" />
@@ -363,7 +435,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-1.4 rounded-lg sm:py-1.75 text-sm sm:text-base font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transition-all duration-200 hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-1.75 sm:mt-2.5"
+                    className="w-full min-h-12 py-3.5 rounded-lg sm:py-2.5 text-base sm:text-sm font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transition-all duration-200 hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-2 sm:mt-2.5"
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center">
@@ -397,7 +469,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-1.4 rounded-lg sm:py-1.75 text-sm sm:text-base font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transition-all duration-200 hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-1.75 sm:mt-2.5"
+                    className="w-full min-h-12 py-3.5 rounded-lg sm:py-2.5 text-base sm:text-sm font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transition-all duration-200 hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-2 sm:mt-2.5"
                   >
                     {isLoading ? 'Verifying...' : 'Verify Email'}
                   </button>
@@ -431,10 +503,12 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   )}
                 </p>
               )}
-            </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      </div>
-    </>
+        </>
+      )}
+    </AnimatePresence>
   );
 }

@@ -3,6 +3,9 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { Poppins } from 'next/font/google';
 import AppSessionProviders from '@/components/AppSessionProviders';
 import ThemeProvider from '@/components/ThemeProvider';
+import { NEXT_THEMES_STORAGE_KEY } from '@/lib/themePreferences';
+
+const themeInitScript = `(function(){try{var k=${JSON.stringify(NEXT_THEMES_STORAGE_KEY)};var t=localStorage.getItem(k);var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;if(d)r.classList.add('dark');else r.classList.remove('dark');}catch(e){}})();`;
 
 const poppins = Poppins({
   weight: ['400', '500', '600', '700', '800', '900'],
@@ -21,10 +24,19 @@ export const metadata = {
   },
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${poppins.className} ${poppins.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body className={`${poppins.className} ${poppins.variable} bg-background text-foreground`}>
         <ThemeProvider>
           <ClerkProvider>
             <AppSessionProviders>{children}</AppSessionProviders>

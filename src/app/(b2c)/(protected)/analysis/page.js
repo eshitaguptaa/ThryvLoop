@@ -50,6 +50,8 @@ const outfit = Outfit({
   variable: '--font-outfit',
 });
 
+const SHOW_SAMPLE_DATA = process.env.NODE_ENV !== 'production';
+
 export default function AnalyticsDashboard() {
   const { user } = useUser();
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -370,7 +372,7 @@ export default function AnalyticsDashboard() {
             {error}
           </div>
         )}
-        {seedMessage && (
+        {SHOW_SAMPLE_DATA && seedMessage && (
           <div className="mb-6 py-3 px-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium">
             {seedMessage}
           </div>
@@ -386,6 +388,7 @@ export default function AnalyticsDashboard() {
             <p className={`mt-2 ${appMutedTextClass} font-medium`}>{dateString}</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            {SHOW_SAMPLE_DATA ? (
             <button
               type="button"
               onClick={handleLoadSampleData}
@@ -399,6 +402,7 @@ export default function AnalyticsDashboard() {
               )}
               Load sample data
             </button>
+            ) : null}
             <button
               type="button"
               onClick={handleExport}

@@ -36,11 +36,11 @@ export default function Pricing() {
           </ScrollReveal>
 
           {/* Cards Grid: lg:grid-cols-4 */}
-          <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-[1100px] mx-auto" stagger={0.07}>
+          <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 md:gap-8 max-w-7xl xl:max-w-[1100px] mx-auto" stagger={0.07}>
             
             {/* 1. Free Card (Light Theme) */}
             <ScrollItem>
-            <div className="bg-card border-2 border-border rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 h-full">
+            <div className="bg-card border-2 border-border rounded-2xl p-6 md:p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 h-full">
               <div className="flex-grow">
                 <h3 className="text-2xl font-semibold text-foreground mb-1.5">Free</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">Forever free — useful &amp; complete</p>
@@ -84,7 +84,7 @@ export default function Pricing() {
 
             {/* 2. Pro Monthly Card (Most Popular - Primary Accent) */}
             <ScrollItem>
-            <div className="relative bg-card border-2 border-indigo-500 rounded-2xl p-8 flex flex-col shadow-2xl shadow-indigo-500/10 scale-105 h-full">
+            <div className="relative bg-card border-2 border-indigo-500 rounded-2xl p-6 md:p-8 flex flex-col shadow-2xl shadow-indigo-500/10 xl:scale-105 h-full">
               
               {/* "Most Popular" Badge (indigo-500) */}
               <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-indigo-500 text-white px-6 py-2 text-sm font-bold rounded-full shadow-lg text-center whitespace-nowrap">
@@ -137,7 +137,7 @@ export default function Pricing() {
 
             {/* 3. Pro Yearly Card (Light Theme) */}
             <ScrollItem>
-            <div className="bg-card border-2 border-border rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 h-full">
+            <div className="bg-card border-2 border-border rounded-2xl p-6 md:p-8 flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 h-full">
               <div className="flex-grow">
                 <h3 className="text-2xl font-semibold text-foreground mb-1.5">Pro Yearly</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">Best value — save ~45% vs monthly</p>
@@ -178,7 +178,7 @@ export default function Pricing() {
 
             {/* 4. Lifetime Card — gold accent; dark gradient for readable text */}
             <ScrollItem>
-            <div className="relative bg-gradient-to-br from-orange-50 to-amber-100 dark:from-amber-950/70 dark:to-orange-950/50 border-2 border-[#F59E0B] dark:border-amber-500/60 rounded-2xl p-8 flex flex-col transition-all duration-300 hover:shadow-2xl dark:hover:shadow-amber-900/20 hover:-translate-y-2 overflow-hidden h-full">
+            <div className="relative bg-gradient-to-br from-orange-50 to-amber-100 dark:from-amber-950/70 dark:to-orange-950/50 border-2 border-[#F59E0B] dark:border-amber-500/60 rounded-2xl p-6 md:p-8 flex flex-col transition-all duration-300 hover:shadow-2xl dark:hover:shadow-amber-900/20 hover:-translate-y-2 overflow-hidden h-full">
               
               <div className="flex-grow">
                 <div className="flex items-center justify-center gap-3 mb-1.5">

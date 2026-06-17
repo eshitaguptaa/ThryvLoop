@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "src/app/api/workspace/sync/route.js": {
+      "maxDuration": 60
+    },
+    "src/app/api/assistant/chat/route.js": {
+      "maxDuration": 60
+    },
+    "src/app/api/assistant/analytics-insight/route.js": {
+      "maxDuration": 30
+    }
+  }
+}

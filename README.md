@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# ThryvLoop
 
-## Getting Started
+Productivity workspace with focus timer, tasks, calendar, analytics, and ThryvBot AI assistant.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Next.js 16** (App Router)
+- **Clerk** — authentication
+- **Supabase** — database & user preferences
+- **Google Gemini** — ThryvBot AI
+- **Google Workspace OAuth** — Calendar & Gmail sync
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Local development
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+1. **Requirements:** Node.js 20+
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. **Install dependencies**
 
-## Learn More
+   ```bash
+   npm install
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+3. **Environment**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+   ```bash
+   cp .env.example .env.local
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   Fill in Clerk, Supabase, Gemini, and Google OAuth values. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full checklist.
 
-## Deploy on Vercel
+4. **Database**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   Apply every SQL file in `supabase/migrations/` to your Supabase project (SQL editor or Supabase CLI).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+5. **Run**
+
+   ```bash
+   npm run dev
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000).
+
+6. **Validate env** (optional before deploy)
+
+   ```bash
+   npm run validate:env
+   ```
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run start` | Start production server |
+| `npm run lint` | ESLint |
+| `npm run validate:env` | Check required env vars |
+
+## Deployment
+
+Deploy to [Vercel](https://vercel.com) (recommended) or any Node.js host that supports Next.js.
+
+**Before going live:**
+
+1. Copy all variables from `.env.example` into your host’s environment.
+2. Use **production** Clerk keys (`pk_live_` / `sk_live_`).
+3. Set `NEXT_PUBLIC_APP_URL` to your canonical domain (e.g. `https://app.thryvloop.com`).
+4. Run Supabase migrations on your production database.
+5. Configure Clerk JWT template `supabase` and webhook → `/api/webhooks/clerk`.
+6. Add Google OAuth redirect URI: `https://YOUR_DOMAIN/api/workspace/callback/google`.
+
+Full step-by-step guide: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
+
+After deploy, verify: `GET /api/health` should return `{ "status": "ok" }`.
+
+## Feature flags
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `NEXT_PUBLIC_ENABLE_B2B_WORKSPACES` | `false` | Hides Teams/workspaces routes for B2C launch |
+
+## Docs
+
+- [Deployment checklist](docs/DEPLOYMENT.md)
+- [Google Workspace integration](docs/WORKSPACE_INTEGRATIONS.md)
+
+## CI
+
+GitHub Actions runs `lint` and `build` on push/PR to `main` (see `.github/workflows/ci.yml`).
