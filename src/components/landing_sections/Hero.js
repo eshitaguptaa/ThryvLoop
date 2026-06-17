@@ -15,7 +15,7 @@ const mockupBlendClass =
 /** Bottom hero mockups — identical frame; images scale to same height from the bottom edge. */
 const BOTTOM_MOCKUPS = {
   tasks: {
-    light: { src: '/LandingPageImages/tasks.png', width: 1610, height: 1494 },
+    light: { src: '/LandingPageImages/Tasks.png', width: 1610, height: 1494 },
     dark: { src: '/LandingPageImages/landing-dark-image-2.png', width: 1039, height: 893 },
     alt: 'Tasks',
     delay: 0.3,
@@ -107,7 +107,7 @@ export default function Hero({ onGetStartedClick }) {
           delay={0.2}
         >
           <Image
-            src="/LandingPageImages/analytic.png"
+            src="/LandingPageImages/Analytic.png"
             alt="Analytics"
             width={290}
             height={240}
