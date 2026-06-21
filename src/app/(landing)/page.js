@@ -18,7 +18,7 @@ function LandingWrapper() {
   return <Landing />;
 }
 
-export default function LandingPageClient() {
+export default function Home() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
       <LandingWrapper />

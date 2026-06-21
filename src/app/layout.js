@@ -30,9 +30,6 @@ export const viewport = {
   maximumScale: 5,
 };
 
-/** Avoid static prerender — Clerk requires valid keys at build time (breaks CI). */
-export const dynamic = 'force-dynamic';
-
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>

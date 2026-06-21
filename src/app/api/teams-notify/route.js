@@ -1,6 +1,5 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { checkRateLimit } from '@/lib/security/rateLimit';
-import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -61,10 +60,6 @@ async function saveToWaitlist(email) {
 }
 
 export async function POST(request) {
-  if (!B2B_WORKSPACES_ENABLED) {
-    return Response.json({ error: 'Not found' }, { status: 404 });
-  }
-
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||

@@ -39,10 +39,6 @@ export default clerkMiddleware(async (auth, req) => {
       const destination = userId ? '/home' : '/';
       return NextResponse.redirect(new URL(destination, req.url));
     }
-
-    if (req.nextUrl.pathname === '/api/teams-notify') {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
   }
 
   if (!userId && req.cookies.get(WORKSPACE_OAUTH_COOKIE)) {

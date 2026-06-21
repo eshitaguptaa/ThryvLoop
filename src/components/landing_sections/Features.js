@@ -10,7 +10,6 @@ import ForestRainControls from '@/components/landing_sections/ForestRainControls
 import FeatureCardIcon from '@/components/landing_sections/FeatureCardIcon';
 import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
 import { SectionBlend } from '@/components/landing_sections/SectionBlend';
-import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 
 // ====================================================================
 // 1. Icon Components for React/Next.js
@@ -211,11 +210,9 @@ export default function Features() {
 
 
                {/* Feature Card 4: Team Workspaces (interactive) */}
-                {B2B_WORKSPACES_ENABLED ? (
                 <ScrollItem className="feature-compact-card feature-tablet-pair h-full">
                 <WorkspacesShowcase />
                 </ScrollItem>
-                ) : null}
                {/* Feature Card 5: Soundscape Composer */}
                 <ScrollItem className="feature-compact-card feature-tablet-pair h-full">
                 <SoundscapeComposerShowcase />

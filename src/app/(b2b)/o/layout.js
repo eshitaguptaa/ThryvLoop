@@ -1,19 +1,7 @@
-'use client';
+import OrgAreaShell from '@/app/(b2b)/o/OrgAreaShell';
 
-import { ClerkLoading, RedirectToSignIn, SignedIn, SignedOut } from '@clerk/nextjs';
+export const dynamic = 'force-dynamic';
 
 export default function OrgAreaLayout({ children }) {
-  return (
-    <>
-      <ClerkLoading>
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="text-foreground text-lg">Loading…</div>
-        </div>
-      </ClerkLoading>
-      <SignedOut>
-        <RedirectToSignIn />
-      </SignedOut>
-      <SignedIn>{children}</SignedIn>
-    </>
-  );
+  return <OrgAreaShell>{children}</OrgAreaShell>;
 }

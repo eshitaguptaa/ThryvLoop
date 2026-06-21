@@ -12,6 +12,27 @@ import { heroContent, heroImage, heroLine } from '@/lib/landingMotion';
 const mockupBlendClass =
   'object-contain dark:mix-blend-multiply dark:opacity-[0.98]';
 
+const TOP_MOCKUPS = {
+  analytics: {
+    light: { src: '/LandingPageImages/analytics-hero-light.png', width: 290, height: 240 },
+    dark: { src: '/LandingPageImages/analytics-hero-dark.png', width: 290, height: 240 },
+    alt: 'Analytics',
+    delay: 0.2,
+    cornerClass: 'rounded-tl-3xl',
+    positionClass: 'absolute top-0 md:top-1 lg:top-5 left-0 z-20',
+    useLightBlend: true,
+  },
+  ambience: {
+    light: { src: '/LandingPageImages/ambience.png', width: 290, height: 210 },
+    dark: { src: '/LandingPageImages/ambience.png', width: 290, height: 210 },
+    alt: 'Ambience',
+    delay: 0.35,
+    cornerClass: 'rounded-tr-3xl',
+    positionClass: 'absolute top-0 right-0 z-20',
+    useLightBlend: false,
+  },
+};
+
 /** Bottom hero mockups — identical frame; images scale to same height from the bottom edge. */
 const BOTTOM_MOCKUPS = {
   tasks: {
@@ -30,8 +51,40 @@ const BOTTOM_MOCKUPS = {
   },
 };
 
+const topMockupSizeClass =
+  'h-auto w-[125px] md:w-[150px] lg:w-[190px] xl:w-[235px] 2xl:w-[290px] max-w-[34vw] md:max-w-[36vw] lg:max-w-none';
+
 const bottomImgClass =
   'block h-auto w-[175px] md:w-[210px] lg:w-[250px] xl:w-[280px] 2xl:w-[295px] max-w-[42vw] md:max-w-[40vw] lg:max-w-none';
+
+function TopHeroMockup({ config }) {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const isDark = mounted && resolvedTheme === 'dark';
+  const asset = isDark ? config.dark : config.light;
+  const blendClass = !isDark && config.useLightBlend ? mockupBlendClass : 'object-contain';
+
+  return (
+    <HeroReveal
+      className={`${config.positionClass} hidden md:block pointer-events-none max-w-[38%] lg:max-w-[36%] xl:max-w-none`}
+      variants={heroImage}
+      delay={config.delay}
+    >
+      {/* Plain img — reliable on Linux/CDN; avoids Next/Image path quirks in production */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={asset.src}
+        alt={config.alt}
+        width={asset.width}
+        height={asset.height}
+        className={`${topMockupSizeClass} ${blendClass} ${config.cornerClass}`}
+        draggable={false}
+      />
+    </HeroReveal>
+  );
+}
 
 function BottomHeroMockup({ config }) {
   const { resolvedTheme } = useTheme();
@@ -77,44 +130,14 @@ function BottomHeroMockup({ config }) {
 }
 
 export default function Hero({ onGetStartedClick }) {
-  const topMockupSizeClass =
-    'h-auto w-[125px] md:w-[150px] lg:w-[190px] xl:w-[235px] 2xl:w-[290px] max-w-[34vw] md:max-w-[36vw] lg:max-w-none';
-
   return (
     <section className="pt-16 sm:pt-20 px-4 sm:px-6 py-8 sm:py-10 flex justify-center bg-background relative overflow-x-hidden min-h-[calc(100vh-4rem)] md:min-h-[680px] lg:min-h-screen">
       <SectionBlend position="bottom" fromColor="transparent" toColor="surface" size="lg" />
       <div className="max-w-[1280px] w-full relative bg-surface rounded-2xl sm:rounded-3xl min-h-[420px] md:min-h-[640px] lg:min-h-[680px] xl:min-h-[640px] border border-border overflow-hidden flex flex-col justify-center">
         <div className="absolute inset-0 hero-dot-grid pointer-events-none rounded-2xl sm:rounded-3xl opacity-100" />
 
-        <HeroReveal
-          className="absolute top-0 right-0 z-20 hidden md:block pointer-events-none max-w-[38%] lg:max-w-[36%] xl:max-w-none"
-          variants={heroImage}
-          delay={0.35}
-        >
-          <Image
-            src="/LandingPageImages/ambience.png"
-            alt="Ambience"
-            width={290}
-            height={210}
-            className={`${topMockupSizeClass} object-contain rounded-tr-3xl`}
-            unoptimized
-          />
-        </HeroReveal>
-
-        <HeroReveal
-          className="absolute top-0 md:top-1 lg:top-5 left-0 z-20 hidden md:block pointer-events-none max-w-[38%] lg:max-w-[36%] xl:max-w-none"
-          variants={heroImage}
-          delay={0.2}
-        >
-          <Image
-            src="/LandingPageImages/Analytic.png"
-            alt="Analytics"
-            width={290}
-            height={240}
-            className={`${topMockupSizeClass} ${mockupBlendClass} rounded-tl-3xl`}
-            unoptimized
-          />
-        </HeroReveal>
+        <TopHeroMockup config={TOP_MOCKUPS.ambience} />
+        <TopHeroMockup config={TOP_MOCKUPS.analytics} />
 
         <BottomHeroMockup config={BOTTOM_MOCKUPS.integrations} />
         <BottomHeroMockup config={BOTTOM_MOCKUPS.tasks} />
