@@ -172,20 +172,20 @@ export default function Features() {
                       <div className="w-full max-w-3xl grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-center">
                         <div className="relative flex justify-center py-6">
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-48 h-48 sm:w-60 sm:h-60 lg:w-72 lg:h-72 border border-white/5 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite]" />
-                            <div className="absolute w-40 h-40 sm:w-52 sm:h-52 lg:w-64 lg:h-64 border border-white/10 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite_0.5s]" />
+                            <div className="w-56 h-56 sm:w-60 sm:h-60 lg:w-72 lg:h-72 border border-white/5 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite]" />
+                            <div className="absolute w-48 h-48 sm:w-52 sm:h-52 lg:w-64 lg:h-64 border border-white/10 rounded-full animate-[pulse-ring_3s_cubic-bezier(0.215,0.61,0.355,1)_infinite_0.5s]" />
                           </div>
-                          <div className="relative w-48 h-48 sm:w-60 sm:h-60 lg:w-72 lg:h-72 backdrop-blur-2xl bg-black/30 rounded-full border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex items-center justify-center z-10 group-hover:scale-105 transition-transform duration-500 ring-1 ring-white/20">
-                            <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-3">
+                          <div className="relative w-56 h-56 sm:w-60 sm:h-60 lg:w-72 lg:h-72 backdrop-blur-2xl bg-black/30 rounded-full border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex items-center justify-center z-10 group-hover:scale-105 transition-transform duration-500 ring-1 ring-white/20">
+                            <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-4 sm:p-3">
                               <circle className="text-white/5" cx="50%" cy="50%" fill="transparent" r="46%" stroke="currentColor" strokeLinecap="round" strokeWidth="4" />
                               <circle className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.6)] transition-all duration-1000" cx="50%" cy="50%" fill="transparent" r="46%" stroke="currentColor" strokeDasharray="800" strokeDashoffset="200" strokeLinecap="round" strokeWidth="6" />
                             </svg>
-                            <div className="flex flex-col items-center justify-center z-20 text-center space-y-2">
-                              <div className="text-[10px] font-bold tracking-[0.4em] uppercase text-white/60">Time Left</div>
-                              <div className="text-5xl sm:text-6xl lg:text-7xl font-semibold text-white tracking-tighter tabular-nums drop-shadow-2xl leading-none">25:00</div>
-                              <div className="flex items-center gap-2 mt-2 px-3 py-1 rounded-full bg-white/10 border border-white/5">
-                                <MaterialSymbol icon="laptop_chromebook" className="text-[16px] text-white/80" />
-                                <span className="text-xs font-semibold text-white/80">Deep Work</span>
+                            <div className="flex flex-col items-center justify-center z-20 text-center space-y-1 sm:space-y-2 max-w-[72%] sm:max-w-none">
+                              <div className="text-[9px] sm:text-[10px] font-bold tracking-[0.2em] sm:tracking-[0.4em] uppercase text-white/60">Time Left</div>
+                              <div className="text-4xl sm:text-6xl lg:text-7xl font-semibold text-white tracking-tighter tabular-nums drop-shadow-2xl leading-none">25:00</div>
+                              <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-2 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-white/10 border border-white/5">
+                                <MaterialSymbol icon="laptop_chromebook" className="text-[14px] sm:text-[16px] text-white/80" />
+                                <span className="text-[10px] sm:text-xs font-semibold text-white/80">Deep Work</span>
                               </div>
                             </div>
                           </div>
