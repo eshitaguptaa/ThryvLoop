@@ -1,3 +1,5 @@
+import { isGoogleScopeDeniedMessage } from '@/lib/workspace/googleApiErrors';
+
 /** @param {string | null | undefined} message */
 export function isAuthWorkspaceError(message) {
   if (!message || typeof message !== 'string') return false;
@@ -8,14 +10,17 @@ export function isAuthWorkspaceError(message) {
     m.includes('token has been expired') ||
     m.includes('token has been revoked') ||
     m.includes('invalid credentials') ||
-    m.includes('sign in again')
+    m.includes('sign in again') ||
+    m.includes('google session needs a quick resync') ||
+    m.includes('google connection expired')
   );
 }
 
-/** User-facing sync error; hides raw auth failures (handled via reconnect flow). */
+/** User-facing sync error; hides auth failures and optional scope denials. */
 export function formatWorkspaceSyncError(message) {
   if (!message || typeof message !== 'string') return null;
   if (isAuthWorkspaceError(message)) return null;
+  if (isGoogleScopeDeniedMessage(message)) return null;
   return message.trim();
 }
 
@@ -34,7 +39,7 @@ export function formatIntegrationsQueryError(raw) {
     return 'Google connection could not be verified. Sign in, then use Connect with Google again.';
   }
   if (m === 'access_denied') {
-    return 'Google connection was cancelled. You can try again anytime.';
+    return null;
   }
   if (m === 'missing_code' || m === 'invalid_state' || m === 'missing_state') {
     return 'Connection session expired. Use Connect with Google again.';

@@ -1,5 +1,6 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { mapCalendarBlockForClient } from '@/lib/workspace/meetUrl';
+import { getGoogleConnectionAccess } from '@/lib/workspace/googleAccess';
 import { hasGoogleCalendarWriteScope } from '@/lib/workspace/oauth';
 import {
   backfillUnsyncedCalendarEvents,
@@ -74,6 +75,7 @@ export async function getWorkspaceCalendarEvents(userId, rangeStart, rangeEnd) {
     events,
     connections,
     googleConnection: google,
+    googleAccess: getGoogleConnectionAccess(google),
     hasConnection: connections.length > 0,
     canPushToGoogle,
     range: {

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export default function TeamsNotifyForm() {
+export default function CompanyHubsNotifyForm() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
@@ -42,6 +42,7 @@ export default function TeamsNotifyForm() {
       <form
         onSubmit={handleSubmit}
         className="flex flex-col sm:flex-row gap-4 justify-center"
+        aria-label="Get notified when Company Hubs launch"
       >
         <input
           type="email"
@@ -49,7 +50,7 @@ export default function TeamsNotifyForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Enter your email"
+          placeholder="Work email for early access"
           disabled={status === 'loading' || status === 'success'}
           className="px-5 py-4 rounded-xl w-full sm:w-80 outline-none disabled:opacity-60"
           style={{

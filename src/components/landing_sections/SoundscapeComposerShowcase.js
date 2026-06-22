@@ -2,27 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import FeatureCardIcon from '@/components/landing_sections/FeatureCardIcon';
+import { DEFAULT_SOUNDSCAPE_RECIPES, getSoundscapeSoundName } from '@/lib/soundscapeConstants';
 
-const RECIPES = [
-  {
-    id: 'deep-dive',
-    name: 'Deep Dive',
-    icon: 'bolt',
-    layers: ['Heavy Rain', 'Binaural', 'Forest'],
-  },
-  {
-    id: 'code-flow',
-    name: 'Code Flow',
-    icon: 'code',
-    layers: ['Lo-Fi', 'Binaural', 'Fire'],
-  },
-  {
-    id: 'zen-zone',
-    name: 'Zen Zone',
-    icon: 'spa',
-    layers: ['Waterfall', 'Forest', 'Binaural'],
-  },
-];
+const RECIPES = DEFAULT_SOUNDSCAPE_RECIPES.map((recipe) => ({
+  id: recipe.id,
+  name: recipe.name,
+  icon: recipe.icon === 'lotus' ? 'spa' : recipe.icon,
+  layers: recipe.sounds.map((sound) => getSoundscapeSoundName(sound.id)),
+}));
 
 const MaterialSymbol = ({ icon, className = '', fill = 1 }) => (
   <span

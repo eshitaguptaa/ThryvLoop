@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ensureGoogleConnectionFresh } from '@/lib/workspace/connections';
 import { getWorkspaceStatus } from '@/lib/workspace/status';
 import { getWorkspaceUserId } from '@/lib/workspace/requireAuth';
 
@@ -11,6 +12,7 @@ export async function GET() {
     );
   }
   try {
+    await ensureGoogleConnectionFresh(userId);
     const status = await getWorkspaceStatus(userId);
     return NextResponse.json(status);
   } catch (err) {

@@ -7,7 +7,11 @@ import { useUser, useAuth } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
 import {
   SOUNDSCAPE_SOUND_FILES,
+  SOUNDSCAPE_LIBRARY,
+  DEFAULT_SOUNDSCAPE_RECIPES,
   getSoundscapeSoundName,
+  getSoundscapeSoundIcon,
+  normalizeActiveSound,
 } from '@/lib/soundscapeConstants';
 import { bootstrapSpacesAudioIfEmpty as runBootstrapSpacesAudio } from '@/lib/soundscapeBootstrap';
 import {
@@ -141,13 +145,8 @@ export default function SoundscapeComposer({
     const saved = getJson('soundscape-active-sounds');
     if (!Array.isArray(saved)) return [];
     return saved
-      .filter((sound) => SOUNDSCAPE_SOUND_FILES[sound?.id])
-      .map((sound) => ({
-        id: sound.id,
-        name: sound.name || getSoundscapeSoundName(sound.id),
-        volume: sound.volume ?? 50,
-        category: sound.category || 'Atmosphere',
-      }));
+      .map((sound) => normalizeActiveSound(sound))
+      .filter(Boolean);
   };
 
   const [activeTab, setActiveTab] = useState('Atmosphere');
@@ -531,76 +530,11 @@ export default function SoundscapeComposer({
   }, [userId, restorePersistedPlayback]);
 
   // Sound Library - only include sounds that exist in public/sounds
-  const soundLibrary = {
-    Atmosphere: [
-      { id: 'rain', name: 'Heavy Rain', description: 'Active' },
-      { id: 'fire', name: 'Fire Crackle', description: 'Cozy • Interior' },
-      { id: 'forest', name: 'Forest', description: 'Nature • Calm' },
-      { id: 'waterfall', name: 'Waterfall', description: 'Flowing • Peaceful' },
-    ],
-    Neural: [
-      { id: 'binaural', name: 'Binaural (40Hz)', description: 'Focus • Theta' },
-    ],
-    Rhythm: [
-      { id: 'lofi', name: 'Chill Lo-Fi', description: 'Relax • Study' },
-      { id: 'synthwave', name: 'Synthwave', description: 'Retro • Vibes' },
-    ],
-  };
+  const soundLibrary = SOUNDSCAPE_LIBRARY;
 
   const getSoundNameById = (soundId) => getSoundscapeSoundName(soundId);
 
-  const defaultRecipes = [
-    { 
-      id: 'deep-dive', 
-      name: 'Deep Dive', 
-      icon: 'bolt',
-      sounds: [
-        { id: 'rain', volume: 60, category: 'Atmosphere' },
-        { id: 'binaural', volume: 50, category: 'Neural' },
-        { id: 'forest', volume: 30, category: 'Atmosphere' },
-      ]
-    },
-    { 
-      id: 'code-flow', 
-      name: 'Code Flow', 
-      icon: 'code',
-      sounds: [
-        { id: 'lofi', volume: 55, category: 'Rhythm' },
-        { id: 'binaural', volume: 45, category: 'Neural' },
-        { id: 'fire', volume: 40, category: 'Atmosphere' },
-      ]
-    },
-    { 
-      id: 'creative-spark', 
-      name: 'Creative Spark', 
-      icon: 'pen',
-      sounds: [
-        { id: 'synthwave', volume: 50, category: 'Rhythm' },
-        { id: 'fire', volume: 35, category: 'Atmosphere' },
-        { id: 'forest', volume: 30, category: 'Atmosphere' },
-      ]
-    },
-    { 
-      id: 'zen-zone', 
-      name: 'Zen Zone', 
-      icon: 'lotus',
-      sounds: [
-        { id: 'waterfall', volume: 50, category: 'Atmosphere' },
-        { id: 'forest', volume: 40, category: 'Atmosphere' },
-        { id: 'binaural', volume: 35, category: 'Neural' },
-      ]
-    },
-    { 
-      id: 'office-privacy', 
-      name: 'Office Privacy', 
-      icon: 'briefcase',
-      sounds: [
-        { id: 'rain', volume: 45, category: 'Atmosphere' },
-        { id: 'fire', volume: 40, category: 'Atmosphere' },
-        { id: 'binaural', volume: 30, category: 'Neural' },
-      ]
-    },
-  ];
+  const defaultRecipes = DEFAULT_SOUNDSCAPE_RECIPES;
 
   // Load custom recipes from Supabase
   useEffect(() => {
@@ -669,13 +603,8 @@ export default function SoundscapeComposer({
           setItem('soundscape-global-volume', masterVolume.toString());
           const savedSounds = Array.isArray(data.active_sounds) ? data.active_sounds : [];
           const normalizedSounds = savedSounds
-            .filter(sound => SOUNDSCAPE_SOUND_FILES[sound.id])
-            .map(sound => ({
-              id: sound.id,
-              name: getSoundNameById(sound.id),
-              volume: sound.volume ?? 50,
-              category: sound.category || 'Atmosphere',
-            }));
+            .map((sound) => normalizeActiveSound(sound))
+            .filter(Boolean);
           setActiveSounds(normalizedSounds);
           setJson('soundscape-active-sounds', normalizedSounds);
         }
@@ -698,13 +627,8 @@ export default function SoundscapeComposer({
       const savedSounds = getJson('soundscape-active-sounds');
       if (Array.isArray(savedSounds) && savedSounds.length > 0) {
         const normalized = savedSounds
-          .filter((s) => SOUNDSCAPE_SOUND_FILES[s.id])
-          .map((s) => ({
-            id: s.id,
-            name: getSoundNameById(s.id),
-            volume: s.volume ?? 50,
-            category: s.category || 'Atmosphere',
-          }));
+          .map((sound) => normalizeActiveSound(sound))
+          .filter(Boolean);
         setActiveSounds(normalized);
       }
       const sessionActive = getItem('soundscape-session-active') === 'true';
@@ -743,6 +667,7 @@ export default function SoundscapeComposer({
 
   // SoundIcon component
   const SoundIcon = ({ soundId, className = "w-6 h-6" }) => {
+    const iconKey = getSoundscapeSoundIcon(soundId);
     const icons = {
       spaces: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -770,7 +695,32 @@ export default function SoundscapeComposer({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
         </svg>
       ),
-      binaural: (
+      ocean: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 14c1.5-1 3-1 4.5 0s3 1 4.5 0 3-1 4.5 0M4 10c1.5-1 3-1 4.5 0s3 1 4.5 0 3-1 4.5 0" />
+        </svg>
+      ),
+      thunder: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+      breeze: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.5 8c1.5-2 4-2.5 6-1M4 12h11M6 16c1.5 2 4 2.5 6 1" />
+        </svg>
+      ),
+      cafe: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 8h10v6a4 4 0 01-4 4H8a4 4 0 01-4-4V8zm12 2h1a3 3 0 010 6h-1M8 4v2m4-2v2" />
+        </svg>
+      ),
+      office: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" />
+        </svg>
+      ),
+      neural: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
@@ -782,11 +732,31 @@ export default function SoundscapeComposer({
       ),
       synthwave: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4-8 4 6 4-10 4 12" />
+        </svg>
+      ),
+      piano: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 19V5h12v14H6zm3-14v6m3-6v6m3-6v6" />
+        </svg>
+      ),
+      jazz: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
         </svg>
       ),
+      ambient: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 0v18m-4.5-9H12" />
+        </svg>
+      ),
+      classical: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 18V5l10-2v13M9 18c0 1.1-1.3 2-3 2s-3-.9-3-2 1.3-2 3-2 3 .9 3 2zm10-2c0 1.1-1.3 2-3 2s-3-.9-3-2 1.3-2 3-2 3 .9 3 2z" />
+        </svg>
+      ),
     };
-    return icons[soundId] || <div className={className} />;
+    return icons[iconKey] || icons.neural;
   };
 
   // Recipe Icon Component
@@ -1568,13 +1538,8 @@ export default function SoundscapeComposer({
     if (recipe && recipe.sounds) {
       // Load recipe sounds - filter out invalid sounds (Spaces handled separately)
       const newSounds = recipe.sounds
-        .filter(sound => SOUNDSCAPE_SOUND_FILES[sound.id])
-        .map(sound => ({
-          id: sound.id,
-          name: soundLibrary[sound.category]?.find(s => s.id === sound.id)?.name || sound.id,
-          volume: sound.volume || 50,
-          category: sound.category,
-        }));
+        .map((sound) => normalizeActiveSound(sound))
+        .filter(Boolean);
 
       const currentVideoId = getBackgroundVideoId();
       const recipeHasSpaces = recipe.sounds.some(s => s.id === 'spaces');

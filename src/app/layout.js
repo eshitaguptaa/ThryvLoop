@@ -15,8 +15,12 @@ const poppins = Poppins({
 });
 
 export const metadata = {
-  title: 'ThryvLoop - Your Personal Productivity Hub',
-  description: 'Transform your workspace with immersive ambience, intelligent task management, seamless integrations, and powerful analytics.',
+  title: {
+    default: 'ThryvLoop — The unified digital workspace for people and companies',
+    template: '%s | ThryvLoop',
+  },
+  description:
+    'ThryvLoop transforms digital workspaces for companies and individuals—one hub for focus, tasks, calendar, analytics, and ambience. No app-hopping. Measurable productivity gains.',
   icons: {
     icon: '/LandingPageImages/logo.png',
     shortcut: '/LandingPageImages/logo.png',

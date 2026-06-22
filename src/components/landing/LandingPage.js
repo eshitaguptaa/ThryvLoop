@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import AuthModal from '@/components/AuthModal';
 import NavbarLanding from '@/components/landing_sections/NavbarLanding';
 import Hero from '@/components/landing_sections/Hero';
+import ValuePropositions from '@/components/landing_sections/ValuePropositions';
 import Features from '@/components/landing_sections/Features';
 import Solutions from '@/components/landing_sections/Solutions';
 import FooterLanding from '@/components/landing_sections/FooterLanding';
@@ -12,6 +13,7 @@ import Resources from '@/components/landing_sections/Resources';
 import Pricing from '@/components/landing_sections/Pricing';
 import { landingFont } from '@/lib/landingFont';
 import { scrollToLandingSection } from '@/lib/landingScroll';
+import LandingAmbient from '@/components/landing/LandingAmbient';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -56,12 +58,14 @@ export default function LandingPage() {
   };
 
   return (
-    <div className={`landing-page ${landingFont.className} ${landingFont.variable}`}>
+    <div className={`landing-page relative ${landingFont.className} ${landingFont.variable}`}>
+      <LandingAmbient />
       <NavbarLanding 
         onSignInClick={() => openAuth('signin')} 
         onGetStartedClick={() => openAuth('signup')} 
       />
       <Hero onGetStartedClick={() => openAuth('signup')} />
+      <ValuePropositions />
       <Features/>
       <Solutions/>
       <Resources/>

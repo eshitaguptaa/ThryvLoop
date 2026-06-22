@@ -1,6 +1,15 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getValidAccessToken, markSynced, setSyncError } from '@/lib/workspace/connections';
-import { formatGoogleApiError } from '@/lib/workspace/googleApiErrors';
+import {
+  formatGoogleApiError,
+  isGoogleScopeDeniedBody,
+  isGoogleScopeDeniedMessage,
+} from '@/lib/workspace/googleApiErrors';
+import {
+  hasGoogleCalendarAccessScope,
+  hasGoogleGmailScope,
+} from '@/lib/workspace/oauth';
+import { isAuthWorkspaceError } from '@/lib/workspace/userMessages';
 import { extractGoogleMeetUrl } from '@/lib/workspace/meetUrl';
 
 const GMAIL_RETRY_MS = 2500;
@@ -17,6 +26,14 @@ function rangeForSync() {
   return { start, end, now };
 }
 
+function isHardSyncError(message) {
+  if (!message) return false;
+  if (isGoogleScopeDeniedMessage(message)) return false;
+  if (isAuthWorkspaceError(message)) return false;
+  if (message === 'No Google token') return false;
+  return true;
+}
+
 /** @param {string} userId */
 export async function syncUserWorkspaces(userId) {
   const supabase = createSupabaseAdmin();
@@ -29,23 +46,39 @@ export async function syncUserWorkspaces(userId) {
     try {
       if (provider !== 'google') continue;
       const outcome = await syncGoogle(userId);
-      if (outcome.errors.length) {
-        await setSyncError(userId, provider, outcome.errors.join(' '));
+      const hardErrors = outcome.errors.filter(isHardSyncError);
+
+      if (hardErrors.length) {
+        await setSyncError(userId, provider, hardErrors.join(' '));
         results.push({
           provider,
           ok: false,
-          error: outcome.errors.join(' '),
+          error: hardErrors.join(' '),
           calendarOk: outcome.calendarOk,
           gmailOk: outcome.gmailOk,
+          calendarGranted: outcome.calendarGranted,
+          gmailGranted: outcome.gmailGranted,
         });
       } else {
         await markSynced(userId, provider);
-        results.push({ provider, ok: true, calendarOk: true, gmailOk: true });
+        results.push({
+          provider,
+          ok: true,
+          calendarOk: outcome.calendarOk,
+          gmailOk: outcome.gmailOk,
+          calendarGranted: outcome.calendarGranted,
+          gmailGranted: outcome.gmailGranted,
+        });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sync failed';
-      await setSyncError(userId, provider, msg);
-      results.push({ provider, ok: false, error: msg });
+      if (isHardSyncError(msg)) {
+        await setSyncError(userId, provider, msg);
+        results.push({ provider, ok: false, error: msg });
+      } else {
+        await markSynced(userId, provider);
+        results.push({ provider, ok: true, calendarOk: false, gmailOk: false });
+      }
     }
   }
   return results;
@@ -69,6 +102,9 @@ async function syncGoogleCalendar(userId, token) {
   );
   const calJson = await calRes.json();
   if (!calRes.ok) {
+    if (isGoogleScopeDeniedBody(calJson)) {
+      return { ok: false, scopeDenied: true };
+    }
     throw new Error(formatGoogleApiError(calJson, 'Google Calendar fetch failed'));
   }
 
@@ -95,6 +131,8 @@ async function syncGoogleCalendar(userId, token) {
       onConflict: 'user_id,provider,external_id',
     });
   }
+
+  return { ok: true, scopeDenied: false };
 }
 
 async function fetchGmailList(token) {
@@ -103,7 +141,7 @@ async function fetchGmailList(token) {
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const gmailList = await gmailRes.json();
-  return { ok: gmailRes.ok, body: gmailList };
+  return { ok: gmailRes.ok, body: gmailList, status: gmailRes.status };
 }
 
 /** @param {string} userId @param {string} token */
@@ -115,7 +153,10 @@ async function syncGoogleGmail(userId, token) {
     lastBody = body;
     if (ok) {
       await upsertGmailNotifications(userId, token, body, supabase);
-      return;
+      return { ok: true, scopeDenied: false };
+    }
+    if (isGoogleScopeDeniedBody(body)) {
+      return { ok: false, scopeDenied: true };
     }
     const retryable =
       body?.error?.errors?.[0]?.reason === 'accessNotConfigured' ||
@@ -188,7 +229,6 @@ async function upsertGmailNotifications(userId, token, gmailList, supabase) {
     });
   }
 
-  // Mark messages no longer unread in Gmail as read in our feed
   let markReadQuery = supabase
     .from('workspace_notifications')
     .update({ is_read: true, synced_at: nowIso })
@@ -202,7 +242,6 @@ async function upsertGmailNotifications(userId, token, gmailList, supabase) {
 
   await markReadQuery;
 
-  // Drop read Gmail rows older than 14 days so the feed stays current
   const staleBefore = new Date();
   staleBefore.setDate(staleBefore.getDate() - 14);
   await supabase
@@ -216,23 +255,66 @@ async function upsertGmailNotifications(userId, token, gmailList, supabase) {
 
 /** @param {string} userId */
 async function syncGoogle(userId) {
+  const supabase = createSupabaseAdmin();
+  const { data: conn } = await supabase
+    .from('workspace_connections')
+    .select('scopes')
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+    .maybeSingle();
+
+  const scopes = conn?.scopes || [];
+  let calendarGranted = hasGoogleCalendarAccessScope(scopes);
+  let gmailGranted = hasGoogleGmailScope(scopes);
+
   const token = await getValidAccessToken(userId, 'google');
-  if (!token) return { calendarOk: false, gmailOk: false, errors: ['No Google token'] };
+  if (!token) {
+    return {
+      calendarOk: false,
+      gmailOk: false,
+      calendarGranted,
+      gmailGranted,
+      errors: ['No Google token'],
+    };
+  }
 
   const errors = [];
   let calendarOk = false;
   let gmailOk = false;
-  try {
-    await syncGoogleCalendar(userId, token);
-    calendarOk = true;
-  } catch (err) {
-    errors.push(err instanceof Error ? err.message : 'Calendar sync failed');
+
+  if (calendarGranted) {
+    try {
+      const result = await syncGoogleCalendar(userId, token);
+      if (result.scopeDenied) {
+        calendarGranted = false;
+      } else {
+        calendarOk = true;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Calendar sync failed';
+      if (isHardSyncError(msg)) errors.push(msg);
+    }
   }
-  try {
-    await syncGoogleGmail(userId, token);
-    gmailOk = true;
-  } catch (err) {
-    errors.push(err instanceof Error ? err.message : 'Gmail sync failed');
+
+  if (gmailGranted) {
+    try {
+      const result = await syncGoogleGmail(userId, token);
+      if (result.scopeDenied) {
+        gmailGranted = false;
+      } else {
+        gmailOk = true;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Gmail sync failed';
+      if (isHardSyncError(msg)) errors.push(msg);
+    }
   }
-  return { calendarOk, gmailOk, errors };
+
+  return {
+    calendarOk,
+    gmailOk,
+    calendarGranted,
+    gmailGranted,
+    errors,
+  };
 }

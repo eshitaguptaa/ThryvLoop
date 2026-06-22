@@ -109,20 +109,47 @@ export default function Features() {
         }
       `}</style>
 
-       <div className="bg-surface text-foreground antialiased selection:bg-primary/30 selection:text-primary min-h-screen">
-         <div className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden bg-surface">
-           <main id="features" className="flex-grow flex flex-col items-center py-20 px-4 sm:px-6 lg:px-8 relative bg-surface">
+       <div className="bg-surface text-foreground antialiased selection:bg-primary/30 selection:text-primary">
+         <div className="relative flex w-full flex-col overflow-hidden bg-surface">
+           {/* Soft mesh glow — rose/violet/indigo; top pinned to surface */}
+           <div
+             aria-hidden
+             className="pointer-events-none absolute inset-0 z-0 landing-glow-drift"
+             style={{
+               background: `
+                 radial-gradient(ellipse 135% 100% at 50% 26%, rgba(139,92,246,0.16), transparent 60%),
+                 radial-gradient(ellipse 85% 75% at 6% 44%, rgba(236,72,153,0.09), transparent 56%),
+                 radial-gradient(ellipse 85% 75% at 94% 40%, rgba(99,102,241,0.11), transparent 56%),
+                 linear-gradient(155deg, transparent 35%, rgba(91,77,237,0.07) 68%, transparent 92%)
+               `,
+               maskImage:
+                 'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.14) 12%, rgba(0,0,0,0.5) 26%, black 44%, black 100%)',
+               WebkitMaskImage:
+                 'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.14) 12%, rgba(0,0,0,0.5) 26%, black 44%, black 100%)',
+             }}
+           />
+           <div
+             aria-hidden
+             className="pointer-events-none absolute inset-0 z-0 landing-grid-flow"
+             style={{
+               backgroundImage: `
+                 linear-gradient(to right, rgba(99,102,241,0.13) 1px, transparent 1px),
+                 linear-gradient(to bottom, rgba(99,102,241,0.13) 1px, transparent 1px)
+               `,
+               backgroundSize: '32px 32px',
+               maskImage:
+                 'linear-gradient(to bottom, transparent 0%, transparent 5%, rgba(0,0,0,0.2) 10%, rgba(0,0,0,0.65) 22%, black 38%, black 88%, transparent 100%)',
+               WebkitMaskImage:
+                 'linear-gradient(to bottom, transparent 0%, transparent 5%, rgba(0,0,0,0.2) 10%, rgba(0,0,0,0.65) 22%, black 38%, black 88%, transparent 100%)',
+             }}
+           />
+           <main id="features" className="relative z-10 flex flex-col items-center pt-8 sm:pt-10 pb-0 px-4 sm:px-6 lg:px-8">
             <SectionBlend position="bottom" fromColor="transparent" toColor="background" size="xl" />
-            {/* Background Gradient Blobs */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[600px] bg-primary/10 blur-[120px] rounded-full pointer-events-none -z-10 dark:opacity-40"></div>
-            <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-accent-purple/10 blur-[100px] rounded-full pointer-events-none -z-10 dark:opacity-30"></div>
+            <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-accent-purple/10 blur-[100px] rounded-full pointer-events-none -z-10 dark:opacity-30 landing-glow-drift-alt" />
             
             <div className="w-full max-w-[1280px] flex flex-col gap-20">
               {/* Header Section — always visible; scroll-reveal was leaving this stuck at opacity 0 when partially on screen */}
-               <div className="relative z-10 flex flex-col items-center text-center gap-6 max-w-4xl mx-auto py-12">
-                 {/* Purple glow effect around heading */}
-                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-gradient-to-r from-[#5b4ded]/8 via-[#7c3aed]/10 to-[#8b5cf6]/8 blur-[100px] rounded-full pointer-events-none z-0"></div>
-                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-[#5b4ded]/5 blur-[80px] rounded-full pointer-events-none z-0"></div>
+               <ScrollReveal className="relative z-10 flex flex-col items-center text-center gap-6 max-w-4xl mx-auto pt-2 pb-10 sm:pb-12" variant="fadeUpSoft">
                  <div className="relative z-20 inline-flex items-center gap-2 rounded-full bg-card/70 px-4 py-1.5 text-xs font-semibold text-[#5b4ded] ring-1 ring-inset ring-border shadow-sm">
                    <span className="relative flex h-2 w-2">
                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5b4ded] opacity-75"></span>
@@ -130,13 +157,14 @@ export default function Features() {
                    </span>
                    Productivity Reimagined
                  </div>
-                <h1 className="relative z-20 landing-display text-4xl sm:text-[3.25rem] max-w-3xl">
-                  Built for <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5b4ded] to-[#8b5cf6]">Deep Work</span> & Flow
-                </h1>
+                <h2 className="relative z-20 landing-display text-4xl sm:text-[3.25rem] max-w-3xl">
+                  Everything You Need in <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5b4ded] to-[#8b5cf6]">One Hub</span>
+                </h2>
                 <p className="relative z-20 landing-body text-lg sm:text-xl max-w-2xl">
-                  Experience a workspace that adapts to your energy. ThryvLoop orchestrates your day, silences the noise, and keeps you in the zone.
+                  No toggling between apps. ThryvLoop transforms your digital workspace—focus spaces,
+                  tasks, analytics, and integrations orchestrated so productivity actually improves.
                 </p>
-               </div>
+               </ScrollReveal>
 
               {/* Features Grid */}
               <ScrollStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start md:items-stretch lg:items-start" stagger={0.06}>
@@ -209,7 +237,7 @@ export default function Features() {
 
 
 
-               {/* Feature Card 4: Team Workspaces (interactive) */}
+               {/* Feature Card 4: Company Hubs (interactive) */}
                 <ScrollItem className="feature-compact-card feature-tablet-pair h-full">
                 <WorkspacesShowcase />
                 </ScrollItem>
@@ -346,15 +374,15 @@ export default function Features() {
 
 
               </ScrollStagger>
+            </div>
 
-              <ScrollReveal className="flex justify-center mt-12" variant="fadeUpSoft" delay={0.1}>
+              <ScrollReveal className="flex justify-center w-full max-w-[1280px] pt-20 sm:pt-24 pb-10 sm:pb-12" variant="fadeUpSoft" delay={0.1}>
                 <button className="group relative flex min-w-[240px] cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-full h-16 px-10 bg-foreground text-background text-lg font-bold leading-normal tracking-wide transition-all hover:scale-105 hover:shadow-2xl hover:shadow-primary/30">
                   <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></span>
                   <span className="truncate">Explore all features</span>
                   <MaterialSymbol icon="arrow_forward" className="text-lg transition-transform group-hover:translate-x-1" />
                 </button>
           </ScrollReveal>
-          </div>
            </main>
         </div>
       </div>

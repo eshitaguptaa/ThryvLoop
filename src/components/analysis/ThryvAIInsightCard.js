@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Zap, RefreshCw, Focus, ListTodo } from 'lucide-react';
 
-export default function ThryvAIInsightCard({ metrics, enabled }) {
+export default function ThryvAIInsightCard({ metrics, enabled, onInsightChange }) {
   const [insight, setInsight] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,13 +22,15 @@ export default function ThryvAIInsightCard({ metrics, enabled }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to generate insight');
       setInsight(data);
+      onInsightChange?.(data);
     } catch (e) {
       setInsight(null);
+      onInsightChange?.(null);
       setError(e?.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
-  }, [enabled, metrics]);
+  }, [enabled, metrics, onInsightChange]);
 
   useEffect(() => {
     if (enabled) fetchInsight();

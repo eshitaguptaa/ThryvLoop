@@ -13,7 +13,8 @@ export default function FooterLanding() {
             ThryvLoop
           </h3>
           <p className="text-white/60 leading-relaxed max-w-md">
-            Revolutionizing the digital workspace. Transform context-switching into flow state. Make the online office a place you look forward to inhabiting.
+            Transforming digital workspaces for people and companies. One unified hub—no app-hopping—
+            with focus, tasks, and analytics built to deliver measurable productivity gains.
           </p>
         </div>
         <div className="lg:col-span-2">

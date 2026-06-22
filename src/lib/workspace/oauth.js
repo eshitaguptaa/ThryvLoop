@@ -3,10 +3,11 @@ import { createHmac, randomBytes } from 'crypto';
 export const GOOGLE_CALENDAR_WRITE_SCOPE = 'https://www.googleapis.com/auth/calendar';
 export const GOOGLE_CALENDAR_EVENTS_WRITE_SCOPE =
   'https://www.googleapis.com/auth/calendar.events';
+export const GOOGLE_GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
 export const GOOGLE_SCOPES = [
   GOOGLE_CALENDAR_WRITE_SCOPE,
-  'https://www.googleapis.com/auth/gmail.readonly',
+  GOOGLE_GMAIL_READONLY_SCOPE,
   'https://www.googleapis.com/auth/userinfo.email',
 ].join(' ');
 
@@ -15,13 +16,35 @@ const CALENDAR_WRITE_SCOPES = new Set([
   GOOGLE_CALENDAR_EVENTS_WRITE_SCOPE,
 ]);
 
+const CALENDAR_ACCESS_SCOPES = new Set([
+  GOOGLE_CALENDAR_WRITE_SCOPE,
+  GOOGLE_CALENDAR_EVENTS_WRITE_SCOPE,
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar.events.readonly',
+]);
+
+/** @param {string[] | null | undefined} scopes */
+export function hasGoogleCalendarAccessScope(scopes) {
+  return (scopes || []).some((scope) => CALENDAR_ACCESS_SCOPES.has(scope));
+}
+
+/** @param {string[] | null | undefined} scopes */
+export function hasGoogleGmailScope(scopes) {
+  return (scopes || []).some(
+    (scope) =>
+      scope === GOOGLE_GMAIL_READONLY_SCOPE ||
+      scope === 'https://mail.google.com/' ||
+      (typeof scope === 'string' && scope.includes('gmail'))
+  );
+}
+
 /** @param {string[] | null | undefined} scopes */
 export function hasGoogleCalendarWriteScope(scopes) {
   return (scopes || []).some((scope) => CALENDAR_WRITE_SCOPES.has(scope));
 }
 
 export const GOOGLE_CALENDAR_WRITE_REQUIRED_MESSAGE =
-  'Google Calendar is connected with read-only access. Open Settings → Integrations, disconnect Google, then connect again and approve calendar write access.';
+  'To sync events to Google Calendar, resync your Google account and allow calendar access.';
 
 export function getOAuthSecret() {
   const raw =
@@ -104,6 +127,7 @@ export function buildGoogleAuthUrl(state) {
     scope: GOOGLE_SCOPES,
     access_type: 'offline',
     prompt: 'consent',
+    include_granted_scopes: 'true',
     state,
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;

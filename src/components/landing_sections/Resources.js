@@ -10,24 +10,42 @@ export default function Resources() {
   return (
     // Base colors using variables
     <div id="resources" className="relative w-full bg-background text-muted-foreground antialiased overflow-hidden">
-      {/* Top gradient wash */}
+      {/* Aurora-style wash — teal/sky accents (distinct from Company Hubs purple) */}
       <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[420px] z-0"
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 landing-glow-drift-alt"
         style={{
-          background:
-            'radial-gradient(ellipse 90% 70% at 50% 0%, rgba(99,102,241,0.14), rgba(139,92,246,0.08), transparent 72%)',
+          background: `
+            conic-gradient(from 210deg at 50% 22%, rgba(6,182,212,0.14), rgba(56,189,248,0.1), rgba(99,102,241,0.08), rgba(16,185,129,0.1), transparent 62%),
+            radial-gradient(ellipse 120% 90% at 78% 36%, rgba(14,165,233,0.12), transparent 58%),
+            radial-gradient(ellipse 120% 90% at 18% 40%, rgba(20,184,166,0.11), transparent 58%),
+            radial-gradient(ellipse 130% 80% at 50% 88%, rgba(15,23,42,0.35), transparent 65%)
+          `,
+          maskImage:
+            'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.16) 12%, rgba(0,0,0,0.52) 24%, black 42%, black 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.16) 12%, rgba(0,0,0,0.52) 24%, black 42%, black 100%)',
         }}
       />
-      <SectionBlend position="top" fromColor="surface" toColor="transparent" size="md" />
 
-      {/* Background Glows (Emphasizing Purple/Secondary) */}
-      <div className="absolute inset-0 -z-10 overflow-hidden">
-        {/* Glow 1: Primary (Purple) */}
-        <div className="absolute top-0 left-0 w-96 h-96 bg-[var(--primary)]/20 rounded-full blur-3xl opacity-60" />
-        {/* Glow 2: Secondary (Deep Purple) */}
-        <div className="absolute bottom-0 right-0 w-[30rem] h-[30rem] bg-[var(--secondary)]/20 rounded-full blur-3xl opacity-50" />
-      </div>
+      {/* Fine grid — cool tint, fades in below the seamless top edge */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 landing-grid-flow"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, rgba(6,182,212,0.07) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(6,182,212,0.07) 1px, transparent 1px)
+          `,
+          backgroundSize: '32px 32px',
+          maskImage:
+            'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.55) 32%, black 50%, black 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.55) 32%, black 50%, black 100%)',
+        }}
+      />
+
+      <SectionBlend position="bottom" fromColor="transparent" toColor="background" size="md" />
 
       <main className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-12 pb-12 sm:pt-14 sm:pb-14">
         {/* Header */}

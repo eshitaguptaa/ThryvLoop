@@ -10,6 +10,11 @@ import {
   formatWorkspaceSyncError,
   isAuthWorkspaceError,
 } from '@/lib/workspace/userMessages';
+import {
+  getGoogleConnectionAccess,
+  getGoogleResyncMessage,
+  needsGoogleResync,
+} from '@/lib/workspace/googleAccess';
 
 const GOOGLE_ICON = (
   <svg className="w-8 h-8" viewBox="0 0 24 24" aria-hidden>
@@ -64,7 +69,7 @@ export default function WorkspaceIntegrations({
 
   useEffect(() => {
     if (oauthConnected === 'google') {
-      setToast({ type: 'success', text: 'Google connected. Run sync to pull calendar and Gmail.' });
+      setToast({ type: 'success', text: 'Google connected. You can sync anytime from here.' });
       void load();
       onOAuthNoticeConsumed?.();
     } else if (oauthError) {
@@ -88,16 +93,19 @@ export default function WorkspaceIntegrations({
       }
       if (!res.ok) throw new Error(json.error || 'Sync failed');
       const googleResult = (json.results || []).find((r) => r.provider === 'google');
+      await load();
+      if (googleResult?.ok) {
+        const parts = [];
+        if (googleResult.calendarOk) parts.push('Calendar');
+        if (googleResult.gmailOk) parts.push('Gmail');
+        const syncedLabel = parts.length ? parts.join(' & ') : 'Google account';
+        setToast({ type: 'success', text: `${syncedLabel} synced.` });
+        return;
+      }
       if (googleResult && !googleResult.ok) {
-        if (googleResult.calendarOk && !googleResult.gmailOk) {
-          await load();
-          setToast({ type: 'error', text: 'Calendar synced. Gmail still pending—retry in a few minutes.' });
-          return;
-        }
         throw new Error(googleResult.error || 'Sync failed');
       }
-      await load();
-      setToast({ type: 'success', text: 'Calendar and Gmail are synced.' });
+      setToast({ type: 'success', text: 'Sync complete.' });
     } catch (e) {
       setToast({ type: 'error', text: e instanceof Error ? e.message : 'Sync failed' });
       await load();
@@ -131,10 +139,13 @@ export default function WorkspaceIntegrations({
     }
   };
 
+  const isConnected = Boolean(connection);
   const syncErrorDisplay = formatWorkspaceSyncError(connection?.sync_error);
   const showReconnectHint = Boolean(connection && isAuthWorkspaceError(connection?.sync_error));
   const apiFixes = getRequiredApiFixes(syncErrorDisplay || connection?.sync_error);
-  const isConnected = Boolean(connection);
+  const googleAccess = getGoogleConnectionAccess(connection);
+  const resyncMessage = getGoogleResyncMessage(googleAccess);
+  const showResyncHint = Boolean(isConnected && needsGoogleResync(googleAccess));
 
   const cardClass = embedded
     ? 'rounded-2xl border border-white/[0.06] bg-[#141416]/80 overflow-hidden backdrop-blur-sm'
@@ -238,8 +249,28 @@ export default function WorkspaceIntegrations({
               }
             >
               <p className={`text-sm leading-relaxed ${embedded ? 'text-indigo-200' : 'text-indigo-950'}`}>
-                Your Google connection expired. Disconnect below, then connect again to restore calendar and Gmail.
+                Your Google session needs a quick resync. Use Resync Google below — no need to disconnect.
               </p>
+            </div>
+          ) : null}
+
+          {showResyncHint ? (
+            <div
+              className={
+                embedded
+                  ? 'px-6 py-3 bg-indigo-500/10 border-b border-indigo-500/15'
+                  : 'px-6 sm:px-8 py-4 bg-indigo-50/80 border-b border-indigo-100/80'
+              }
+            >
+              <p className={`text-sm leading-relaxed ${embedded ? 'text-indigo-200' : 'text-indigo-950'}`}>
+                {resyncMessage}
+              </p>
+              <a
+                href="/api/workspace/connect/google"
+                className={`inline-flex items-center gap-1.5 mt-2 text-xs font-semibold ${embedded ? 'text-[#c4b5fd] hover:text-white' : 'text-indigo-600 hover:text-indigo-800'}`}
+              >
+                Resync Google account →
+              </a>
             </div>
           ) : null}
 
@@ -317,8 +348,22 @@ export default function WorkspaceIntegrations({
           </div>
 
           <ul className={`px-6 pb-6 text-xs space-y-1 ${embedded ? 'text-white/35' : 'text-muted-foreground'}`}>
-            <li>· Calendar — meetings & availability</li>
-            <li>· Gmail — unread messages in alerts</li>
+            <li>
+              · Calendar — meetings &amp; availability
+              {isConnected ? (
+                <span className={googleAccess.calendarGranted ? ' text-emerald-500' : ''}>
+                  {googleAccess.calendarGranted ? ' · enabled' : ' · not enabled'}
+                </span>
+              ) : null}
+            </li>
+            <li>
+              · Gmail — unread messages in alerts
+              {isConnected ? (
+                <span className={googleAccess.gmailGranted ? ' text-emerald-500' : ''}>
+                  {googleAccess.gmailGranted ? ' · enabled' : ' · not enabled'}
+                </span>
+              ) : null}
+            </li>
           </ul>
         </>
       )}

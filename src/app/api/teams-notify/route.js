@@ -28,9 +28,9 @@ async function sendNotifyEmail(subscriberEmail) {
       from,
       to: [to],
       reply_to: subscriberEmail,
-      subject: 'ThryvLoop Teams waitlist signup',
+      subject: 'ThryvLoop Company Hubs waitlist signup',
       html: `
-        <p>Someone signed up for Teams notifications on the ThryvLoop landing page.</p>
+        <p>Someone signed up for Company Hubs early access on the ThryvLoop landing page.</p>
         <p><strong>Email:</strong> ${subscriberEmail}</p>
         <p><em>${new Date().toISOString()}</em></p>
       `,
@@ -91,21 +91,21 @@ export async function POST(request) {
   if (sent.ok) {
     return Response.json({
       ok: true,
-      message: "You're on the list! We'll notify you when Teams launches.",
+      message: "You're on the list! We'll notify you when Company Hubs launch.",
     });
   }
 
   if (sent.reason === 'missing_api_key' && saved) {
     return Response.json({
       ok: true,
-      message: "You're on the list! We'll notify you when Teams launches.",
+      message: "You're on the list! We'll notify you when Company Hubs launch.",
     });
   }
 
   if (saved) {
     return Response.json({
       ok: true,
-      message: "You're on the list! We'll notify you when Teams launches.",
+      message: "You're on the list! We'll notify you when Company Hubs launch.",
     });
   }
 

@@ -8,8 +8,27 @@ const FREE_SPACES_COUNT = 5;
 export default function Pricing() {
   return (
     // Base colors using standard classes
-    <section className="pt-10 pb-20 px-6 bg-background" id="pricing">
-        <div className="max-w-7xl mx-auto">
+    <section className="relative pt-10 pb-20 px-6 bg-background overflow-hidden" id="pricing">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 landing-glow-drift opacity-80"
+        style={{
+          background:
+            'radial-gradient(ellipse 90% 70% at 20% 20%, rgba(99,102,241,0.1), transparent 55%), radial-gradient(ellipse 80% 60% at 80% 30%, rgba(139,92,246,0.08), transparent 50%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 landing-grid-flow"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, rgba(99,102,241,0.09) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(99,102,241,0.09) 1px, transparent 1px)
+          `,
+          backgroundSize: '32px 32px',
+        }}
+      />
+        <div className="relative z-10 max-w-7xl mx-auto">
           
           {/* Header */}
           <ScrollReveal as="header" className="text-center mb-16">

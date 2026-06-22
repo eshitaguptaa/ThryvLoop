@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { workspaceApiFetch } from '@/lib/workspace/clientApi';
+import { getGoogleConnectionAccess, getGoogleResyncMessage, needsGoogleResync } from '@/lib/workspace/googleAccess';
 import { formatWorkspaceSyncError, isAuthWorkspaceError } from '@/lib/workspace/userMessages';
 
 const POLL_MS = 60_000;
@@ -79,11 +80,13 @@ export function useWorkspace({ enabled = true, poll = true } = {}) {
   const connections = status?.connections ?? [];
   const hasConnection = connections.length > 0;
   const googleConnection = connections.find((c) => c.provider === 'google') ?? null;
+  const googleAccess =
+    status?.googleAccess ?? getGoogleConnectionAccess(googleConnection);
   const syncError = googleConnection?.sync_error ?? null;
   const needsWorkspaceReconnect = Boolean(googleConnection && isAuthWorkspaceError(syncError));
-  const needsWorkspaceSync =
-    !googleConnection ||
-    Boolean(formatWorkspaceSyncError(syncError));
+  const needsWorkspaceSync = Boolean(formatWorkspaceSyncError(syncError));
+  const needsGoogleResyncPrompt = needsGoogleResync(googleAccess);
+  const googleResyncMessage = getGoogleResyncMessage(googleAccess);
 
   return {
     status,
@@ -100,8 +103,11 @@ export function useWorkspace({ enabled = true, poll = true } = {}) {
     unreadCount: status?.unreadCount ?? 0,
     connections,
     googleConnection,
+    googleAccess,
     needsWorkspaceSync,
     needsWorkspaceReconnect,
+    needsGoogleResyncPrompt,
+    googleResyncMessage,
     fetchStatus,
     sync,
   };

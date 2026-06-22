@@ -68,9 +68,10 @@ function TopHeroMockup({ config }) {
 
   return (
     <HeroReveal
-      className={`${config.positionClass} hidden md:block pointer-events-none max-w-[38%] lg:max-w-[36%] xl:max-w-none`}
+      className={`${config.positionClass} hidden md:block pointer-events-none max-w-[38%] lg:max-w-[36%] xl:max-w-none landing-float-slow`}
       variants={heroImage}
       delay={config.delay}
+      style={{ animationDelay: `${config.delay * 5}s` }}
     >
       {/* Plain img — reliable on Linux/CDN; avoids Next/Image path quirks in production */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -101,9 +102,10 @@ function BottomHeroMockup({ config }) {
 
   return (
     <HeroReveal
-      className={`${anchorClass} hidden md:block pointer-events-none`}
+      className={`${anchorClass} hidden md:block pointer-events-none landing-float-slower`}
       variants={heroImage}
       delay={config.delay}
+      style={{ animationDelay: `${config.delay * 4.5}s` }}
     >
       {isDark ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -134,7 +136,7 @@ export default function Hero({ onGetStartedClick }) {
     <section className="pt-16 sm:pt-20 px-4 sm:px-6 py-8 sm:py-10 flex justify-center bg-background relative overflow-x-hidden min-h-[calc(100vh-4rem)] md:min-h-[680px] lg:min-h-screen">
       <SectionBlend position="bottom" fromColor="transparent" toColor="surface" size="lg" />
       <div className="max-w-[1280px] w-full relative bg-surface rounded-2xl sm:rounded-3xl min-h-[420px] md:min-h-[640px] lg:min-h-[680px] xl:min-h-[640px] border border-border overflow-hidden flex flex-col justify-center">
-        <div className="absolute inset-0 hero-dot-grid pointer-events-none rounded-2xl sm:rounded-3xl opacity-100" />
+        <div className="absolute inset-0 hero-dot-grid landing-dot-grid-flow pointer-events-none rounded-2xl sm:rounded-3xl opacity-100" />
 
         <TopHeroMockup config={TOP_MOCKUPS.ambience} />
         <TopHeroMockup config={TOP_MOCKUPS.analytics} />
@@ -156,26 +158,34 @@ export default function Hero({ onGetStartedClick }) {
           </HeroReveal>
 
           <HeroReveal className="text-center max-w-[720px] mx-auto px-2 md:px-6 lg:px-4" variants={heroContent}>
+            <motion.p
+              variants={heroLine}
+              className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400 mb-4"
+            >
+              Transform digital workspaces
+            </motion.p>
             <motion.h1
               variants={heroLine}
               className="landing-display text-3xl sm:text-4xl md:text-[2.35rem] lg:text-[2.75rem] xl:text-[3.5rem] mb-0"
             >
-              Switch On. Lock In.
+              One Hub.
               <br />
-              Go Beyond.
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600">
+                Zero App-Hopping.
+              </span>
             </motion.h1>
             <motion.p
               variants={heroLine}
-              className="landing-body text-base sm:text-lg md:text-[1.05rem] mb-6 sm:mb-8 mt-4 sm:mt-5 max-w-lg md:max-w-xl mx-auto"
+              className="landing-body text-base sm:text-lg md:text-[1.05rem] mb-6 sm:mb-8 mt-4 sm:mt-5 max-w-lg mx-auto"
             >
-              A productivity powerhouse blending ambience, music, analytics, tasks and integrations into a
-              frictionless flow.
+              ThryvLoop unifies focus, tasks, and analytics for people and companies—one place to
+              work, with productivity you can measure.
             </motion.p>
             <motion.div variants={heroLine} className="flex justify-center">
               <button
                 type="button"
                 onClick={onGetStartedClick}
-                className="w-full sm:w-auto px-8 py-3 rounded-full font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-purple-700 hover:shadow-indigo-500/35 transition-all hover:-translate-y-0.5"
+                className="landing-cta-shine w-full sm:w-auto px-8 py-3 rounded-full font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-purple-700 hover:shadow-indigo-500/35 transition-all hover:-translate-y-0.5"
               >
                 Get free demo
               </button>

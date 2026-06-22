@@ -19,6 +19,7 @@ if (process.env.NODE_ENV === 'production') {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
   ...(process.env.NODE_ENV === 'development' && {
     allowedDevOrigins: ['*.ngrok-free.dev', '*.ngrok.io'],
   }),

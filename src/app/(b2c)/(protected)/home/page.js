@@ -46,20 +46,10 @@ import {
   dashboardStatBadgeClass,
   dashboardStatIconBoxClass,
 } from '@/lib/appShellClasses';
+import { getSoundscapeSoundName } from '@/lib/soundscapeConstants';
 
 const FOCUS_GOAL_MINUTES = 120; // 2 hours default daily goal
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-const SOUNDSCAPE_SOUND_NAMES = {
-  rain: 'Heavy Rain',
-  fire: 'Fire Crackle',
-  forest: 'Forest',
-  waterfall: 'Waterfall',
-  binaural: 'Binaural (40Hz)',
-  lofi: 'Chill Lo-Fi',
-  synthwave: 'Synthwave',
-  spaces: 'Spaces',
-};
 
 function formatWorkspaceWhen(iso) {
   if (!iso) return '';
@@ -103,6 +93,8 @@ export default function Dashboard() {
     hasConnection,
     needsWorkspaceSync,
     needsWorkspaceReconnect,
+    needsGoogleResyncPrompt,
+    googleResyncMessage,
     googleConnection,
     inMeeting,
     currentMeeting,
@@ -143,7 +135,7 @@ export default function Dashboard() {
       withSpaces.push({ id: 'spaces', name: 'Spaces', volume: parseInt(videoVol, 10) || 50 });
     }
     setSoundscapeActiveSounds(
-      withSpaces.map((s) => ({ id: s.id, name: SOUNDSCAPE_SOUND_NAMES[s.id] || s.name || s.id }))
+      withSpaces.map((s) => ({ id: s.id, name: getSoundscapeSoundName(s.id) || s.name || s.id }))
     );
     if (spacesOn && !isPlayingNow) {
       setSoundscapeIsPlaying(true);
@@ -454,6 +446,7 @@ export default function Dashboard() {
   const workspaceSyncMessage = formatWorkspaceSyncError(googleConnection?.sync_error);
   const showConnectPrompt = !workspaceLoading && !hasConnection;
   const showReconnectPrompt = !workspaceLoading && needsWorkspaceReconnect;
+  const showResyncPrompt = !workspaceLoading && hasConnection && needsGoogleResyncPrompt;
   const showSyncBanner = !workspaceLoading && hasConnection && Boolean(workspaceSyncMessage);
 
   return (
@@ -498,6 +491,8 @@ export default function Dashboard() {
                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-indigo-600 text-white text-[10px] font-bold">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
+              ) : needsGoogleResyncPrompt && !workspaceLoading ? (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-card" aria-hidden />
               ) : needsWorkspaceSync && !workspaceLoading ? (
                 <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-500 ring-2 ring-card animate-pulse" aria-hidden />
               ) : null}
@@ -512,7 +507,18 @@ export default function Dashboard() {
                     <div className="px-4 py-4 text-center text-muted-foreground text-sm">Loading…</div>
                   ) : workspaceNotifications.length === 0 ? (
                     <div className="px-4 py-4 text-center text-muted-foreground text-sm">
-                      {needsWorkspaceSync && !workspaceLoading ? (
+                      {needsGoogleResyncPrompt && !workspaceLoading ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotificationsOpen(false);
+                            openIntegrationsSettings();
+                          }}
+                          className="text-indigo-600 font-semibold hover:underline"
+                        >
+                          Enable Calendar or Gmail →
+                        </button>
+                      ) : needsWorkspaceSync && !workspaceLoading ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -958,17 +964,32 @@ export default function Dashboard() {
                   </button>
                 ) : null}
 
-                {showReconnectPrompt ? (
+                {showResyncPrompt ? (
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-indigo-200/90 dark:border-indigo-500/30 bg-indigo-50/60 dark:bg-indigo-950/35">
                     <p className="flex-1 text-xs sm:text-sm text-indigo-950 dark:text-indigo-200 leading-relaxed">
-                      Google connection expired. Reconnect to see meetings and mail here.
+                      {googleResyncMessage}
                     </p>
                     <button
                       type="button"
                       onClick={openIntegrationsSettings}
                       className="shrink-0 inline-flex items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
                     >
-                      Open integrations
+                      Resync Google
+                    </button>
+                  </div>
+                ) : null}
+
+                {showReconnectPrompt ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-indigo-200/90 dark:border-indigo-500/30 bg-indigo-50/60 dark:bg-indigo-950/35">
+                    <p className="flex-1 text-xs sm:text-sm text-indigo-950 dark:text-indigo-200 leading-relaxed">
+                      Google needs a quick resync to refresh Calendar and Gmail.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={openIntegrationsSettings}
+                      className="shrink-0 inline-flex items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
+                    >
+                      Resync Google
                     </button>
                   </div>
                 ) : null}

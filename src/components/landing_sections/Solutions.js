@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SPACES_CATALOG } from '@/lib/spacesCatalog';
-import TeamsNotifyForm from '@/components/landing_sections/TeamsNotifyForm';
+import CompanyHubsNotifyForm from '@/components/landing_sections/CompanyHubsNotifyForm';
 import WorkspaceEnvironment from '@/components/landing_sections/WorkspaceEnvironment';
 import { ScrollReveal, ScrollStagger, ScrollItem } from '@/components/landing_sections/ScrollReveal';
 import { SectionBlend, gridFadeStyle } from '@/components/landing_sections/SectionBlend';
@@ -52,15 +52,15 @@ export default function Solutions() {
     <main id="solutions" className="relative w-full overflow-hidden">
 
       {/* ================= HERO ================= */}
-<section className="relative text-center px-6 pt-28 pb-24 overflow-hidden bg-background">
+<section className="relative text-center px-6 pt-10 sm:pt-12 pb-24 overflow-hidden bg-background">
 
   {/* GRID BACKGROUND */}
   <div
-    className="absolute inset-0"
+    className="absolute inset-0 landing-grid-flow"
     style={{
       backgroundImage: `
-        linear-gradient(to right, rgba(99,102,241,0.06) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(99,102,241,0.06) 1px, transparent 1px)
+        linear-gradient(to right, rgba(99,102,241,0.11) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(99,102,241,0.11) 1px, transparent 1px)
       `,
       backgroundSize: "32px 32px",
       ...gridFadeStyle('both'),
@@ -69,7 +69,7 @@ export default function Solutions() {
 
   {/* SOFT PURPLE GLOW */}
   <div
-  className="absolute inset-x-0 -bottom-0 h-[150%]"
+  className="absolute inset-x-0 -bottom-0 h-[150%] landing-glow-drift landing-glow-pulse"
   style={{
     background:
       "radial-gradient(ellipse 80% 60% at 50% 100%, rgba(139,92,246,0.22), transparent 75%)",
@@ -94,15 +94,15 @@ export default function Solutions() {
             YOUR FOCUS SANCTUARY
           </div>
 
-    {/* TITLE (DECREASED SIZE) */}
-    <h1
+    {/* TITLE */}
+    <h2
       className="font-extrabold tracking-tight leading-tight mb-6"
       style={{
         fontSize: "clamp(2.6rem, 5vw, 4.2rem)",
         color: "var(--foreground)",
       }}
     >
-      The Ultimate{" "}
+      One{" "}
       <span
         className="text-transparent bg-clip-text"
         style={{
@@ -112,26 +112,27 @@ export default function Solutions() {
       >
         Productivity
       </span>{" "}
-      Powerhouse
-    </h1>
+      Hub for Individuals
+    </h2>
 
     {/* SUBTEXT */}
     <p
       className="max-w-3xl mx-auto text-base sm:text-lg"
       style={{ color: "var(--muted-foreground)" }}
     >
-      Designed for solo creators, freelancers, and professionals to eliminate
-      cognitive overload, reclaim focus, and achieve deep work in a beautiful,
-      unified workspace.
+      Stop juggling tabs. ThryvLoop transforms your digital workspace into a single
+      environment—so you reclaim focus, finish more, and see productivity improve week over week.
     </p>
 
   </ScrollReveal>
 </section>
 
+      {/* Card + Company Hubs share one background so the top edge stays seamless */}
+      <div className="relative bg-background">
       {/* ================= CARD ================= */}
-      <section className="px-6 pb-32">
+      <section className="relative z-10 px-6 pb-12 sm:pb-16">
         <div
-          className="max-w-6xl mx-auto rounded-3xl shadow-xl"
+          className="max-w-6xl mx-auto rounded-3xl shadow-xl transition-transform duration-500 hover:-translate-y-1"
           style={{
             backgroundColor: "rgba(99,102,241,0.06)",
             border: "1px solid rgba(99,102,241,0.15)",
@@ -163,9 +164,8 @@ export default function Solutions() {
                 className="mb-10 max-w-xl"
                 style={{ color: "var(--muted-foreground)" }}
               >
-                Transform your digital workspace into a sanctuary of focus.
-                We've integrated the best-in-class tools, so you can stop
-                switching contexts and start creating.
+                Everything in one place—no toggling between apps. Transform your digital
+                workspace into a sanctuary of focus and measurable output.
               </p>
 
               {/* UPDATED BUTTON WITH HOVER EFFECT */}
@@ -232,76 +232,82 @@ export default function Solutions() {
         </div>
       </section>
 
-      {/* ================= TEAMS ================= */}
-      <section className="relative px-6 py-14 text-center overflow-hidden bg-background">
-
-  {/* GRID BACKGROUND */}
+      {/* ================= COMPANY HUBS ================= */}
+      <section
+        id="company-hubs"
+        className="relative z-10 px-6 pt-10 sm:pt-14 pb-16 sm:pb-20 text-center text-white overflow-hidden"
+      >
+  {/* Ambient glow — large soft radials; top stays pinned to parent background */}
   <div
-    className="absolute inset-0 z-0"
+    aria-hidden
+    className="pointer-events-none absolute inset-0 z-0 landing-glow-drift-alt landing-glow-pulse"
+    style={{
+      background: `
+        radial-gradient(ellipse 150% 105% at 50% 28%, rgba(99,102,241,0.22), transparent 62%),
+        radial-gradient(ellipse 95% 85% at 12% 34%, rgba(124,58,237,0.16), transparent 58%),
+        radial-gradient(ellipse 95% 85% at 88% 30%, rgba(59,130,246,0.14), transparent 58%),
+        radial-gradient(ellipse 110% 70% at 50% 92%, rgba(7,7,13,0.55), transparent 68%)
+      `,
+      maskImage:
+        'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.18) 11%, rgba(0,0,0,0.55) 22%, black 40%, black 100%)',
+      WebkitMaskImage:
+        'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.18) 11%, rgba(0,0,0,0.55) 22%, black 40%, black 100%)',
+    }}
+  />
+
+  {/* Grid — very subtle, fades in below the seamless top edge */}
+  <div
+    aria-hidden
+    className="pointer-events-none absolute inset-0 z-0 landing-grid-flow"
     style={{
       backgroundImage: `
-        linear-gradient(to right, rgba(99,102,241,0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(99,102,241,0.05) 1px, transparent 1px)
+        linear-gradient(to right, rgba(99,102,241,0.09) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(99,102,241,0.09) 1px, transparent 1px)
       `,
-      backgroundSize: "32px 32px",
-      ...gridFadeStyle('both'),
+      backgroundSize: '32px 32px',
+      maskImage:
+        'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.2) 16%, rgba(0,0,0,0.6) 30%, black 48%, black 100%)',
+      WebkitMaskImage:
+        'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.2) 16%, rgba(0,0,0,0.6) 30%, black 48%, black 100%)',
     }}
   />
 
-  {/* BLUE–PURPLE GLOW */}
-  <div
-    className="absolute inset-x-0 bottom-0 h-[180%] z-0"
-    style={{
-      background:
-        "radial-gradient(ellipse 85% 65% at 50% 85%, rgba(99,102,241,0.28), rgba(59,130,246,0.18), rgba(139,92,246,0.14), transparent 75%)",
-    }}
-  />
-
-  <SectionBlend position="bottom" fromColor="transparent" toColor="surface" size="lg" />
+  <SectionBlend position="bottom" fromColor="transparent" toColor="surface" size="lg" className="z-[1]" />
 
   <ScrollReveal className="relative z-10 max-w-3xl mx-auto">
 
     {/* BADGE */}
     <span
-      className="inline-block px-5 py-2 rounded-full text-xs font-semibold tracking-wide mb-6"
-      style={{
-        backgroundColor: "rgba(99,102,241,0.15)",
-        color: "var(--primary)",
-      }}
+      className="inline-block px-5 py-2 rounded-full text-xs font-semibold tracking-wide mb-6 bg-violet-500/15 text-violet-300"
     >
       COMING SOON
     </span>
 
     {/* TITLE */}
-    <h2
-      className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-6"
-      style={{ color: "var(--foreground)" }}
-    >
-      Powerhouse for{" "}
+    <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-6 text-white">
+      Company Hubs{" "}
       <span
         className="text-transparent bg-clip-text"
         style={{
           backgroundImage:
-            "linear-gradient(90deg, var(--primary), #3b82f6)",
+            "linear-gradient(90deg, #a78bfa, #60a5fa)",
         }}
       >
-        Teams
+        for Organizations
       </span>
     </h2>
 
     {/* DESCRIPTION */}
-    <p
-      className="text-lg leading-relaxed max-w-3xl mx-auto mb-12"
-      style={{ color: "var(--muted-foreground)" }}
-    >
-      Bring the power of focused work to your entire organization.
-      Collaborative features, project management, and shared workspaces
-      are on the way to supercharge your team's productivity.
+    <p className="text-lg leading-relaxed max-w-3xl mx-auto mb-12 text-slate-400">
+      Bring the same single-hub experience to your entire company. Shared goals,
+      project visibility, and org-wide analytics—built to lift productivity across
+      every department, not add another collaboration tool.
     </p>
 
-    <TeamsNotifyForm />
+    <CompanyHubsNotifyForm />
   </ScrollReveal>
 </section>
+      </div>
 
       <WorkspaceEnvironment />
 

@@ -1,20 +1,25 @@
 import { clerkClient } from '@clerk/nextjs/server';
-import { listConnections, upsertConnection } from '@/lib/workspace/connections';
+import { upsertConnection } from '@/lib/workspace/connections';
+import { buildScopesFromProbe } from '@/lib/workspace/googleAccess';
+import { isGoogleScopeDeniedBody } from '@/lib/workspace/googleApiErrors';
 import { GOOGLE_SCOPES } from '@/lib/workspace/oauth';
 import { syncUserWorkspaces } from '@/lib/workspace/sync';
 
 const CLERK_GOOGLE_PROVIDERS = ['google', 'oauth_google'];
 
 /**
- * @param {string} userId
  * @returns {Promise<{ token: string, expiresAt?: string | null, scopes?: string[] } | null>}
  */
 export async function fetchClerkGoogleAccessToken(userId) {
   const client = await clerkClient();
+
   for (const provider of CLERK_GOOGLE_PROVIDERS) {
     try {
-      const res = await client.users.getUserOauthAccessToken(userId, provider);
-      const entry = res.data?.[0];
+      const tokenRes = await client.users.getUserOauthAccessToken(userId, provider);
+      const tokens = tokenRes?.data || [];
+      const entry =
+        tokens.find((t) => t.token && CLERK_GOOGLE_PROVIDERS.includes(t.provider)) ||
+        tokens.find((t) => t.token);
       if (entry?.token) {
         return {
           token: entry.token,
@@ -23,14 +28,15 @@ export async function fetchClerkGoogleAccessToken(userId) {
         };
       }
     } catch {
-      // try next provider id
+      // Try next provider slug.
     }
   }
+
   return null;
 }
 
 /** @param {string} accessToken */
-async function googleWorkspaceScopesWork(accessToken) {
+export async function probeGoogleServiceAccess(accessToken) {
   const [calRes, gmailRes] = await Promise.all([
     fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1', {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -39,15 +45,19 @@ async function googleWorkspaceScopesWork(accessToken) {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
   ]);
-  return calRes.ok && gmailRes.ok;
+
+  const calJson = calRes.ok ? null : await calRes.json().catch(() => ({}));
+  const gmailJson = gmailRes.ok ? null : await gmailRes.json().catch(() => ({}));
+
+  return {
+    calendarGranted: calRes.ok || !isGoogleScopeDeniedBody(calJson),
+    gmailGranted: gmailRes.ok || !isGoogleScopeDeniedBody(gmailJson),
+  };
 }
 
-/**
- * @param {import('@clerk/backend').User} user
- */
 function getGoogleExternalAccount(user) {
   return (
-    user.externalAccounts?.find(
+    user?.externalAccounts?.find(
       (a) =>
         a.provider === 'google' ||
         a.provider === 'oauth_google' ||
@@ -58,11 +68,11 @@ function getGoogleExternalAccount(user) {
 
 /**
  * Link workspace Google connection using Clerk's Google OAuth token (after sign-in with Google).
- * Requires Calendar + Gmail scopes on the Clerk Google social connection.
  *
  * @param {string} userId
  */
 export async function linkGoogleWorkspaceFromClerk(userId) {
+  const { listConnections } = await import('@/lib/workspace/connections');
   const existing = await listConnections(userId);
   const hasGoogle = existing.some((c) => c.provider === 'google');
 
@@ -83,14 +93,11 @@ export async function linkGoogleWorkspaceFromClerk(userId) {
     return { status: 'token_unavailable' };
   }
 
-  const scopesOk = await googleWorkspaceScopesWork(clerkToken.token);
-  if (!scopesOk) {
-    return {
-      status: 'needs_clerk_scopes',
-      hint:
-        'Add Calendar (read/write) and Gmail readonly scopes to the Google provider in Clerk Dashboard, then sign in with Google again.',
-    };
-  }
+  const probed = await probeGoogleServiceAccess(clerkToken.token);
+  const scopes =
+    clerkToken.scopes?.length > 0
+      ? clerkToken.scopes
+      : buildScopesFromProbe(probed);
 
   const expiresIn = clerkToken.expiresAt
     ? Math.max(60, Math.floor((new Date(clerkToken.expiresAt).getTime() - Date.now()) / 1000))
@@ -106,9 +113,15 @@ export async function linkGoogleWorkspaceFromClerk(userId) {
     accessToken: clerkToken.token,
     refreshToken: null,
     expiresIn,
-    scopes: clerkToken.scopes?.length ? clerkToken.scopes : GOOGLE_SCOPES.split(' ').filter(Boolean),
+    scopes: scopes.length ? scopes : GOOGLE_SCOPES.split(' ').filter(Boolean),
   });
 
   const results = await syncUserWorkspaces(userId);
-  return { status: 'linked_and_synced', synced: true, results };
+  return {
+    status: 'linked_and_synced',
+    synced: true,
+    results,
+    calendarGranted: probed.calendarGranted,
+    gmailGranted: probed.gmailGranted,
+  };
 }

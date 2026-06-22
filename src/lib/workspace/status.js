@@ -1,5 +1,6 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { mapCalendarBlockForClient } from '@/lib/workspace/meetUrl';
+import { getGoogleConnectionAccess } from '@/lib/workspace/googleAccess';
 
 /**
  * Current meeting + today's meeting minutes + recent workspace notifications.
@@ -20,7 +21,7 @@ export async function getWorkspaceStatus(userId) {
   const [connectionsRes, todayBlocksRes, upcomingBlocksRes, notifRes] = await Promise.all([
     supabase
       .from('workspace_connections')
-      .select('provider, account_email, last_synced_at, sync_error')
+      .select('provider, account_email, last_synced_at, sync_error, scopes')
       .eq('user_id', userId),
     supabase
       .from('workspace_calendar_blocks')
@@ -90,6 +91,9 @@ export async function getWorkspaceStatus(userId) {
 
   return {
     connections: connectionsRes.data || [],
+    googleAccess: getGoogleConnectionAccess(
+      (connectionsRes.data || []).find((c) => c.provider === 'google') ?? null
+    ),
     inMeeting: Boolean(currentMeeting),
     currentMeeting: currentMeeting
       ? {

@@ -113,6 +113,7 @@ export default function WorkspaceCalendarView() {
   const [events, setEvents] = useState([]);
   const [hasConnection, setHasConnection] = useState(false);
   const [canPushToGoogle, setCanPushToGoogle] = useState(false);
+  const [calendarGranted, setCalendarGranted] = useState(false);
   const [accountEmail, setAccountEmail] = useState(null);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -159,6 +160,7 @@ export default function WorkspaceCalendarView() {
       setEvents(json.events || []);
       setHasConnection(Boolean(json.hasConnection));
       setCanPushToGoogle(Boolean(json.canPushToGoogle));
+      setCalendarGranted(Boolean(json.googleAccess?.calendarGranted));
       setAccountEmail(json.googleConnection?.account_email ?? null);
       setLastSyncedAt(json.googleConnection?.last_synced_at ?? null);
     } catch (e) {
@@ -175,10 +177,15 @@ export default function WorkspaceCalendarView() {
 
   const syncNow = async () => {
     setSyncing(true);
+    setError('');
     try {
       const res = await workspaceApiFetch('/api/workspace/sync', { method: 'POST' }, getToken);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Sync failed');
+      const googleResult = (json.results || []).find((r) => r.provider === 'google');
+      if (googleResult && !googleResult.ok) {
+        throw new Error(googleResult.error || 'Sync failed');
+      }
       await fetchCalendar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Sync failed');
@@ -453,18 +460,34 @@ export default function WorkspaceCalendarView() {
           </div>
         ) : null}
 
-        {hasConnection && !canPushToGoogle && !loading ? (
-          <div className="mb-5 rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <p className="text-sm text-amber-950/90">
-              <span className="font-semibold">Google is read-only.</span> Events save in ThryvLoop but will not
-              appear in Google Calendar until you reconnect with write access.
+        {hasConnection && !calendarGranted && !loading ? (
+          <div className="mb-5 rounded-xl border-2 border-indigo-100 bg-indigo-50/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-indigo-900/90">
+              <span className="font-semibold">Calendar access is off.</span> You can still create events in
+              ThryvLoop. Resync Google to import meetings and push events to your calendar.
             </p>
             <button
               type="button"
               onClick={openIntegrationsSettings}
-              className="shrink-0 inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-700"
+              className="shrink-0 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
             >
-              Reconnect Google
+              Resync Google
+            </button>
+          </div>
+        ) : null}
+
+        {hasConnection && calendarGranted && !canPushToGoogle && !loading ? (
+          <div className="mb-5 rounded-xl border-2 border-indigo-100 bg-indigo-50/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-indigo-900/90">
+              <span className="font-semibold">Calendar is read-only.</span> Events save in ThryvLoop. Resync Google
+              with write access to push events to Google Calendar.
+            </p>
+            <button
+              type="button"
+              onClick={openIntegrationsSettings}
+              className="shrink-0 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+            >
+              Resync Google
             </button>
           </div>
         ) : null}

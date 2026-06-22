@@ -50,12 +50,40 @@ export function getGoogleApiEnableLinks(projectNumber) {
 }
 
 /** @param {unknown} body */
+export function isGoogleScopeDeniedBody(body) {
+  if (!body || typeof body !== 'object') return false;
+  const err = body.error;
+  if (!err) return false;
+  const reason = err.errors?.[0]?.reason;
+  if (reason === 'insufficientPermissions' || err.status === 'PERMISSION_DENIED') return true;
+  return isGoogleScopeDeniedMessage(err.message);
+}
+
+/** @param {string | null | undefined} message */
+export function isGoogleScopeDeniedMessage(message) {
+  if (!message || typeof message !== 'string') return false;
+  const m = message.trim().toLowerCase();
+  return (
+    m.includes('insufficientpermissions') ||
+    m.includes('permission_denied') ||
+    m.includes('insufficient authentication scopes') ||
+    m.includes('request had insufficient') ||
+    m.includes('does not have permission') ||
+    m.includes('not authorized to access') ||
+    (m.includes('403') && (m.includes('calendar') || m.includes('gmail')))
+  );
+}
+
+/** @param {unknown} body */
 export function formatGoogleApiError(body, fallback) {
   if (!body || typeof body !== 'object') return fallback;
   const err = body.error;
   if (!err) return fallback;
   const reason = err.errors?.[0]?.reason;
   const message = err.message || fallback;
+  if (isGoogleScopeDeniedBody(body)) {
+    return message;
+  }
   if (reason === 'accessNotConfigured') {
     return (
       `${message} If you already enabled this API in project ${getGoogleCloudProjectName()}, wait 5–10 minutes and click Sync now. ` +
@@ -63,7 +91,7 @@ export function formatGoogleApiError(body, fallback) {
     );
   }
   if (reason === 'insufficientPermissions' || err.status === 'PERMISSION_DENIED') {
-    return `${message} Try Disconnect, then Connect again to refresh permissions.`;
+    return message;
   }
   return message;
 }

@@ -116,14 +116,15 @@ export function HeroReveal({
   className = '',
   variants,
   delay = 0,
+  style,
 }) {
   const reduced = useReducedMotion();
-  if (reduced) return <div className={className}>{children}</div>;
+  if (reduced) return <div className={className} style={style}>{children}</div>;
 
   return (
     <motion.div
       className={layerClass(className)}
-      style={motionLayer.style}
+      style={{ ...motionLayer.style, ...style }}
       initial="hidden"
       animate="visible"
       variants={variants}

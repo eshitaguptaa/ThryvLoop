@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ensureGoogleConnectionFresh } from '@/lib/workspace/connections';
 import { syncUserWorkspaces } from '@/lib/workspace/sync';
 import { getWorkspaceStatus } from '@/lib/workspace/status';
 import { getWorkspaceUserId } from '@/lib/workspace/requireAuth';
@@ -19,6 +20,7 @@ export async function POST() {
   if (limited) return limited;
 
   try {
+    await ensureGoogleConnectionFresh(userId);
     const results = await syncUserWorkspaces(userId);
     const status = await getWorkspaceStatus(userId);
     return NextResponse.json({ results, status });

@@ -8,6 +8,9 @@
     },
     "src/app/api/assistant/analytics-insight/route.js": {
       "maxDuration": 30
+    },
+    "src/app/api/analysis/export-pdf/route.js": {
+      "maxDuration": 60
     }
   }
 }

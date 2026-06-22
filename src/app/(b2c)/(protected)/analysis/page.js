@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth, useUser } from '@clerk/nextjs';
 import {
@@ -23,7 +23,6 @@ import {
   Target,
   CheckCircle2,
   ListTodo,
-  Clock,
   Database,
   Activity,
   Flame,
@@ -32,6 +31,7 @@ import {
   Mail,
 } from 'lucide-react';
 import ThryvAIInsightCard from '@/components/analysis/ThryvAIInsightCard';
+import { captureAnalyticsCharts } from '@/lib/analysis/captureChartImages';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { Outfit } from 'next/font/google';
 import { getSupabaseClient, setSupabaseAuthToken, getFocusTimerStateFromSupabase } from '@/utils/userStorage';
@@ -64,6 +64,13 @@ export default function AnalyticsDashboard() {
   const [error, setError] = useState('');
   const [seedLoading, setSeedLoading] = useState(false);
   const [seedMessage, setSeedMessage] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [cachedInsight, setCachedInsight] = useState(null);
+
+  const focusSessionsChartRef = useRef(null);
+  const sessionsPerDayChartRef = useRef(null);
+  const taskDistributionChartRef = useRef(null);
 
   const {
     meetingMinutesToday,
@@ -310,46 +317,84 @@ export default function AnalyticsDashboard() {
     inMeeting,
   ]);
 
-  const handleExport = () => {
-    if (typeof window === 'undefined') return;
-    const escapeCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const lines = [];
-    lines.push(['ThryvLoop Analytics', new Date().toISOString()].map(escapeCell).join(','));
-    lines.push('');
-    lines.push(['Metric', 'Value'].map(escapeCell).join(','));
-    lines.push([escapeCell('Sessions today'), escapeCell(displaySessions)].join(','));
-    lines.push([escapeCell('Focus minutes today'), escapeCell(focusMinutesToday)].join(','));
-    lines.push([escapeCell('Focus minutes this week'), escapeCell(Math.round(focusMinutesThisWeek))].join(','));
-    lines.push([escapeCell('Sessions this week (count)'), escapeCell(sessionsThisWeek)].join(','));
-    lines.push([escapeCell('Tasks completed this week'), escapeCell(tasksCompletedThisWeek)].join(','));
-    lines.push([escapeCell('Streak (days)'), escapeCell(streak)].join(','));
-    lines.push([escapeCell('Efficiency %'), escapeCell(focusEfficiency)].join(','));
-    lines.push([escapeCell('Preferred timer mode'), escapeCell(modeLabel)].join(','));
-    lines.push([escapeCell('Total tasks'), escapeCell(totalTasks)].join(','));
-    lines.push([escapeCell('Done tasks'), escapeCell(doneCount)].join(','));
-    lines.push('');
-    lines.push(['Date', 'Label', 'Focus minutes', 'Sessions'].map(escapeCell).join(','));
-    chartData.forEach((d) => {
-      lines.push([escapeCell(d.date), escapeCell(d.label), escapeCell(d.focusMinutes), escapeCell(d.sessions)].join(','));
-    });
-    const csv = '\uFEFF' + lines.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `thryvloop-analytics-${todayStr}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const taskDistributionData = [
     { name: "Today's Focus", value: todaysFocusCount, color: '#5043F3' },
     { name: 'In Progress', value: inProgressCount, color: '#f59e0b' },
     { name: 'Backlog', value: backlogCount, color: '#64748b' },
     { name: 'Done', value: doneCount, color: '#10b981' },
   ].filter((d) => d.value > 0);
+
+  const handleDownloadPdf = async () => {
+    if (typeof window === 'undefined') return;
+    setExportLoading(true);
+    setExportError('');
+    try {
+      let insight = cachedInsight;
+      if (!insight?.summary) {
+        const insightRes = await fetch('/api/assistant/analytics-insight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ metrics: aiMetrics }),
+        });
+        const insightData = await insightRes.json().catch(() => ({}));
+        if (insightRes.ok && insightData?.summary) {
+          insight = insightData;
+          setCachedInsight(insightData);
+        }
+      }
+
+      const charts = await captureAnalyticsCharts({
+        focusSessions: focusSessionsChartRef.current,
+        sessionsPerDay: sessionsPerDayChartRef.current,
+        taskDistribution: taskDistributionChartRef.current,
+      });
+
+      const peakMatrix = dayLabels.map((_, dayIndex) =>
+        Array.from({ length: 24 }, (_, hour) => peakByDayHour[dayIndex]?.[hour] ?? 0)
+      );
+
+      const res = await fetch('/api/analysis/export-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userName:
+            user?.firstName ||
+            user?.username ||
+            user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] ||
+            'User',
+          dateString,
+          metrics: aiMetrics,
+          chartData,
+          taskDistribution: taskDistributionData,
+          peakByDayHour: peakMatrix,
+          dayLabels,
+          maxPeakCell,
+          categoryCounts,
+          insight,
+          charts,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to generate PDF');
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `thryvloop-report-${todayStr}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setExportError(e?.message || 'Could not generate PDF');
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   const THRYV_PURPLE = '#5043F3';
 
@@ -375,6 +420,11 @@ export default function AnalyticsDashboard() {
         {SHOW_SAMPLE_DATA && seedMessage && (
           <div className="mb-6 py-3 px-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium">
             {seedMessage}
+          </div>
+        )}
+        {exportError && (
+          <div className="mb-6 py-3 px-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm font-medium">
+            {exportError}
           </div>
         )}
 
@@ -405,12 +455,16 @@ export default function AnalyticsDashboard() {
             ) : null}
             <button
               type="button"
-              onClick={handleExport}
-              disabled={loading || !!error}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-card hover:bg-muted/60 border border-border text-foreground font-semibold text-sm transition-colors shadow-sm disabled:opacity-50 disabled:pointer-events-none"
+              onClick={handleDownloadPdf}
+              disabled={loading || !!error || exportLoading}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#5043F3] hover:bg-[#4337D9] disabled:opacity-50 disabled:pointer-events-none text-white font-semibold text-sm transition-colors shadow-lg shadow-indigo-200/50 dark:shadow-indigo-900/30"
             >
-              <Download className="w-4 h-4" />
-              Export CSV
+              {exportLoading ? (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {exportLoading ? 'Generating PDF…' : 'Download report'}
             </button>
           </div>
         </header>
@@ -432,7 +486,7 @@ export default function AnalyticsDashboard() {
               </span>
             </div>
           </div>
-          <div className="h-[320px] w-full">
+          <div className="h-[320px] w-full" ref={focusSessionsChartRef}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
@@ -503,7 +557,7 @@ export default function AnalyticsDashboard() {
               <h2 className="text-lg font-bold text-foreground tracking-tight mb-1">Sessions per day</h2>
               <p className="text-sm text-muted-foreground">Daily session count · last 14 days</p>
             </div>
-            <div className="h-[240px]">
+            <div className="h-[240px]" ref={sessionsPerDayChartRef}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -528,7 +582,7 @@ export default function AnalyticsDashboard() {
               <p className="text-sm text-muted-foreground">By column</p>
             </div>
             {taskDistributionData.length > 0 ? (
-              <div className="h-[240px]">
+              <div className="h-[240px]" ref={taskDistributionChartRef}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={taskDistributionData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
@@ -728,7 +782,11 @@ export default function AnalyticsDashboard() {
             </div>
           </div>
 
-          <ThryvAIInsightCard metrics={aiMetrics} enabled={Boolean(isSignedIn && !loading && !error)} />
+          <ThryvAIInsightCard
+            metrics={aiMetrics}
+            enabled={Boolean(isSignedIn && !loading && !error)}
+            onInsightChange={setCachedInsight}
+          />
         </div>
       </main>
     </div>
