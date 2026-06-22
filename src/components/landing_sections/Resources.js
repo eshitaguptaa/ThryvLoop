@@ -10,10 +10,25 @@ export default function Resources() {
   return (
     // Base colors using variables
     <div id="resources" className="relative w-full bg-background text-muted-foreground antialiased overflow-hidden">
-      {/* Aurora-style wash — teal/sky accents (distinct from Company Hubs purple) */}
+      {/* Aurora — ThryvLoop purple in light mode; teal/sky in dark */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 landing-glow-drift-alt"
+        className="pointer-events-none absolute inset-0 z-0 landing-glow-drift-alt dark:hidden"
+        style={{
+          background: `
+            conic-gradient(from 210deg at 50% 22%, rgba(91,77,237,0.1), rgba(139,92,246,0.08), rgba(99,102,241,0.06), transparent 62%),
+            radial-gradient(ellipse 120% 90% at 78% 36%, rgba(139,92,246,0.08), transparent 58%),
+            radial-gradient(ellipse 120% 90% at 18% 40%, rgba(91,77,237,0.07), transparent 58%)
+          `,
+          maskImage:
+            'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.16) 12%, rgba(0,0,0,0.52) 24%, black 42%, black 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.16) 12%, rgba(0,0,0,0.52) 24%, black 42%, black 100%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 landing-glow-drift-alt hidden dark:block"
         style={{
           background: `
             conic-gradient(from 210deg at 50% 22%, rgba(6,182,212,0.14), rgba(56,189,248,0.1), rgba(99,102,241,0.08), rgba(16,185,129,0.1), transparent 62%),
@@ -28,10 +43,25 @@ export default function Resources() {
         }}
       />
 
-      {/* Fine grid — cool tint, fades in below the seamless top edge */}
+      {/* Fine grid — purple in light, cool tint in dark */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 landing-grid-flow"
+        className="pointer-events-none absolute inset-0 z-0 landing-grid-flow dark:hidden"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, rgba(91,77,237,0.07) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(91,77,237,0.07) 1px, transparent 1px)
+          `,
+          backgroundSize: '32px 32px',
+          maskImage:
+            'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.55) 32%, black 50%, black 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.55) 32%, black 50%, black 100%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 landing-grid-flow hidden dark:block"
         style={{
           backgroundImage: `
             linear-gradient(to right, rgba(6,182,212,0.07) 1px, transparent 1px),

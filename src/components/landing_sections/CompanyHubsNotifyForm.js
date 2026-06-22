@@ -52,29 +52,13 @@ export default function CompanyHubsNotifyForm() {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Work email for early access"
           disabled={status === 'loading' || status === 'success'}
-          className="px-5 py-4 rounded-xl w-full sm:w-80 outline-none disabled:opacity-60"
-          style={{
-            backgroundColor: 'var(--white)',
-            border: '1px solid rgba(15,23,42,0.15)',
-            color: 'var(--dark)',
-          }}
+          className="px-5 py-4 rounded-xl w-full sm:w-80 outline-none disabled:opacity-60 bg-card border border-border text-foreground placeholder:text-muted-foreground focus:border-violet-400 dark:focus:border-violet-500"
         />
 
         <button
           type="submit"
           disabled={status === 'loading' || status === 'success'}
-          className="px-7 py-4 rounded-xl font-semibold flex items-center gap-2 justify-center transition-colors duration-300 disabled:opacity-60"
-          style={{
-            backgroundColor: 'var(--dark)',
-            color: 'var(--white)',
-          }}
-          onMouseEnter={(e) => {
-            if (e.currentTarget.disabled) return;
-            e.currentTarget.style.backgroundColor = 'var(--primary)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'var(--dark)';
-          }}
+          className="px-7 py-4 rounded-xl font-semibold flex items-center gap-2 justify-center transition-colors duration-300 disabled:opacity-60 bg-foreground text-background hover:bg-primary"
         >
           {status === 'loading' ? 'Sending…' : status === 'success' ? '✓ Subscribed' : '🔔 Notify Me'}
         </button>
@@ -82,8 +66,7 @@ export default function CompanyHubsNotifyForm() {
 
       {message ? (
         <p
-          className="mt-4 text-sm"
-          style={{ color: status === 'error' ? '#dc2626' : 'var(--gray)' }}
+          className={`mt-4 text-sm ${status === 'error' ? 'text-red-600' : 'text-muted-foreground'}`}
           role="status"
         >
           {message}

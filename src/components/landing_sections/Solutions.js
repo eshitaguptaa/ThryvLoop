@@ -235,12 +235,27 @@ export default function Solutions() {
       {/* ================= COMPANY HUBS ================= */}
       <section
         id="company-hubs"
-        className="relative z-10 px-6 pt-10 sm:pt-14 pb-16 sm:pb-20 text-center text-white overflow-hidden"
+        className="relative z-10 px-6 pt-10 sm:pt-14 pb-16 sm:pb-20 text-center text-foreground dark:text-white overflow-hidden"
       >
   {/* Ambient glow — large soft radials; top stays pinned to parent background */}
   <div
     aria-hidden
-    className="pointer-events-none absolute inset-0 z-0 landing-glow-drift-alt landing-glow-pulse"
+    className="pointer-events-none absolute inset-0 z-0 landing-glow-drift-alt landing-glow-pulse dark:hidden"
+    style={{
+      background: `
+        radial-gradient(ellipse 150% 105% at 50% 28%, rgba(99,102,241,0.12), transparent 62%),
+        radial-gradient(ellipse 95% 85% at 12% 34%, rgba(124,58,237,0.08), transparent 58%),
+        radial-gradient(ellipse 95% 85% at 88% 30%, rgba(59,130,246,0.08), transparent 58%)
+      `,
+      maskImage:
+        'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.18) 11%, rgba(0,0,0,0.55) 22%, black 40%, black 100%)',
+      WebkitMaskImage:
+        'linear-gradient(to bottom, transparent 0%, transparent 6%, rgba(0,0,0,0.18) 11%, rgba(0,0,0,0.55) 22%, black 40%, black 100%)',
+    }}
+  />
+  <div
+    aria-hidden
+    className="pointer-events-none absolute inset-0 z-0 landing-glow-drift-alt landing-glow-pulse hidden dark:block"
     style={{
       background: `
         radial-gradient(ellipse 150% 105% at 50% 28%, rgba(99,102,241,0.22), transparent 62%),
@@ -278,27 +293,21 @@ export default function Solutions() {
 
     {/* BADGE */}
     <span
-      className="inline-block px-5 py-2 rounded-full text-xs font-semibold tracking-wide mb-6 bg-violet-500/15 text-violet-300"
+      className="inline-block px-5 py-2 rounded-full text-xs font-semibold tracking-wide mb-6 bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"
     >
       COMING SOON
     </span>
 
     {/* TITLE */}
-    <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-6 text-white">
+    <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-6 text-foreground dark:text-white">
       Company Hubs{" "}
-      <span
-        className="text-transparent bg-clip-text"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, #a78bfa, #60a5fa)",
-        }}
-      >
+      <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-500 dark:from-[#a78bfa] dark:to-[#60a5fa]">
         for Organizations
       </span>
     </h2>
 
     {/* DESCRIPTION */}
-    <p className="text-lg leading-relaxed max-w-3xl mx-auto mb-12 text-slate-400">
+    <p className="text-lg leading-relaxed max-w-3xl mx-auto mb-12 text-muted-foreground">
       Bring the same single-hub experience to your entire company. Shared goals,
       project visibility, and org-wide analytics—built to lift productivity across
       every department, not add another collaboration tool.

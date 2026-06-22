@@ -65,8 +65,7 @@ export default function Pricing() {
                 <p className="text-muted-foreground text-sm leading-relaxed">Forever free — useful &amp; complete</p>
                 
                 <div className="mt-7 mb-9">
-                  {/* Price size matches screenshot */}
-                  <span className="text-5xl font-extrabold tracking-tight text-foreground">₹0</span>
+                  <span className="text-5xl font-extrabold tracking-tight text-foreground">Free</span>
                 </div>
 
                 <ul className="space-y-3.5 text-muted-foreground">
@@ -114,10 +113,8 @@ export default function Pricing() {
                 <h3 className="text-2xl font-semibold text-foreground mb-1.5">Pro Monthly</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">per month — cancel anytime</p>
                 
-                <div className="mt-7 mb-9 flex items-baseline gap-2">
-                  {/* Price size matches screenshot */}
-                  <span className="text-5xl font-extrabold tracking-tight text-foreground">₹89</span>
-                  <span className="text-lg text-muted-foreground font-medium">/ month</span>
+                <div className="mt-7 mb-9">
+                  <span className="text-5xl font-extrabold tracking-tight text-foreground">TBD</span>
                 </div>
 
                 <ul className="space-y-3.5 text-muted-foreground">
@@ -161,10 +158,8 @@ export default function Pricing() {
                 <h3 className="text-2xl font-semibold text-foreground mb-1.5">Pro Yearly</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">Best value — save ~45% vs monthly</p>
                 
-                <div className="mt-7 mb-9 flex items-baseline gap-2">
-                  {/* Price size matches screenshot */}
-                  <span className="text-5xl font-extrabold tracking-tight text-foreground">₹599</span>
-                  <span className="text-lg text-muted-foreground font-medium">/ year</span>
+                <div className="mt-7 mb-9">
+                  <span className="text-5xl font-extrabold tracking-tight text-foreground">TBD</span>
                 </div>
 
                 <ul className="space-y-3.5 text-muted-foreground">
@@ -209,8 +204,8 @@ export default function Pricing() {
                 
                 <p className="text-muted-foreground text-sm leading-relaxed">One-time payment</p>
                 
-                <div className="mt-7 mb-9 flex items-baseline gap-2">
-                  <span className="text-5xl font-extrabold tracking-tight text-foreground">₹1,099</span>
+                <div className="mt-7 mb-9">
+                  <span className="text-5xl font-extrabold tracking-tight text-foreground">TBD</span>
                 </div>
 
                 <ul className="space-y-3.5 text-muted-foreground">

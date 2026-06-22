@@ -2,8 +2,8 @@ export const LANDING_NAV_HEIGHT = 64;
 
 export const LANDING_SECTIONS = [
   { id: 'features', label: 'Features' },
-  { id: 'solutions', label: 'Solutions' },
-  { id: 'resources', label: 'Resources' },
+  { id: 'solutions', label: 'Focus Hub' },
+  { id: 'company-hubs', label: 'Company Hubs' },
   { id: 'pricing', label: 'Pricing' },
 ];
 

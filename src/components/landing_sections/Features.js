@@ -1,5 +1,4 @@
 import React from 'react';
-import Link from 'next/link';
 import WorkspacesShowcase from '@/components/landing_sections/WorkspacesShowcase';
 import SoundscapeComposerShowcase from '@/components/landing_sections/SoundscapeComposerShowcase';
 import TasksShowcase from '@/components/landing_sections/TasksShowcase';
@@ -158,11 +157,10 @@ export default function Features() {
                    Productivity Reimagined
                  </div>
                 <h2 className="relative z-20 landing-display text-4xl sm:text-[3.25rem] max-w-3xl">
-                  Everything You Need in <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5b4ded] to-[#8b5cf6]">One Hub</span>
+                Every Tool Designed to Protect Your  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5b4ded] to-[#8b5cf6]">Flow State</span>
                 </h2>
                 <p className="relative z-20 landing-body text-lg sm:text-xl max-w-2xl">
-                  No toggling between apps. ThryvLoop transforms your digital workspace—focus spaces,
-                  tasks, analytics, and integrations orchestrated so productivity actually improves.
+                Discover the tools designed to take control of your workday, from multi-layered audio mixers to live workspace synchronizations.
                 </p>
                </ScrollReveal>
 
@@ -264,32 +262,17 @@ export default function Features() {
   ></div>
 
   {/* Left content */}
-  <div className="flex-1 space-y-8 relative z-10 max-w-xl">
+  <div className="flex-1 flex flex-col justify-center gap-5 relative z-10 max-w-xl">
     <div>
       <FeatureCardIcon icon="smart_toy" tone="indigo" className="mb-6" fill={1} />
       <h3 className="landing-display text-3xl md:text-4xl">
-        AI Chatbot <span className="text-muted-foreground">Assistant</span>
+        AI Chatbot <span className="text-[#5b4ded]">Assistant</span>
       </h3>
     </div>
 
     <p className="landing-body text-lg">
-      Your personal productivity concierge. Start your day with clarity as our AI summarizes your agenda, prioritizes tasks, and handles quick queries instantly.
+      Your AI-powered focus assistant. Start your day with clarity as our AI summarizes your agenda, prioritizes tasks, and handles quick queries instantly.
     </p>
-
-    <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
-      <Link
-        href="/home"
-        className="px-7 py-3 rounded-full bg-foreground text-background font-bold shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 hover:-translate-y-1 transition-all flex items-center justify-center gap-2"
-      >
-        Chat with AI <MaterialSymbol icon="arrow_forward" className="text-sm" />
-      </Link>
-      <Link
-        href="/signup"
-        className="px-7 py-3 rounded-full bg-card border border-border text-foreground font-semibold hover:bg-muted transition-colors text-center"
-      >
-        View Demo
-      </Link>
-    </div>
   </div>
 
   {/* RIGHT - the chat mockup with purple glow behind it */}

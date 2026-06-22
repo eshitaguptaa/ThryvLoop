@@ -113,7 +113,7 @@ export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
   return (
     <>
       <nav className="fixed top-0 w-full h-16 bg-background/95 backdrop-blur-md z-[1000] border-b border-border">
-        <div className="max-w-[1200px] mx-auto h-full px-4 sm:px-6 lg:px-8 grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4">
+        <div className="max-w-[1280px] mx-auto h-full px-4 sm:px-6 lg:px-8 grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4">
           <Link
             href="/"
             onClick={scrollToTop}
@@ -131,7 +131,7 @@ export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
             </span>
           </Link>
 
-          <ul className="hidden lg:flex items-center justify-center gap-5 xl:gap-8 list-none m-0 p-0 min-w-0">
+          <ul className="hidden lg:flex items-center justify-center gap-3 xl:gap-5 list-none m-0 p-0 min-w-0">
             {LANDING_SECTIONS.map(({ id, label }) => (
               <li key={id}>
                 <a

@@ -511,7 +511,7 @@ export default function WorkspaceEnvironment() {
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-bold tracking-widest text-emerald-600 dark:text-emerald-400 uppercase cursor-pointer hover:bg-emerald-500/20 hover:scale-105 active:scale-95 transition-all">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                      Anti-Spyware Guarantee
+                      Anti-Spyware Promise
                     </span>
                     <svg className="w-6 h-6 text-muted-foreground cursor-pointer hover:opacity-80 transition-opacity" viewBox="0 0 24 24" fill="currentColor">
                       <circle cx="12" cy="12" r="10" fill="currentColor" className="opacity-20" />

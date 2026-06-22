@@ -168,18 +168,17 @@ export default function Hero({ onGetStartedClick }) {
               variants={heroLine}
               className="landing-display text-3xl sm:text-4xl md:text-[2.35rem] lg:text-[2.75rem] xl:text-[3.5rem] mb-0"
             >
-              One Hub.
+              One Hub
               <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600">
-                Zero App-Hopping.
+                Zero App-Hopping
               </span>
             </motion.h1>
             <motion.p
               variants={heroLine}
               className="landing-body text-base sm:text-lg md:text-[1.05rem] mb-6 sm:mb-8 mt-4 sm:mt-5 max-w-lg mx-auto"
             >
-              ThryvLoop unifies focus, tasks, and analytics for people and companies—one place to
-              work, with productivity you can measure.
+              Unify your tasks, focus and analytics. One workspace for individuals and teams to measure and boost productivity.
             </motion.p>
             <motion.div variants={heroLine} className="flex justify-center">
               <button
@@ -187,7 +186,7 @@ export default function Hero({ onGetStartedClick }) {
                 onClick={onGetStartedClick}
                 className="landing-cta-shine w-full sm:w-auto px-8 py-3 rounded-full font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-purple-700 hover:shadow-indigo-500/35 transition-all hover:-translate-y-0.5"
               >
-                Get free demo
+                Get Started
               </button>
             </motion.div>
           </HeroReveal>
