@@ -86,13 +86,11 @@ export default function SpacesBackgroundVideo() {
 
   const resolvePlaybackVolume = useCallback(() => {
     if (isSpacesPaused()) return 0;
+    if (!isSpacesPlaybackActive()) return 0;
+    if (volumeRef.current === 0) return 0;
     const ducked = playbackVolumeRef.current;
-    const activeViaPreference = isSpacesPlaybackActive();
-    const activeViaPlayback =
-      ducked !== null && ducked !== undefined && ducked > 0;
-    if (!activeViaPreference && !activeViaPlayback) return 0;
     if (ducked === null || ducked === undefined) return volumeRef.current;
-    // Session duck-to-zero must not silence Spaces unless the user paused/muted
+    // Duck-to-zero from composer layering — not a master pause (handled above)
     if (ducked === 0) return volumeRef.current;
     return ducked;
   }, [isSpacesPaused, isSpacesPlaybackActive]);
@@ -415,7 +413,8 @@ export default function SpacesBackgroundVideo() {
     const handleVolumeChange = (e) => {
       if (e.detail?.playbackOnly) {
         if (e.detail?.volume !== undefined) {
-          if (e.detail.volume === 0 && !isSpacesPaused()) {
+          const forceLevel = Boolean(e.detail.forceLevel) || e.detail.baseVolume === 0;
+          if (e.detail.volume === 0 && !isSpacesPaused() && !forceLevel) {
             return;
           }
           if (e.detail.volume > 0) {
@@ -428,6 +427,8 @@ export default function SpacesBackgroundVideo() {
           applyPlayerVolume(playerRef.current, e.detail.volume);
           if (e.detail.volume > 0 && playerRef.current) {
             startPlayback(playerRef.current);
+          } else if (e.detail.volume === 0 && playerRef.current) {
+            applyPlayerVolume(playerRef.current, 0);
           }
         }
         return;
@@ -451,7 +452,15 @@ export default function SpacesBackgroundVideo() {
   }, [syncSpacesPlayback]);
 
   useEffect(() => {
-    const handlePauseChanged = () => {
+    const handlePauseChanged = (e) => {
+      if (e?.detail?.isPlaying === false) {
+        playbackVolumeRef.current = 0;
+        if (playerRef.current) {
+          applyPlayerVolume(playerRef.current, 0);
+        }
+        return;
+      }
+
       if (shouldKeepVideoVisible()) {
         setPlayerActivated(true);
         if (!playerRef.current) return;

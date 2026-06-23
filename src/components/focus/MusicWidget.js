@@ -59,7 +59,11 @@ export default function MusicWidget() {
 
   const isMixAudible = (sounds, playing, paused) => {
     if (!playing) return false;
-    return hasAudibleComposerSounds(sounds) || (!paused && checkSpacesPlaying());
+    const masterRaw = getUserStorageItem(userId, 'soundscape-global-volume', 'soundscape-global-volume');
+    const master = masterRaw ? parseInt(masterRaw, 10) : 75;
+    const composerAudible = master > 0 && hasAudibleComposerSounds(sounds);
+    const spacesAudible = !paused && checkSpacesPlaying();
+    return composerAudible || spacesAudible;
   };
 
   // Get active sounds from localStorage (synced with SoundscapeComposer)
@@ -272,7 +276,9 @@ export default function MusicWidget() {
       setUserStorageItem(userId, 'soundscape-is-playing', 'false');
       setUserStorageItem(userId, 'soundscape-session-active', 'false');
       window.dispatchEvent(
-        new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: false } })
+        new CustomEvent('soundscape-play-pause-changed', {
+          detail: { isPlaying: false, muteSpaces: true },
+        })
       );
       window.dispatchEvent(
         new CustomEvent('focus-volume-changed', { detail: { volume: 0, playbackOnly: true } })

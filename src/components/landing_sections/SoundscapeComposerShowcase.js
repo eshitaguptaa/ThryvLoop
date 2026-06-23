@@ -4,10 +4,18 @@ import { useEffect, useState } from 'react';
 import FeatureCardIcon from '@/components/landing_sections/FeatureCardIcon';
 import { DEFAULT_SOUNDSCAPE_RECIPES, getSoundscapeSoundName } from '@/lib/soundscapeConstants';
 
+const RECIPE_MATERIAL_ICONS = {
+  bolt: 'bolt',
+  code: 'code',
+  pen: 'ink_pen',
+  lotus: 'spa',
+  briefcase: 'work',
+};
+
 const RECIPES = DEFAULT_SOUNDSCAPE_RECIPES.map((recipe) => ({
   id: recipe.id,
   name: recipe.name,
-  icon: recipe.icon === 'lotus' ? 'spa' : recipe.icon,
+  icon: RECIPE_MATERIAL_ICONS[recipe.icon] ?? recipe.icon,
   layers: recipe.sounds.map((sound) => getSoundscapeSoundName(sound.id)),
 }));
 

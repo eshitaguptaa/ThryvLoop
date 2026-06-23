@@ -1,11 +1,16 @@
 'use client';
 
-import { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
 import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
 import { SPACES_CATEGORIES, SPACES_CATALOG, filterSpacesByCategory } from '@/lib/spacesCatalog';
+import {
+  applySpacesBaseVolume,
+  isSpacesVisuallyMuted,
+  toggleSpacesMute,
+} from '@/lib/spacesVolumeControl';
 
 const DRAWER_TRANSITION_MS = 300;
 
@@ -32,6 +37,14 @@ export default function SpacesDrawer({ isOpen, onClose }) {
   
   const [volumeState, setVolumeState] = useState(getVolume);
   const isUpdatingFromDrawerRef = useRef(false);
+  const [spacesMuted, setSpacesMuted] = useState(() =>
+    isSpacesVisuallyMuted(userId, getVolume()),
+  );
+
+  const syncSpacesMuted = useCallback(() => {
+    const currentVol = focusContext?.volume ?? volumeState;
+    setSpacesMuted(isSpacesVisuallyMuted(userId, currentVol));
+  }, [userId, focusContext?.volume, volumeState]);
   
   // Listen for volume changes from SoundscapeComposer
   useEffect(() => {
@@ -51,42 +64,48 @@ export default function SpacesDrawer({ isOpen, onClose }) {
         }
         // Always update local state as well (for when context is not available)
         setVolumeState(newVolume);
+        setSpacesMuted(isSpacesVisuallyMuted(userId, newVolume));
       }
     };
 
+    const handlePauseChange = () => syncSpacesMuted();
+
     if (typeof window !== 'undefined') {
       window.addEventListener('focus-volume-changed', handleVolumeChange);
+      window.addEventListener('focus-spaces-pause-changed', handlePauseChange);
+      window.addEventListener('soundscape-state-changed', handlePauseChange);
+      window.addEventListener('soundscape-play-pause-changed', handlePauseChange);
       return () => {
         window.removeEventListener('focus-volume-changed', handleVolumeChange);
+        window.removeEventListener('focus-spaces-pause-changed', handlePauseChange);
+        window.removeEventListener('soundscape-state-changed', handlePauseChange);
+        window.removeEventListener('soundscape-play-pause-changed', handlePauseChange);
       };
     }
-  }, [focusContext?.setVolume]);
+  }, [focusContext?.setVolume, syncSpacesMuted, userId]);
+
+  useEffect(() => {
+    if (isOpen) syncSpacesMuted();
+  }, [isOpen, syncSpacesMuted]);
   
   // Use context when inside FocusProvider; local state is fallback only
   const volume = focusContext?.volume ?? volumeState;
+  const showSpacesMuted = spacesMuted;
   const setVolume = (val) => {
-    const newVolume = Math.max(0, Math.min(100, val)); // Clamp between 0 and 100
-    
-    // Mark that we're updating from this component
+    const currentVolume = focusContext?.volume ?? volumeState;
     isUpdatingFromDrawerRef.current = true;
-    
+
+    const clamped = applySpacesBaseVolume(userId, currentVolume, val);
+
     if (focusContext?.setVolume) {
-      focusContext.setVolume(newVolume);
+      focusContext.setVolume(clamped);
     }
-    setVolumeState(newVolume);
-    
-    // Always save to localStorage
-    if (typeof window !== 'undefined') {
-      setUserStorageItem(userId, 'focus-video-volume', newVolume.toString());
-      // Always dispatch custom event to ensure video player gets the update
-      window.dispatchEvent(new CustomEvent('focus-volume-changed', {
-        detail: { volume: newVolume }
-      }));
-      // Reset flag after event is dispatched
-      setTimeout(() => {
-        isUpdatingFromDrawerRef.current = false;
-      }, 0);
-    }
+    setVolumeState(clamped);
+    setSpacesMuted(isSpacesVisuallyMuted(userId, clamped));
+
+    setTimeout(() => {
+      isUpdatingFromDrawerRef.current = false;
+    }, 0);
   };
   
   // Get backgroundVideoId from context or localStorage
@@ -491,10 +510,26 @@ export default function SpacesDrawer({ isOpen, onClose }) {
               {/* Volume Controls */}
           <div className="flex items-center gap-4">
                 <button 
-                  onClick={() => setVolume(volume > 0 ? 0 : 50)}
-                  className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1"
+                  onClick={() => {
+                    const currentVolume = volume;
+                    isUpdatingFromDrawerRef.current = true;
+                    const next = toggleSpacesMute(userId, currentVolume);
+                    if (focusContext?.setVolume) {
+                      focusContext.setVolume(next);
+                    }
+                    setVolumeState(next);
+                    setSpacesMuted(isSpacesVisuallyMuted(userId, next));
+                    setTimeout(() => {
+                      isUpdatingFromDrawerRef.current = false;
+                    }, 0);
+                  }}
+                  className={`flex-shrink-0 transition-colors p-1 ${
+                    showSpacesMuted
+                      ? 'text-orange-400 hover:text-orange-300'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
                 >
-                  {volume === 0 ? (
+                  {showSpacesMuted ? (
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M17 10l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />

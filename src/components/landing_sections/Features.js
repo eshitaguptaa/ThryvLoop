@@ -358,14 +358,6 @@ export default function Features() {
 
               </ScrollStagger>
             </div>
-
-              <ScrollReveal className="flex justify-center w-full max-w-[1280px] pt-20 sm:pt-24 pb-10 sm:pb-12" variant="fadeUpSoft" delay={0.1}>
-                <button className="group relative flex min-w-[240px] cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-full h-16 px-10 bg-foreground text-background text-lg font-bold leading-normal tracking-wide transition-all hover:scale-105 hover:shadow-2xl hover:shadow-primary/30">
-                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></span>
-                  <span className="truncate">Explore all features</span>
-                  <MaterialSymbol icon="arrow_forward" className="text-lg transition-transform group-hover:translate-x-1" />
-                </button>
-          </ScrollReveal>
            </main>
         </div>
       </div>

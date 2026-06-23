@@ -13,13 +13,10 @@ export function isSpacesPausedByUser(userId) {
   return getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
 }
 
-/** Whether Spaces ambient audio should be playing (matches MusicWidget session logic). */
+/** Whether Spaces ambient audio should be playing (respects master play/pause). */
 export function isSpacesPlaybackIntent(userId) {
   if (!hasSpacesMediaConfigured(userId)) return false;
   if (isSpacesPausedByUser(userId)) return false;
-
-  const pausedFlag = getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused');
-  if (pausedFlag === 'false') return true;
 
   const sessionActive =
     getUserStorageItem(userId, 'soundscape-session-active', 'soundscape-session-active') === 'true';

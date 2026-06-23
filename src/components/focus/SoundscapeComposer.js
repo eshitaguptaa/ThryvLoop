@@ -32,6 +32,14 @@ import {
   setFocusTimerRecipesToSupabase,
 } from '@/utils/userStorage';
 import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
+import {
+  applySpacesBaseVolume,
+  dispatchFocusSpacesPauseChanged,
+  getSpacesPreviousVolume as getStoredSpacesPreviousVolume,
+  resolveSpacesPlaybackVolume,
+  saveSpacesPreviousVolume as persistSpacesPreviousVolume,
+  toggleSpacesMute,
+} from '@/lib/spacesVolumeControl';
 import WorkspaceIntegrations from '@/components/workspace/WorkspaceIntegrations';
 
 export default function SoundscapeComposer({
@@ -101,12 +109,19 @@ export default function SoundscapeComposer({
   };
 
   const getEffectiveSpacesVolume = (baseVolume) => {
-    if (isSpacesPausedByUser()) return 0;
-    if (soloSoundId !== null) return 0;
-    if (isPlaying && activeSounds.length > 0) {
-      return Math.round(baseVolume * (globalVolume / 100));
-    }
-    return baseVolume;
+    return resolveSpacesPlaybackVolume(userId, baseVolume, { soloSoundId });
+  };
+
+  const getSpacesPreviousVolume = () => {
+    const fromRef = previousSpacesVolumeRef.current;
+    if (fromRef > 0) return fromRef;
+    return getStoredSpacesPreviousVolume(userId);
+  };
+
+  const saveSpacesPreviousVolume = (vol) => {
+    if (vol <= 0) return;
+    previousSpacesVolumeRef.current = vol;
+    persistSpacesPreviousVolume(userId, vol);
   };
 
   /** Persist the user's Spaces volume preference (base level). */
@@ -130,13 +145,18 @@ export default function SoundscapeComposer({
     }
   };
 
-  /** Update YouTube playback level only (ducking). Does not persist or sync UI sliders. */
-  const dispatchSpacesPlaybackVolume = (baseVolume) => {
+  /** Update YouTube playback level (ducking or explicit Spaces level from composer). */
+  const dispatchSpacesPlaybackVolume = (baseVolume, { forceLevel = false } = {}) => {
     if (typeof window === 'undefined') return;
     const playbackVolume = getEffectiveSpacesVolume(baseVolume);
     window.dispatchEvent(
       new CustomEvent('focus-volume-changed', {
-        detail: { volume: playbackVolume, playbackOnly: true },
+        detail: {
+          volume: playbackVolume,
+          playbackOnly: true,
+          baseVolume,
+          forceLevel,
+        },
       })
     );
   };
@@ -343,6 +363,9 @@ export default function SoundscapeComposer({
   const initializedRef = useRef(false);
   const previousVolumesRef = useRef({}); // Store previous volumes when muting individual sounds
   const previousGlobalVolumeRef = useRef(75); // Store previous global volume when muting master
+  const previousSpacesVolumeRef = useRef(50); // Store previous Spaces volume when muting
+  /** True when master mute auto-paused Spaces (restore on master unmute). */
+  const masterMutedSpacesRef = useRef(false);
   const soundTimestampsRef = useRef({}); // Track when each sound was added to determine oldest
   const hasStartedPlaybackRef = useRef(false);
   const stateHydratedRef = useRef(false);
@@ -363,6 +386,31 @@ export default function SoundscapeComposer({
       setSessionActive,
     });
 
+  const muteSpacesForMaster = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!getBackgroundVideoId() || getSpacesVolume() <= 0) return;
+    if (isSpacesPausedByUser()) return;
+    masterMutedSpacesRef.current = true;
+    setSpacesMuted(true);
+    setItem('focus-spaces-paused', 'true');
+    lastPlaybackVolumeRef.current = null;
+    dispatchSpacesPlaybackVolume(0, { forceLevel: true });
+    dispatchFocusSpacesPauseChanged(true);
+  }, [userId]);
+
+  const restoreSpacesAfterMaster = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!masterMutedSpacesRef.current) return;
+    masterMutedSpacesRef.current = false;
+    if (!getBackgroundVideoId() || getSpacesVolume() <= 0) return;
+    setSpacesMuted(false);
+    setItem('focus-spaces-paused', 'false');
+    lastPlaybackVolumeRef.current = null;
+    window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
+    dispatchSpacesPlaybackVolume(getSpacesVolume(), { forceLevel: true });
+    dispatchFocusSpacesPauseChanged(false);
+  }, [userId, spacesVolume]);
+
   const pauseSoundscapePlayback = useCallback((dispatchEvent = true) => {
     if (typeof window === 'undefined') return;
     hasStartedPlaybackRef.current = false;
@@ -378,10 +426,6 @@ export default function SoundscapeComposer({
       window.dispatchEvent(
         new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: false } })
       );
-      if (getItem('focus-spaces-paused') === 'false') {
-        lastPlaybackVolumeRef.current = null;
-        window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
-      }
     }
   }, [userId]);
 
@@ -412,13 +456,12 @@ export default function SoundscapeComposer({
   const isMixAudible = useCallback((
     sounds,
     masterVol,
-    spacesMutedVal,
     spacesVol,
   ) => {
     if (masterVol > 0 && Array.isArray(sounds) && sounds.some((s) => s.volume > 0)) {
       return true;
     }
-    if (!spacesMutedVal && spacesVol > 0 && getBackgroundVideoId()) {
+    if (spacesVol > 0 && getBackgroundVideoId()) {
       return true;
     }
     return false;
@@ -427,12 +470,10 @@ export default function SoundscapeComposer({
   const pauseIfMixInaudible = useCallback((
     soundsSnapshot = activeSoundsRef.current,
     masterVol = globalVolumeRef.current,
-    spacesMutedVal,
     spacesVol,
   ) => {
-    const spacesMutedEffective = spacesMutedVal ?? getItem('focus-spaces-paused') === 'true';
     const spacesVolEffective = spacesVol ?? getSpacesVolume();
-    if (!isMixAudible(soundsSnapshot, masterVol, spacesMutedEffective, spacesVolEffective)) {
+    if (!isMixAudible(soundsSnapshot, masterVol, spacesVolEffective)) {
       pauseSoundscapePlayback();
     }
   }, [isMixAudible, pauseSoundscapePlayback, userId]);
@@ -646,6 +687,9 @@ export default function SoundscapeComposer({
         const v = parseInt(savedSpacesVol, 10);
         const base = Number.isNaN(v) ? 50 : Math.max(0, Math.min(100, v));
         setSpacesVolumeState(base);
+        if (base > 0) {
+          saveSpacesPreviousVolume(base);
+        }
         if (focusContext?.volume !== base) {
           persistSpacesVolume(base);
         }
@@ -916,6 +960,14 @@ export default function SoundscapeComposer({
     prevPathnameRef.current = pathname;
     if (!getBackgroundVideoId()) return;
 
+    if (!isPlaying) {
+      if (lastPlaybackVolumeRef.current !== 0) {
+        lastPlaybackVolumeRef.current = 0;
+        dispatchSpacesPlaybackVolume(0, { forceLevel: true });
+      }
+      return;
+    }
+
     if (onFocus && !isSpacesPausedByUser()) {
       bootstrapSpacesPlayback();
       return;
@@ -987,9 +1039,18 @@ export default function SoundscapeComposer({
         } else {
           setSessionActive(false);
           setIsPlaying(false);
-          if (getItem('focus-spaces-paused') === 'false') {
+          Object.values(audioRefs.current).forEach((audio) => {
+            if (audio) audio.pause();
+          });
+          if (e.detail.muteSpaces) {
+            masterMutedSpacesRef.current = false;
+            setSpacesMuted(true);
+            setItem('focus-spaces-paused', 'true');
             lastPlaybackVolumeRef.current = null;
-            window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
+            dispatchSpacesPlaybackVolume(0, { forceLevel: true });
+          } else {
+            lastPlaybackVolumeRef.current = 0;
+            dispatchSpacesPlaybackVolume(0, { forceLevel: true });
           }
         }
       }
@@ -1337,10 +1398,16 @@ export default function SoundscapeComposer({
     const newVolume = parseInt(rawVolume, 10);
     if (Number.isNaN(newVolume)) return;
     const clamped = Math.max(0, Math.min(100, newVolume));
-    const nextSounds = activeSounds.map((s) => (s.id === soundId ? { ...s, volume: clamped } : s));
-    setActiveSounds(nextSounds);
-    if (isPlaying && clamped === 0) {
-      pauseIfMixInaudible(nextSounds, globalVolume, spacesMuted, spacesVolume);
+    setActiveSounds((prev) =>
+      prev.map((s) => (s.id === soundId ? { ...s, volume: clamped } : s))
+    );
+    const audio = audioRefs.current[soundId];
+    if (audio && isPlaying) {
+      if (soloSoundId !== null && soundId !== soloSoundId) {
+        audio.volume = 0;
+      } else {
+        audio.volume = (clamped / 100) * (globalVolume / 100);
+      }
     }
   };
 
@@ -1608,11 +1675,16 @@ export default function SoundscapeComposer({
     e.stopPropagation();
     const newVolume = parseInt(e.target.value);
     if (!isNaN(newVolume) && newVolume >= 0 && newVolume <= 100) {
+      if (newVolume > 0 && globalVolume === 0) {
+        previousGlobalVolumeRef.current = newVolume;
+      } else if (newVolume === 0 && globalVolume > 0) {
+        previousGlobalVolumeRef.current = globalVolume;
+      }
       setGlobalVolume(newVolume);
-      if (!isPlaying && newVolume > 0) {
+      if (newVolume === 0) {
+        pauseIfMixInaudible(activeSounds, 0, spacesVolume);
+      } else if (!isPlaying) {
         resumeSoundscapePlayback();
-      } else if (isPlaying && newVolume === 0) {
-        pauseIfMixInaudible(activeSounds, 0, spacesMuted, spacesVolume);
       }
     }
   };
@@ -1661,15 +1733,27 @@ export default function SoundscapeComposer({
       const previousVolume = previousVolumesRef.current[soundId] || 50;
       updateSoundVolume(soundId, previousVolume);
       delete previousVolumesRef.current[soundId];
+      const audio = audioRefs.current[soundId];
+      if (audio && isPlaying) {
+        const targetVolume = (previousVolume / 100) * (globalVolume / 100);
+        audio.volume = soloSoundId !== null && soundId !== soloSoundId ? 0 : targetVolume;
+        if (audio.paused) {
+          audio.play().catch(() => {});
+        }
+      }
       return;
     }
 
     previousVolumesRef.current[soundId] = currentVolume;
-    const nextSounds = activeSounds.map((s) => (s.id === soundId ? { ...s, volume: 0 } : s));
+    const nextSounds = activeSounds.map((s) =>
+      s.id === soundId ? { ...s, volume: 0 } : s
+    );
     setActiveSounds(nextSounds);
-    if (isPlaying) {
-      pauseIfMixInaudible(nextSounds, globalVolume, spacesMuted, spacesVolume);
+    const audio = audioRefs.current[soundId];
+    if (audio) {
+      audio.volume = 0;
     }
+    pauseIfMixInaudible(nextSounds, globalVolume, spacesVolume);
   };
 
   const handleMasterMuteToggle = (e) => {
@@ -1678,27 +1762,53 @@ export default function SoundscapeComposer({
       e.stopPropagation();
     }
 
-    if (!isPlaying && globalVolume > 0) {
-      resumeSoundscapePlayback();
+    if (!isPlaying) {
+      let nextGlobal = globalVolume;
+      if (globalVolume === 0) {
+        nextGlobal = previousGlobalVolumeRef.current > 0 ? previousGlobalVolumeRef.current : 75;
+        setGlobalVolume(nextGlobal);
+      }
+      if (nextGlobal > 0 || spacesVolume > 0) {
+        resumeSoundscapePlayback();
+      }
       return;
     }
 
-    const isMuted = globalVolume === 0;
-
-    if (isMuted) {
+    if (globalVolume === 0) {
       const previousVolume = previousGlobalVolumeRef.current > 0 ? previousGlobalVolumeRef.current : 75;
       setGlobalVolume(previousVolume);
-      if (!isPlaying) {
-        resumeSoundscapePlayback();
-      }
     } else {
-      if (globalVolume > 0) {
-        previousGlobalVolumeRef.current = globalVolume;
-      }
+      previousGlobalVolumeRef.current = globalVolume;
       setGlobalVolume(0);
-      if (isPlaying) {
-        pauseIfMixInaudible(activeSounds, 0, spacesMuted, spacesVolume);
-      }
+      pauseIfMixInaudible(activeSounds, 0, spacesVolume);
+    }
+  };
+
+  const handleSpacesVolumeChange = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const newVolume = parseInt(e.target.value, 10);
+    if (Number.isNaN(newVolume) || newVolume < 0 || newVolume > 100) return;
+
+    setSpacesMuted(false);
+    masterMutedSpacesRef.current = false;
+    lastPlaybackVolumeRef.current = null;
+    isUpdatingFromComposerRef.current = true;
+
+    const clamped = applySpacesBaseVolume(userId, spacesVolume, newVolume, { soloSoundId });
+    setSpacesVolumeState(clamped);
+    if (focusContext?.setVolume) {
+      focusContext.setVolume(clamped);
+    }
+
+    setTimeout(() => {
+      isUpdatingFromComposerRef.current = false;
+    }, 0);
+
+    if (newVolume === 0) {
+      pauseIfMixInaudible(activeSounds, globalVolume, 0);
+    } else if (!isPlaying) {
+      resumeSoundscapePlayback();
     }
   };
 
@@ -1707,34 +1817,51 @@ export default function SoundscapeComposer({
       e.preventDefault();
       e.stopPropagation();
     }
-    const nextMuted = !spacesMuted;
 
-    setSpacesMuted(nextMuted);
-    setItem('focus-spaces-paused', nextMuted ? 'true' : 'false');
-    lastPlaybackVolumeRef.current = null;
-
-    if (nextMuted) {
-      window.dispatchEvent(
-        new CustomEvent('focus-volume-changed', { detail: { volume: 0, playbackOnly: true } })
-      );
-      pauseIfMixInaudible(activeSounds, globalVolume, true, spacesVolume);
-    } else {
-      if (!isPlaying) {
-        hasStartedPlaybackRef.current = true;
-        setSessionActive(true);
-        setIsPlaying(true);
-        setItem('soundscape-is-playing', 'true');
-        setItem('soundscape-session-active', 'true');
+    if (!isPlaying) {
+      let nextSpaces = spacesVolume;
+      if (spacesVolume === 0) {
+        masterMutedSpacesRef.current = false;
+        lastPlaybackVolumeRef.current = null;
+        isUpdatingFromComposerRef.current = true;
+        nextSpaces = applySpacesBaseVolume(
+          userId,
+          spacesVolume,
+          getSpacesPreviousVolume(),
+          { soloSoundId },
+        );
+        setSpacesVolumeState(nextSpaces);
+        if (focusContext?.setVolume) {
+          focusContext.setVolume(nextSpaces);
+        }
+        setTimeout(() => {
+          isUpdatingFromComposerRef.current = false;
+        }, 0);
       }
-      if (getBackgroundVideoId() && getSpacesVolume() > 0) {
-        window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
-        dispatchSpacesPlaybackVolume(getSpacesVolume());
+      if (globalVolume > 0 || nextSpaces > 0) {
+        resumeSoundscapePlayback();
       }
-      window.dispatchEvent(
-        new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: true } })
-      );
+      return;
     }
-    window.dispatchEvent(new CustomEvent('soundscape-state-changed'));
+
+    setSpacesMuted(false);
+    masterMutedSpacesRef.current = false;
+    lastPlaybackVolumeRef.current = null;
+    isUpdatingFromComposerRef.current = true;
+
+    const clamped = toggleSpacesMute(userId, spacesVolume, { soloSoundId });
+    setSpacesVolumeState(clamped);
+    if (focusContext?.setVolume) {
+      focusContext.setVolume(clamped);
+    }
+
+    setTimeout(() => {
+      isUpdatingFromComposerRef.current = false;
+    }, 0);
+
+    if (clamped === 0) {
+      pauseIfMixInaudible(activeSounds, globalVolume, 0);
+    }
   };
 
   // Check if a recipe matches the current active sounds exactly
@@ -1799,10 +1926,8 @@ export default function SoundscapeComposer({
       index === self.findIndex(s => s.id === sound.id)
     );
 
-  const playbackPaused = !isPlaying && (
-    playableSounds.length > 0 || spacesVolume > 0 || !!getBackgroundVideoId()
-  );
-  const showMasterMuted = globalVolume === 0 || playbackPaused;
+  const showMainSliderMuted = globalVolume === 0 || !isPlaying;
+  const showSpacesSliderMuted = spacesVolume === 0 || !isPlaying;
 
   const focusFlowSessionsToday = isOpen && settingsPanel === 'focusflow' && userId && typeof window !== 'undefined'
     ? (() => {
@@ -1856,8 +1981,24 @@ export default function SoundscapeComposer({
                 onClick={() => {
                   if (typeof window === 'undefined') return;
                   const newPlayingState = !isPlaying;
+                  setItem('soundscape-is-playing', newPlayingState ? 'true' : 'false');
+                  setItem('soundscape-session-active', newPlayingState ? 'true' : 'false');
+                  setSessionActive(newPlayingState);
+                  if (newPlayingState) {
+                    lastPlaybackVolumeRef.current = null;
+                    if (getBackgroundVideoId() && spacesVolume > 0) {
+                      dispatchSpacesPlaybackVolume(spacesVolume, { forceLevel: true });
+                    }
+                  } else {
+                    lastPlaybackVolumeRef.current = 0;
+                    dispatchSpacesPlaybackVolume(0, { forceLevel: true });
+                  }
+                  window.dispatchEvent(new CustomEvent('soundscape-state-changed'));
                   window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
-                    detail: { isPlaying: newPlayingState, bootstrapSpaces: newPlayingState },
+                    detail: {
+                      isPlaying: newPlayingState,
+                      bootstrapSpaces: newPlayingState,
+                    },
                   }));
                 }}
                 className="w-9 h-9 flex items-center justify-center rounded-full bg-[#2d2d36] hover:bg-[#3d3d46] text-white transition-colors"
@@ -2238,15 +2379,15 @@ export default function SoundscapeComposer({
                   type="button"
                   className="shrink-0 transition-colors hover:opacity-100 cursor-pointer p-1 -ml-1"
                   title={
-                    playbackPaused && globalVolume > 0
-                      ? 'Resume playback'
+                    !isPlaying
+                      ? 'Play all sounds'
                       : globalVolume === 0
-                        ? 'Unmute master volume'
-                        : 'Mute master volume'
+                        ? 'Unmute main volume'
+                        : 'Mute main volume'
                   }
                   style={{ pointerEvents: 'auto' }}
                 >
-                  {showMasterMuted ? (
+                  {showMainSliderMuted ? (
                     <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M7 14l12-12" />
@@ -2276,12 +2417,16 @@ export default function SoundscapeComposer({
                     type="button"
                     onClick={handleSpacesMuteToggle}
                     className={`shrink-0 flex items-center gap-2 text-xs transition-colors cursor-pointer p-1 -ml-1 ${
-                      spacesMuted ? 'text-orange-400' : 'text-white/60 hover:text-white'
+                      showSpacesSliderMuted ? 'text-orange-400' : 'text-white/60 hover:text-white'
                     }`}
-                    title={spacesMuted ? (playbackPaused ? 'Resume playback' : 'Unmute Spaces audio') : 'Mute Spaces audio'}
+                    title={
+                      showSpacesSliderMuted
+                        ? (!isPlaying ? 'Play all sounds' : 'Unmute Spaces audio')
+                        : 'Mute Spaces audio'
+                    }
                     style={{ pointerEvents: 'auto' }}
                   >
-                    {spacesMuted ? (
+                    {showSpacesSliderMuted ? (
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M7 14l12-12" />
@@ -2296,29 +2441,8 @@ export default function SoundscapeComposer({
                     min="0"
                     max="100"
                     value={spacesVolume}
-                    onChange={(e) => {
-                      const newVolume = parseInt(e.target.value);
-                      if (Number.isNaN(newVolume)) return;
-                      if (newVolume > 0 && !isPlaying) {
-                        setSpacesVolumeState(newVolume);
-                        persistSpacesVolume(newVolume);
-                        resumeSoundscapePlayback();
-                        return;
-                      }
-                      if (newVolume > 0 && spacesMuted) {
-                        setSpacesMuted(false);
-                        setItem('focus-spaces-paused', 'false');
-                        lastPlaybackVolumeRef.current = null;
-                      }
-                      setSpacesVolumeState(newVolume);
-                      persistSpacesVolume(newVolume);
-                      if (!spacesMuted || newVolume === 0) {
-                        dispatchSpacesPlaybackVolume(newVolume);
-                      }
-                      if (isPlaying && newVolume === 0) {
-                        pauseIfMixInaudible(activeSounds, globalVolume, spacesMuted, 0);
-                      }
-                    }}
+                    onChange={handleSpacesVolumeChange}
+                    onInput={handleSpacesVolumeChange}
                     className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer slider-purple"
                     style={{
                       background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${spacesVolume}%, rgba(255,255,255,0.1) ${spacesVolume}%, rgba(255,255,255,0.1) 100%)`,
@@ -2346,19 +2470,17 @@ export default function SoundscapeComposer({
                       <button 
                         onClick={() => handleSoundMuteToggle(sound.id)}
                         className={`transition-colors ${
-                          sound.volume === 0 || playbackPaused
+                          sound.volume === 0
                             ? 'text-orange-400' 
                             : 'text-white/20 hover:text-purple-400'
                         }`}
                         title={
-                          playbackPaused && sound.volume > 0
-                            ? 'Resume playback'
-                            : sound.volume === 0
-                              ? 'Unmute this sound'
-                              : 'Mute this sound'
+                          sound.volume === 0
+                            ? 'Unmute this sound'
+                            : 'Mute this sound'
                         }
                       >
-                        {sound.volume === 0 || playbackPaused ? (
+                        {sound.volume === 0 ? (
                           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M5.586 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                             <path d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" strokeLinecap="round" strokeLinejoin="round" />

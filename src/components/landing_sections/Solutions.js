@@ -52,7 +52,7 @@ export default function Solutions() {
     <main id="solutions" className="relative w-full overflow-hidden">
 
       {/* ================= HERO ================= */}
-<section className="relative text-center px-6 pt-10 sm:pt-12 pb-24 overflow-hidden bg-background">
+<section className="relative text-center px-6 pt-24 sm:pt-28 pb-24 overflow-hidden bg-background">
 
   {/* GRID BACKGROUND */}
   <div
