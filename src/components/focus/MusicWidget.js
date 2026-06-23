@@ -54,6 +54,14 @@ export default function MusicWidget() {
     }
   };
 
+  const hasAudibleComposerSounds = (sounds) =>
+    sounds.some((s) => s.id !== 'spaces' && (s.volume ?? 50) > 0);
+
+  const isMixAudible = (sounds, playing, paused) => {
+    if (!playing) return false;
+    return hasAudibleComposerSounds(sounds) || (!paused && checkSpacesPlaying());
+  };
+
   // Get active sounds from localStorage (synced with SoundscapeComposer)
   useEffect(() => {
     const loadActiveSounds = () => {
@@ -77,10 +85,7 @@ export default function MusicWidget() {
         const paused =
           getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
         setSpacesPaused(paused);
-        const spacesPlaying =
-          getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'false';
-        const spacesAuto = spacesPlaying && checkSpacesPlaying();
-        const spacesInMix = (savedPlaying && checkSpacesPlaying()) || spacesAuto;
+        const spacesInMix = !paused && checkSpacesPlaying() && savedPlaying;
         const hasSpaces = filteredSounds.some((s) => s.id === 'spaces');
         if (spacesInMix && !hasSpaces) {
           const spacesVolume = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
@@ -100,12 +105,8 @@ export default function MusicWidget() {
         }
         
         const sessionActive = getSessionActive();
-        if (!sessionActive) {
-          setIsPlaying(false);
-        } else {
-          const savedPlaying = getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing');
-          setIsPlaying(savedPlaying === 'true');
-        }
+        const shouldPlay = sessionActive && isMixAudible(filteredSounds, savedPlaying, paused);
+        setIsPlaying(shouldPlay);
       } catch (e) {
         console.error('Error loading active sounds:', e);
       }
@@ -260,7 +261,7 @@ export default function MusicWidget() {
     const paused =
       getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
     const spacesAuto = checkSpacesPlaying() && !paused;
-    const currentlyPlaying = isPlaying || spacesAuto;
+    const currentlyPlaying = isMixAudible(activeSounds, isPlaying, paused) || spacesAuto;
     const next = !currentlyPlaying;
 
     if (!next) {
@@ -324,12 +325,7 @@ export default function MusicWidget() {
     : null;
 
   const isOnFocus = pathname?.startsWith('/focus');
-  const spacesPlaying =
-    typeof window !== 'undefined' &&
-    userId &&
-    getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'false';
-  const spacesAutoPlaying = spacesPlaying && checkSpacesPlaying();
-  const showAsPlaying = isPlaying || spacesAutoPlaying;
+  const showAsPlaying = isMixAudible(activeSounds, isPlaying, spacesPaused);
 
   if (!position) return null;
 
@@ -372,7 +368,7 @@ export default function MusicWidget() {
 
         {/* LEFT: Visualizer Icon */}
         <div className="shrink-0 w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
-          {showAsPlaying && (activeSounds.length > 0 || checkSpacesPlaying()) ? (
+          {showAsPlaying ? (
             <div className="flex items-end justify-center gap-[3px] h-5 mb-0.5">
               <div 
                 className="w-1 bg-[#a855f7] rounded-full"

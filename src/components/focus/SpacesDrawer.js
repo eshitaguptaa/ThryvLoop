@@ -4,7 +4,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
 import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
-import { DEFAULT_SPACES_VIDEO_ID } from '@/lib/spacesConstants';
+import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
 import { SPACES_CATEGORIES, SPACES_CATALOG, filterSpacesByCategory } from '@/lib/spacesCatalog';
 
 const DRAWER_TRANSITION_MS = 300;
@@ -92,10 +92,12 @@ export default function SpacesDrawer({ isOpen, onClose }) {
   // Get backgroundVideoId from context or localStorage
   const getBackgroundVideoId = () => {
     if (focusContext?.backgroundVideoId) {
-      return focusContext.backgroundVideoId;
+      return resolveSpacesVideoId(focusContext.backgroundVideoId);
     }
     if (typeof window !== 'undefined') {
-      return getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id') || DEFAULT_SPACES_VIDEO_ID;
+      return resolveSpacesVideoId(
+        getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id')
+      );
     }
     return DEFAULT_SPACES_VIDEO_ID;
   };
@@ -111,7 +113,7 @@ export default function SpacesDrawer({ isOpen, onClose }) {
       const saved = typeof window !== 'undefined' 
         ? getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id') 
         : null;
-      setBackgroundVideoIdState(saved);
+      setBackgroundVideoIdState(resolveSpacesVideoId(saved));
     }
   }, [focusContext?.backgroundVideoId, userId]);
   

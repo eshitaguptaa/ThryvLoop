@@ -159,7 +159,7 @@ export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
               onClick={onGetStartedClick}
               className="hidden lg:inline-flex h-9 xl:h-10 items-center px-3.5 xl:px-5 rounded-lg font-semibold no-underline transition-all bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/30 text-xs xl:text-sm whitespace-nowrap"
             >
-              Get Started
+              Sign Up
             </button>
             <button
               type="button"

@@ -22,7 +22,7 @@ const DEFAULT_SESSION = 25;
 const DEFAULT_SHORT_BREAK = 5;
 const DEFAULT_LONG_BREAK = 15;
 const DEFAULT_COUNTDOWN = 5;
-const POMODOROS_BEFORE_LONG_BREAK = 4;
+const POMODOROS_BEFORE_LONG_BREAK = 2;
 
 function getStoredInt(userId, key, fallback) {
   if (typeof window === 'undefined') return fallback;
@@ -146,6 +146,8 @@ export function TimerProvider({ children }) {
   const [isRunning, setIsRunning] = useState(false);
   const [sessionsCompletedToday, setSessionsCompletedToday] = useState(0);
   const [sessionsDate, setSessionsDate] = useState(() => (typeof window !== 'undefined' ? localDateKey() : ''));
+  /** Completed focus sessions in the current short/long break cycle (resets after long break). */
+  const [pomodorosInCycle, setPomodorosInCycle] = useState(0);
   /** Calendar day (local) for the in-progress focus run; productive time only counts when this is today. */
   const [focusRunDate, setFocusRunDate] = useState(null);
   const settingsAppliedRef = useRef(false);
@@ -167,10 +169,12 @@ export function TimerProvider({ children }) {
   const segmentLoggedRef = useRef(0);
   const timeRef = useRef(time);
   const timerModeRef = useRef(timerMode);
+  const pomodorosInCycleRef = useRef(pomodorosInCycle);
   const phaseRef = useRef(phase);
   timeRef.current = time;
   timerModeRef.current = timerMode;
   phaseRef.current = phase;
+  pomodorosInCycleRef.current = pomodorosInCycle;
 
   const refreshLoggedFocusTotals = useCallback(async () => {
     if (!userId || !isSignedIn) {
@@ -370,8 +374,11 @@ export function TimerProvider({ children }) {
         setTickSound(settings.tickSound !== false);
         const sessionsToday = (sessions.date ?? today) === today ? Math.max(0, sessions.today ?? 0) : 0;
         const sessionsDateVal = (sessions.date ?? today) === today ? (sessions.date ?? today) : today;
+        const cycleCount = Math.max(0, Math.min(POMODOROS_BEFORE_LONG_BREAK, sessions.cycle ?? sessions.pomodorosInCycle ?? 0));
         setSessionsCompletedToday(sessionsToday);
         setSessionsDate(sessionsDateVal);
+        setPomodorosInCycle(cycleCount);
+        pomodorosInCycleRef.current = cycleCount;
         let timeVal = typeof timer.time === 'number' ? timer.time : sm * 60;
         const runDate = resolveFocusRunDate(timer.focusRunDate, timer.updatedAt);
         const discarded = discardStaleFocusProgress({
@@ -400,6 +407,7 @@ export function TimerProvider({ children }) {
         setUserStorageItem(userId, 'focus-timer-phase', ph);
         setUserStorageItem(userId, 'focus-timer-sessions-today', String(sessionsToday));
         setUserStorageItem(userId, 'focus-timer-sessions-date', sessionsDateVal);
+        setUserStorageItem(userId, 'focus-timer-pomodoros-in-cycle', String(cycleCount));
         setUserStorageItem(userId, 'focus-timer-run-date', discarded.focusRunDate || '');
         setSupabaseHydrated(true);
       } else {
@@ -419,6 +427,12 @@ export function TimerProvider({ children }) {
           setUserStorageItem(userId, 'focus-timer-sessions-date', today);
           setUserStorageItem(userId, 'focus-timer-sessions-today', '0');
         }
+        const savedCycle = getUserStorageItem(userId, 'focus-timer-pomodoros-in-cycle', 'focus-timer-pomodoros-in-cycle');
+        const cycleCount = savedCycle != null && savedCycle !== ''
+          ? Math.max(0, Math.min(POMODOROS_BEFORE_LONG_BREAK, parseInt(savedCycle, 10) || 0))
+          : 0;
+        setPomodorosInCycle(cycleCount);
+        pomodorosInCycleRef.current = cycleCount;
         const savedMode = getUserStorageItem(userId, 'focus-timer-mode', 'focus-timer-mode');
         const savedPhase = getUserStorageItem(userId, 'focus-timer-phase', 'focus-timer-phase');
         const mode = savedMode === 'stopwatch' || savedMode === 'countdown' ? savedMode : 'pomodoro';
@@ -561,7 +575,8 @@ export function TimerProvider({ children }) {
     if (typeof window === 'undefined' || !userId || !initialLoadDoneRef.current) return;
     setUserStorageItem(userId, 'focus-timer-sessions-today', sessionsCompletedToday.toString());
     setUserStorageItem(userId, 'focus-timer-sessions-date', sessionsDate || localDateKey());
-  }, [sessionsCompletedToday, sessionsDate, userId]);
+    setUserStorageItem(userId, 'focus-timer-pomodoros-in-cycle', pomodorosInCycle.toString());
+  }, [sessionsCompletedToday, sessionsDate, pomodorosInCycle, userId]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !userId || !position || !initialLoadDoneRef.current) return;
@@ -583,7 +598,7 @@ export function TimerProvider({ children }) {
       supabaseSaveTimeoutRef.current = null;
       const state = {
         timer: { time, isRunning, updatedAt: new Date().toISOString(), mode: timerMode, phase, focusRunDate },
-        sessions: { today: sessionsCompletedToday, date: sessionsDate || localDateKey() },
+        sessions: { today: sessionsCompletedToday, date: sessionsDate || localDateKey(), cycle: pomodorosInCycle },
         settings: { timerMode, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, autoStartBreaks, alarmVolume, tickSound },
         position: position && typeof position.x === 'number' ? position : undefined,
         size: size && size.width >= 350 && size.height >= 300 ? size : undefined,
@@ -591,7 +606,7 @@ export function TimerProvider({ children }) {
       setFocusTimerStateToSupabase(userId, state);
     }, 2500);
     return () => { if (supabaseSaveTimeoutRef.current) clearTimeout(supabaseSaveTimeoutRef.current); };
-  }, [userId, time, isRunning, timerMode, phase, focusRunDate, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, autoStartBreaks, alarmVolume, tickSound, sessionsCompletedToday, sessionsDate, position, size, supabaseHydrated]);
+  }, [userId, time, isRunning, timerMode, phase, focusRunDate, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, autoStartBreaks, alarmVolume, tickSound, sessionsCompletedToday, sessionsDate, pomodorosInCycle, position, size, supabaseHydrated]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -642,10 +657,12 @@ export function TimerProvider({ children }) {
                 window.dispatchEvent(new CustomEvent('celebration-trigger', { detail: { type: 'focus_session', sessionMinutes, mode: 'pomodoro' } }));
               }
               playPhaseStartRing();
-              const nextSessions = sessionsCompletedToday + 1;
-              setSessionsCompletedToday(nextSessions);
+              const nextInCycle = pomodorosInCycleRef.current + 1;
+              pomodorosInCycleRef.current = nextInCycle;
+              setPomodorosInCycle(nextInCycle);
+              setSessionsCompletedToday((n) => n + 1);
               setSessionsDate(localDateKey());
-              const doLongBreak = nextSessions > 0 && nextSessions % POMODOROS_BEFORE_LONG_BREAK === 0;
+              const doLongBreak = nextInCycle >= POMODOROS_BEFORE_LONG_BREAK;
               setPhase(doLongBreak ? 'longBreak' : 'shortBreak');
               const breakMins = doLongBreak ? longBreakMinutes : shortBreakMinutes;
               const nextTime = breakMins * 60;
@@ -653,8 +670,18 @@ export function TimerProvider({ children }) {
               else setIsRunning(false);
               return nextTime;
             }
-            if (phase === 'shortBreak' || phase === 'longBreak') {
+            if (phase === 'shortBreak') {
               playPhaseStartRing();
+              setPhase('session');
+              const nextTime = sessionMinutes * 60;
+              if (autoStartBreaks) setTimeout(() => setIsRunning(true), 100);
+              else setIsRunning(false);
+              return nextTime;
+            }
+            if (phase === 'longBreak') {
+              playPhaseStartRing();
+              pomodorosInCycleRef.current = 0;
+              setPomodorosInCycle(0);
               setPhase('session');
               const nextTime = sessionMinutes * 60;
               if (autoStartBreaks) setTimeout(() => setIsRunning(true), 100);
@@ -669,7 +696,7 @@ export function TimerProvider({ children }) {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, autoStartBreaks, sessionsCompletedToday, playAlarm, playPhaseStartRing, playTick, tickSound, longBreakMinutes, countdownMinutes, userId, logRunSegment]);
+  }, [isRunning, timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, autoStartBreaks, playAlarm, playPhaseStartRing, playTick, tickSound, longBreakMinutes, countdownMinutes, userId, logRunSegment]);
 
   /** Persist focus time in 1-minute chunks while the timer runs (all modes). */
   useEffect(() => {
@@ -742,18 +769,30 @@ export function TimerProvider({ children }) {
 
   const handlePomodoroForward = useCallback(() => {
     if (timerMode !== 'pomodoro') return;
-    const order = ['session', 'shortBreak', 'longBreak'];
-    const idx = order.indexOf(phase);
-    const nextPhase = order[(idx + 1) % order.length];
     if (phase === 'session' && isRunning && userId && focusRunDate === localDateKey()) {
       void logRunSegment('pomodoro');
     }
     runStartTimeRef.current = null;
     segmentLoggedRef.current = 0;
-    setPhase(nextPhase);
-    if (nextPhase === 'session') setTime(sessionMinutes * 60);
-    else if (nextPhase === 'shortBreak') setTime(shortBreakMinutes * 60);
-    else setTime(longBreakMinutes * 60);
+
+    if (phase === 'session') {
+      const nextInCycle = pomodorosInCycleRef.current + 1;
+      pomodorosInCycleRef.current = nextInCycle;
+      setPomodorosInCycle(nextInCycle);
+      setSessionsCompletedToday((n) => n + 1);
+      setSessionsDate(localDateKey());
+      const doLongBreak = nextInCycle >= POMODOROS_BEFORE_LONG_BREAK;
+      setPhase(doLongBreak ? 'longBreak' : 'shortBreak');
+      setTime(doLongBreak ? longBreakMinutes * 60 : shortBreakMinutes * 60);
+    } else if (phase === 'shortBreak') {
+      setPhase('session');
+      setTime(sessionMinutes * 60);
+    } else {
+      pomodorosInCycleRef.current = 0;
+      setPomodorosInCycle(0);
+      setPhase('session');
+      setTime(sessionMinutes * 60);
+    }
     setIsRunning(false);
   }, [timerMode, phase, isRunning, userId, sessionMinutes, shortBreakMinutes, longBreakMinutes, focusRunDate, logRunSegment]);
 

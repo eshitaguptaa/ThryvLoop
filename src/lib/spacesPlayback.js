@@ -34,3 +34,10 @@ export function getStoredSpacesVolume(userId) {
   const parsed = saved ? parseInt(saved, 10) : 50;
   return Number.isNaN(parsed) ? 50 : Math.max(0, Math.min(100, parsed));
 }
+
+/** Whether the Spaces background video should be mounted (visual, not audio). */
+export function shouldShowSpacesBackground(userId, videoId = null) {
+  if (typeof window === 'undefined') return false;
+  if (videoId) return true;
+  return hasSpacesMediaConfigured(userId);
+}

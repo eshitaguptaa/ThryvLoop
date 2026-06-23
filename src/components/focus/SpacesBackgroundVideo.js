@@ -5,8 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
-import { DEFAULT_SPACES_VIDEO_ID } from '@/lib/spacesConstants';
-import { isSpacesPausedByUser, isSpacesPlaybackIntent } from '@/lib/spacesPlayback';
+import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
+import { isSpacesPausedByUser, isSpacesPlaybackIntent, hasSpacesMediaConfigured, shouldShowSpacesBackground } from '@/lib/spacesPlayback';
 import { loadYouTubeIframeApi } from '@/lib/youtubeIframeApi';
 
 const DEFAULT_VIDEO_ID = DEFAULT_SPACES_VIDEO_ID;
@@ -43,7 +43,7 @@ export default function SpacesBackgroundVideo() {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [playerActivated, setPlayerActivated] = useState(false);
   const [currentVideoId, setCurrentVideoId] = useState(
-    () => backgroundVideoId || DEFAULT_VIDEO_ID
+    () => resolveSpacesVideoId(backgroundVideoId)
   );
   const currentVideoIdRef = useRef(currentVideoId);
   const embedSrcRef = useRef(getYouTubeEmbedUrl(currentVideoId));
@@ -125,9 +125,6 @@ export default function SpacesBackgroundVideo() {
     try {
       const vol = getPlaybackVolume();
       applyPlayerVolume(player, vol);
-      if (typeof player.unMute === 'function' && vol > 0) {
-        player.unMute();
-      }
       if (typeof player.playVideo === 'function') {
         player.playVideo();
       }
@@ -135,6 +132,13 @@ export default function SpacesBackgroundVideo() {
       console.error('Error starting playback:', e);
     }
   }, [applyPlayerVolume, getPlaybackVolume]);
+
+  const shouldKeepVideoVisible = useCallback(() => {
+    return (
+      isOnFocusRoute &&
+      shouldShowSpacesBackground(userIdRef.current, currentVideoIdRef.current)
+    );
+  }, [isOnFocusRoute]);
 
   const syncSpacesPlayback = useCallback(() => {
     if (!isSpacesPlaybackActive() || isSpacesPaused()) return;
@@ -242,7 +246,7 @@ export default function SpacesBackgroundVideo() {
   }, []);
 
   useEffect(() => {
-    switchToVideo(backgroundVideoId || DEFAULT_VIDEO_ID);
+    switchToVideo(resolveSpacesVideoId(backgroundVideoId));
   }, [backgroundVideoId, switchToVideo]);
 
   const savePlaybackPosition = (videoId, time) => {
@@ -329,10 +333,12 @@ export default function SpacesBackgroundVideo() {
               event.data === window.YT.PlayerState.CUED
             ) {
               setIsVideoPlaying(false);
+              const resumeAudio =
+                isSpacesPlaybackActive() && !isSpacesPaused();
+              const resumeVisual = shouldKeepVideoVisible();
               if (
                 shouldRunPlayer() &&
-                isSpacesPlaybackActive() &&
-                !isSpacesPaused() &&
+                (resumeAudio || resumeVisual) &&
                 (event.data === window.YT.PlayerState.PAUSED ||
                   event.data === window.YT.PlayerState.CUED)
               ) {
@@ -357,17 +363,22 @@ export default function SpacesBackgroundVideo() {
     } catch (e) {
       console.error('Error attaching YouTube player API:', e);
     }
-  }, [isSpacesPaused, isSpacesPlaybackActive, scheduleAudioSync]);
+  }, [isSpacesPaused, isSpacesPlaybackActive, scheduleAudioSync, shouldKeepVideoVisible]);
 
   attachPlayerApiRef.current = attachPlayerApi;
 
   useEffect(() => {
-    if (!userId || typeof window === 'undefined') return;
-    if (isSpacesPlaybackIntent(userId)) {
+    if (typeof window === 'undefined') return;
+
+    const videoId = resolveSpacesVideoId(backgroundVideoId);
+    const showOnFocus = isOnFocusRoute && shouldShowSpacesBackground(userId, videoId);
+    const audioIntent = userId ? isSpacesPlaybackIntent(userId) : false;
+
+    if (showOnFocus || audioIntent) {
       setPlayerActivated(true);
       void loadYouTubeIframeApi();
     }
-  }, [userId]);
+  }, [userId, isOnFocusRoute, backgroundVideoId]);
 
   useEffect(() => {
     if (!playerActivated) return undefined;
@@ -379,11 +390,16 @@ export default function SpacesBackgroundVideo() {
 
   useEffect(() => {
     const handleVideoChange = (e) => {
-      switchToVideo(e.detail?.videoId || DEFAULT_VIDEO_ID);
+      switchToVideo(resolveSpacesVideoId(e.detail?.videoId));
     };
     window.addEventListener('focus-video-changed', handleVideoChange);
     return () => window.removeEventListener('focus-video-changed', handleVideoChange);
   }, [switchToVideo]);
+
+  useEffect(() => {
+    if (!playerReady || !playerRef.current || !shouldKeepVideoVisible()) return;
+    startPlayback(playerRef.current);
+  }, [playerReady, shouldKeepVideoVisible, startPlayback, isOnFocusRoute, backgroundVideoId]);
 
   useEffect(() => {
     if (!playerActivated || !isSpacesPlaybackActive()) return;
@@ -436,6 +452,25 @@ export default function SpacesBackgroundVideo() {
 
   useEffect(() => {
     const handlePauseChanged = () => {
+      if (shouldKeepVideoVisible()) {
+        setPlayerActivated(true);
+        if (!playerRef.current) return;
+
+        if (isSpacesPaused()) {
+          applyPlayerVolume(playerRef.current, 0);
+        } else if (isSpacesPlaybackActive()) {
+          playbackVolumeRef.current = null;
+          syncSpacesPlayback();
+          scheduleAudioSync(playerRef.current);
+        } else {
+          applyPlayerVolume(playerRef.current, 0);
+          if (typeof playerRef.current.playVideo === 'function') {
+            playerRef.current.playVideo();
+          }
+        }
+        return;
+      }
+
       if (!isSpacesPlaybackActive() || isSpacesPaused()) {
         applyPlayerVolume(playerRef.current, 0);
       } else {
@@ -450,7 +485,7 @@ export default function SpacesBackgroundVideo() {
       window.removeEventListener('soundscape-state-changed', handlePauseChanged);
       window.removeEventListener('soundscape-play-pause-changed', handlePauseChanged);
     };
-  }, [applyPlayerVolume, isSpacesPaused, isSpacesPlaybackActive, syncSpacesPlayback, scheduleAudioSync]);
+  }, [applyPlayerVolume, isSpacesPaused, isSpacesPlaybackActive, shouldKeepVideoVisible, syncSpacesPlayback, scheduleAudioSync]);
 
   useEffect(() => {
     if (!playerReady) return;

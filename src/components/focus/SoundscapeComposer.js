@@ -12,6 +12,7 @@ import {
   getSoundscapeSoundName,
   getSoundscapeSoundIcon,
   normalizeActiveSound,
+  enforceSingleInstanceCategories,
 } from '@/lib/soundscapeConstants';
 import { bootstrapSpacesAudioIfEmpty as runBootstrapSpacesAudio } from '@/lib/soundscapeBootstrap';
 import {
@@ -30,7 +31,7 @@ import {
   getFocusTimerRecipesFromSupabase,
   setFocusTimerRecipesToSupabase,
 } from '@/utils/userStorage';
-import { DEFAULT_SPACES_VIDEO_ID } from '@/lib/spacesConstants';
+import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
 import WorkspaceIntegrations from '@/components/workspace/WorkspaceIntegrations';
 
 export default function SoundscapeComposer({
@@ -65,10 +66,10 @@ export default function SoundscapeComposer({
   // Get values from context or localStorage
   const getBackgroundVideoId = () => {
     if (focusContext?.backgroundVideoId !== undefined) {
-      return focusContext.backgroundVideoId;
+      return resolveSpacesVideoId(focusContext.backgroundVideoId);
     }
     if (typeof window !== 'undefined') {
-      return getItem('focus-background-video-id') || DEFAULT_SPACES_VIDEO_ID;
+      return resolveSpacesVideoId(getItem('focus-background-video-id'));
     }
     return DEFAULT_SPACES_VIDEO_ID;
   };
@@ -100,7 +101,7 @@ export default function SoundscapeComposer({
   };
 
   const getEffectiveSpacesVolume = (baseVolume) => {
-    if (isSpacesPausedByUser() || !isSpacesPlaybackActive()) return 0;
+    if (isSpacesPausedByUser()) return 0;
     if (soloSoundId !== null) return 0;
     if (isPlaying && activeSounds.length > 0) {
       return Math.round(baseVolume * (globalVolume / 100));
@@ -144,9 +145,9 @@ export default function SoundscapeComposer({
     if (typeof window === 'undefined') return [];
     const saved = getJson('soundscape-active-sounds');
     if (!Array.isArray(saved)) return [];
-    return saved
-      .map((sound) => normalizeActiveSound(sound))
-      .filter(Boolean);
+    return enforceSingleInstanceCategories(
+      saved.map((sound) => normalizeActiveSound(sound)).filter(Boolean)
+    );
   };
 
   const [activeTab, setActiveTab] = useState('Atmosphere');
@@ -456,7 +457,6 @@ export default function SoundscapeComposer({
     hasStartedPlaybackRef.current = true;
     setSessionActive(true);
     setIsPlaying(true);
-    setItem('focus-spaces-paused', 'false');
 
     if (activeSoundsRef.current.length === 0) {
       bootstrapSpacesAudioIfEmpty();
@@ -481,7 +481,7 @@ export default function SoundscapeComposer({
       }
     }
 
-    if (getBackgroundVideoId() && getSpacesVolume() > 0) {
+    if (!isSpacesPausedByUser() && getBackgroundVideoId() && getSpacesVolume() > 0) {
       window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
       lastPlaybackVolumeRef.current = null;
       anyAudioStarted = true;
@@ -498,21 +498,23 @@ export default function SoundscapeComposer({
     setAudioSyncKey((k) => k + 1);
   }, [pauseSoundscapePlayback, userId]);
 
-  /** User added / chose sounds — mark an active session and play so the global audio effect does not pause clips. */
+  /** User added / chose sounds — mark an active session and play without unmuting Spaces. */
   const ensureSoundscapeSessionPlaying = () => {
     if (typeof window === 'undefined') return;
     setSessionActive(true);
     setItem('soundscape-is-playing', 'true');
     setItem('soundscape-session-active', 'true');
-    setItem('focus-spaces-paused', 'false');
     hasStartedPlaybackRef.current = true;
     setIsPlaying(true);
-    setSpacesMuted(false);
-    if (getBackgroundVideoId() && getSpacesVolume() > 0) {
+
+    if (!isSpacesPausedByUser() && getBackgroundVideoId() && getSpacesVolume() > 0) {
+      setItem('focus-spaces-paused', 'false');
+      setSpacesMuted(false);
       window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
       lastPlaybackVolumeRef.current = null;
       dispatchSpacesPlaybackVolume(getSpacesVolume());
     }
+
     window.dispatchEvent(new CustomEvent('soundscape-play-pause-changed', {
       detail: { isPlaying: true },
     }));
@@ -602,9 +604,9 @@ export default function SoundscapeComposer({
           persistSpacesVolume(baseSpacesVolume);
           setItem('soundscape-global-volume', masterVolume.toString());
           const savedSounds = Array.isArray(data.active_sounds) ? data.active_sounds : [];
-          const normalizedSounds = savedSounds
-            .map((sound) => normalizeActiveSound(sound))
-            .filter(Boolean);
+          const normalizedSounds = enforceSingleInstanceCategories(
+            savedSounds.map((sound) => normalizeActiveSound(sound)).filter(Boolean)
+          );
           setActiveSounds(normalizedSounds);
           setJson('soundscape-active-sounds', normalizedSounds);
         }
@@ -626,9 +628,9 @@ export default function SoundscapeComposer({
       if (savedVolume) setGlobalVolume(parseInt(savedVolume, 10) || 75);
       const savedSounds = getJson('soundscape-active-sounds');
       if (Array.isArray(savedSounds) && savedSounds.length > 0) {
-        const normalized = savedSounds
-          .map((sound) => normalizeActiveSound(sound))
-          .filter(Boolean);
+        const normalized = enforceSingleInstanceCategories(
+          savedSounds.map((sound) => normalizeActiveSound(sound)).filter(Boolean)
+        );
         setActiveSounds(normalized);
       }
       const sessionActive = getItem('soundscape-session-active') === 'true';
@@ -1241,22 +1243,20 @@ export default function SoundscapeComposer({
 
       const soundName = soundLibrary[category]?.find(s => s.id === soundId)?.name || soundId;
       
-      // Rhythm Rule: Only ONE "Rhythm" type sound allowed at a time
-      const isRhythmSound = category === 'Rhythm';
+      // Neural & Rhythm: only one of each category at a time
       let soundsToRemove = [];
-      
-      if (isRhythmSound) {
-        // Find existing Rhythm sounds
-        const existingRhythm = activeSounds.filter(s => s.category === 'Rhythm');
-        soundsToRemove = existingRhythm;
+      if (category === 'Rhythm') {
+        soundsToRemove = activeSounds.filter((s) => s.category === 'Rhythm');
+      } else if (category === 'Neural') {
+        soundsToRemove = activeSounds.filter((s) => s.category === 'Neural');
       }
-      
-      // Max 3 Layers: Always ensure we have room for the new sound
-      // After removing rhythm sounds, if we still have 3 or more, remove the oldest
-      const remainingAfterRhythm = activeSounds.filter(s => !soundsToRemove.some(r => r.id === s.id));
-      if (remainingAfterRhythm.length >= 3) {
-        // Find the oldest sound that's not already being removed
-        const soundsToConsider = remainingAfterRhythm;
+
+      // Max 3 layers: remove oldest if still at capacity after category swap
+      const remainingAfterExclusive = activeSounds.filter(
+        (s) => !soundsToRemove.some((r) => r.id === s.id)
+      );
+      if (remainingAfterExclusive.length >= 3) {
+        const soundsToConsider = remainingAfterExclusive;
         if (soundsToConsider.length > 0) {
           // Find the sound with the oldest timestamp (or first in array if no timestamp)
           const oldestSound = soundsToConsider.reduce((oldest, current) => {
@@ -1553,7 +1553,7 @@ export default function SoundscapeComposer({
         }, 0);
       }
 
-      let finalSounds = [...newSounds];
+      let finalSounds = enforceSingleInstanceCategories([...newSounds]);
       if (finalSounds.length > 3) {
         finalSounds = finalSounds.slice(-3);
       }
@@ -1708,25 +1708,31 @@ export default function SoundscapeComposer({
       e.stopPropagation();
     }
     const nextMuted = !spacesMuted;
-    if (!nextMuted && !isPlaying) {
-      resumeSoundscapePlayback();
-      return;
-    }
+
     setSpacesMuted(nextMuted);
     setItem('focus-spaces-paused', nextMuted ? 'true' : 'false');
     lastPlaybackVolumeRef.current = null;
+
     if (nextMuted) {
       window.dispatchEvent(
         new CustomEvent('focus-volume-changed', { detail: { volume: 0, playbackOnly: true } })
       );
-      if (isPlaying) {
-        pauseIfMixInaudible(activeSounds, globalVolume, true, spacesVolume);
-      }
+      pauseIfMixInaudible(activeSounds, globalVolume, true, spacesVolume);
     } else {
-      if (getBackgroundVideoId()) {
-        window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
+      if (!isPlaying) {
+        hasStartedPlaybackRef.current = true;
+        setSessionActive(true);
+        setIsPlaying(true);
+        setItem('soundscape-is-playing', 'true');
+        setItem('soundscape-session-active', 'true');
       }
-      dispatchSpacesPlaybackVolume(spacesVolume);
+      if (getBackgroundVideoId() && getSpacesVolume() > 0) {
+        window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
+        dispatchSpacesPlaybackVolume(getSpacesVolume());
+      }
+      window.dispatchEvent(
+        new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: true } })
+      );
     }
     window.dispatchEvent(new CustomEvent('soundscape-state-changed'));
   };

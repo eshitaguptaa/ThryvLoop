@@ -17,7 +17,7 @@ export function isValidTheme(value) {
   return THEME_OPTIONS.includes(value);
 }
 
-/** Read theme from next-themes localStorage (shared across signed-out pages). */
+/** Read theme from next-themes localStorage (shared across signed-in and signed-out pages). */
 export function readBrowserTheme() {
   if (typeof window === 'undefined') return null;
   try {
@@ -29,16 +29,36 @@ export function readBrowserTheme() {
   return null;
 }
 
+/** Keep next-themes storage in sync with explicit saves. */
+export function writeBrowserTheme(theme) {
+  if (typeof window === 'undefined' || !isValidTheme(theme)) return;
+  try {
+    localStorage.setItem(NEXT_THEMES_STORAGE_KEY, theme);
+  } catch {
+    // ignore
+  }
+}
+
 /**
- * Load theme preference — user-scoped storage, Supabase, then global browser storage.
+ * Load theme preference — browser choice first, then user storage, Supabase, then system.
  * @param {string|null} userId
  * @returns {Promise<'light'|'dark'|'system'>}
  */
 export async function loadThemePreference(userId) {
+  const browser = readBrowserTheme();
+  if (browser === 'light' || browser === 'dark') return browser;
+
   if (typeof window !== 'undefined') {
     const local = getUserStorageItem(userId, THEME_STORAGE_KEY);
-    if (isValidTheme(local)) return local;
+    if (isValidTheme(local) && local !== 'system') return local;
+
+    if (userId) {
+      const anon = getUserStorageItem(null, THEME_STORAGE_KEY);
+      if (isValidTheme(anon) && anon !== 'system') return anon;
+    }
   }
+
+  if (browser === 'system') return 'system';
 
   if (typeof window !== 'undefined' && userId) {
     try {
@@ -64,14 +84,12 @@ export async function loadThemePreference(userId) {
     }
   }
 
-  const browser = readBrowserTheme();
-  if (browser) return browser;
-
   return 'system';
 }
 
 /**
  * Persist theme preference locally and sync to Supabase.
+ * Writes to the shared browser key so landing + app stay aligned.
  * @param {string|null} userId
  * @param {'light'|'dark'|'system'} theme
  */
@@ -79,7 +97,11 @@ export async function saveThemePreference(userId, theme) {
   if (!isValidTheme(theme)) return;
 
   if (typeof window !== 'undefined') {
-    setUserStorageItem(userId, THEME_STORAGE_KEY, theme);
+    writeBrowserTheme(theme);
+    setUserStorageItem(null, THEME_STORAGE_KEY, theme);
+    if (userId) {
+      setUserStorageItem(userId, THEME_STORAGE_KEY, theme);
+    }
   }
 
   if (typeof window === 'undefined' || !userId) return;

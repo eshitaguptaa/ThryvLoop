@@ -164,6 +164,16 @@ export const SPACES_CATALOG = [
   },
 ];
 
+export const DEFAULT_SPACES_VIDEO_ID = SPACES_CATALOG[0]?.videoId ?? 'iBeKujv18OI';
+
+const SPACES_VIDEO_IDS = new Set(SPACES_CATALOG.map((space) => space.videoId));
+
+/** Return a catalog video id, or the default when missing or no longer in the list. */
+export function resolveSpacesVideoId(videoId) {
+  if (videoId && SPACES_VIDEO_IDS.has(videoId)) return videoId;
+  return DEFAULT_SPACES_VIDEO_ID;
+}
+
 export function filterSpacesByCategory(categoryId) {
   if (categoryId === 'all') return SPACES_CATALOG;
   return SPACES_CATALOG.filter((space) => space.category === categoryId);

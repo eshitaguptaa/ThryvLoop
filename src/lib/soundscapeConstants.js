@@ -176,6 +176,24 @@ export function getSoundscapeSoundIcon(soundId) {
   return SOUNDSCAPE_SOUND_ICONS[normalized] || SOUNDSCAPE_SOUND_ICONS[soundId] || 'neural';
 }
 
+/** Categories where only one sound may be in the mix at a time. */
+export const SINGLE_INSTANCE_SOUND_CATEGORIES = ['Neural', 'Rhythm'];
+
+/** Keep only the last sound per single-instance category (e.g. one Neural, one Rhythm). */
+export function enforceSingleInstanceCategories(sounds) {
+  if (!Array.isArray(sounds) || sounds.length === 0) return sounds;
+  const lastIndexByCategory = new Map();
+  sounds.forEach((sound, index) => {
+    if (SINGLE_INSTANCE_SOUND_CATEGORIES.includes(sound.category)) {
+      lastIndexByCategory.set(sound.category, index);
+    }
+  });
+  return sounds.filter((sound, index) => {
+    if (!SINGLE_INSTANCE_SOUND_CATEGORIES.includes(sound.category)) return true;
+    return lastIndexByCategory.get(sound.category) === index;
+  });
+}
+
 /** @param {{ id?: string, name?: string, volume?: number, category?: string } | null | undefined} sound */
 export function normalizeActiveSound(sound) {
   if (!sound?.id) return null;
