@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
+import { authModalUrl } from '@/lib/authRoutes';
 
 const WORKSPACE_OAUTH_COOKIE = 'workspace_oauth_state';
 
@@ -18,7 +19,6 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 const isPublicRoute = createRouteMatcher([
-  '/signin(.*)',
   '/signup(.*)',
   '/auth(.*)',
 ]);
@@ -51,11 +51,18 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(new URL('/home', req.url));
   }
 
-  if (isProtectedWorkspaceApi(req) && !isPublicWorkspaceApi(req)) {
-    await auth.protect();
+  if (req.nextUrl.pathname.startsWith('/signin')) {
+    return NextResponse.redirect(new URL(authModalUrl('signin'), req.url));
   }
 
-  if (!isPublicRoute(req) && isProtectedRoute(req)) {
+  if (!userId && !isPublicRoute(req) && isProtectedRoute(req)) {
+    const returnPath = `${req.nextUrl.pathname}${req.nextUrl.search}`;
+    return NextResponse.redirect(
+      new URL(authModalUrl('signin', returnPath !== '/' ? returnPath : undefined), req.url),
+    );
+  }
+
+  if (isProtectedWorkspaceApi(req) && !isPublicWorkspaceApi(req)) {
     await auth.protect();
   }
 });

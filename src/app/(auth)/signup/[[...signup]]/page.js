@@ -10,7 +10,7 @@ export default function SignUpPage() {
     <AuthPageShell>
       <SignUp
         fallbackRedirectUrl="/home"
-        signInUrl="/signin"
+        signInUrl="/?auth=signin"
         appearance={appearance}
       />
     </AuthPageShell>

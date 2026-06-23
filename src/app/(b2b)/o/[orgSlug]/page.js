@@ -1,6 +1,7 @@
 import { Mail, User } from 'lucide-react';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { notFound, redirect } from 'next/navigation';
+import { authModalUrl } from '@/lib/authRoutes';
 import {
   workspaceCardClass,
   workspaceContentClass,
@@ -25,7 +26,7 @@ function formatRelativeAgo(iso) {
 
 export default async function OrgWorkspaceHome({ params }) {
   const { userId } = await auth();
-  if (!userId) redirect('/signin');
+  if (!userId) redirect(authModalUrl('signin'));
 
   const { orgSlug } = await params;
   const membership = await getMembershipForSlug(userId, orgSlug);

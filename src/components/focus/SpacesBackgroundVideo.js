@@ -57,6 +57,7 @@ export default function SpacesBackgroundVideo() {
   const startPlaybackRef = useRef(null);
   const restoreAudioAfterVideoSwitchRef = useRef(null);
   const audioSyncTimeoutRef = useRef(null);
+  const volumeRampIntervalRef = useRef(null);
 
   volumeRef.current = volume;
   userIdRef.current = userId;
@@ -117,6 +118,58 @@ export default function SpacesBackgroundVideo() {
       console.error('Error setting volume:', e);
     }
   }, [getPlaybackVolume]);
+
+  const clearVolumeRamp = useCallback(() => {
+    if (volumeRampIntervalRef.current) {
+      clearInterval(volumeRampIntervalRef.current);
+      volumeRampIntervalRef.current = null;
+    }
+  }, []);
+
+  const rampPlayerVolume = useCallback((player = playerRef.current, targetVolume, durationMs = 280) => {
+    if (!player || typeof player.setVolume !== 'function') return;
+    clearVolumeRamp();
+
+    if (targetVolume <= 0) {
+      applyPlayerVolume(player, 0);
+      return;
+    }
+
+    let startVolume = 0;
+    try {
+      if (typeof player.getVolume === 'function') {
+        startVolume = player.getVolume();
+      }
+    } catch {
+      startVolume = 0;
+    }
+
+    try {
+      if (typeof player.unMute === 'function') player.unMute();
+      if (typeof player.playVideo === 'function') player.playVideo();
+    } catch (e) {
+      console.error('Error starting Spaces playback for ramp:', e);
+    }
+
+    const startTime = Date.now();
+    volumeRampIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / durationMs, 1);
+      const eased = progress * progress;
+      const nextVolume = startVolume + (targetVolume - startVolume) * eased;
+
+      try {
+        player.setVolume(nextVolume);
+      } catch (e) {
+        console.error('Error ramping Spaces volume:', e);
+      }
+
+      if (progress >= 1) {
+        clearVolumeRamp();
+        applyPlayerVolume(player, targetVolume);
+      }
+    }, 16);
+  }, [applyPlayerVolume, clearVolumeRamp]);
 
   const startPlayback = useCallback((player = playerRef.current) => {
     if (!player || !shouldRunPlayer()) return;
@@ -257,6 +310,7 @@ export default function SpacesBackgroundVideo() {
   };
 
   const destroyPlayer = () => {
+    clearVolumeRamp();
     if (audioSyncTimeoutRef.current) {
       clearTimeout(audioSyncTimeoutRef.current);
       audioSyncTimeoutRef.current = null;
@@ -371,8 +425,9 @@ export default function SpacesBackgroundVideo() {
     const videoId = resolveSpacesVideoId(backgroundVideoId);
     const showOnFocus = isOnFocusRoute && shouldShowSpacesBackground(userId, videoId);
     const audioIntent = userId ? isSpacesPlaybackIntent(userId) : false;
+    const hasSpaces = userId ? hasSpacesMediaConfigured(userId) : false;
 
-    if (showOnFocus || audioIntent) {
+    if (showOnFocus || audioIntent || hasSpaces) {
       setPlayerActivated(true);
       void loadYouTubeIframeApi();
     }
@@ -424,10 +479,14 @@ export default function SpacesBackgroundVideo() {
           if (pendingVideoSwitchRef.current) {
             return;
           }
-          applyPlayerVolume(playerRef.current, e.detail.volume);
-          if (e.detail.volume > 0 && playerRef.current) {
+          const rampMs = e.detail.rampMs || 0;
+          if (rampMs > 0 && e.detail.volume > 0 && playerRef.current) {
+            rampPlayerVolume(playerRef.current, e.detail.volume, rampMs);
+          } else if (e.detail.volume > 0 && playerRef.current) {
+            applyPlayerVolume(playerRef.current, e.detail.volume);
             startPlayback(playerRef.current);
           } else if (e.detail.volume === 0 && playerRef.current) {
+            clearVolumeRamp();
             applyPlayerVolume(playerRef.current, 0);
           }
         }
@@ -436,7 +495,7 @@ export default function SpacesBackgroundVideo() {
     };
     window.addEventListener('focus-volume-changed', handleVolumeChange);
     return () => window.removeEventListener('focus-volume-changed', handleVolumeChange);
-  }, [applyPlayerVolume, startPlayback, isSpacesPaused]);
+  }, [applyPlayerVolume, startPlayback, isSpacesPaused, rampPlayerVolume, clearVolumeRamp]);
 
   useEffect(() => {
     const resume = () => {
@@ -463,7 +522,10 @@ export default function SpacesBackgroundVideo() {
 
       if (shouldKeepVideoVisible()) {
         setPlayerActivated(true);
-        if (!playerRef.current) return;
+        if (!playerRef.current) {
+          void loadYouTubeIframeApi();
+          return;
+        }
 
         if (isSpacesPaused()) {
           applyPlayerVolume(playerRef.current, 0);
@@ -481,11 +543,16 @@ export default function SpacesBackgroundVideo() {
       }
 
       if (!isSpacesPlaybackActive() || isSpacesPaused()) {
-        applyPlayerVolume(playerRef.current, 0);
+        if (playerRef.current) {
+          applyPlayerVolume(playerRef.current, 0);
+        }
       } else {
         setPlayerActivated(true);
-        syncSpacesPlayback();
-        scheduleAudioSync(playerRef.current);
+        void loadYouTubeIframeApi();
+        if (playerRef.current) {
+          syncSpacesPlayback();
+          scheduleAudioSync(playerRef.current);
+        }
       }
     };
     window.addEventListener('soundscape-state-changed', handlePauseChanged);

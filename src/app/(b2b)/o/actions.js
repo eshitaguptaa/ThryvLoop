@@ -8,12 +8,12 @@ import {
   getMembershipForSlug,
   isOrgAdmin,
 } from '@/lib/org';
-import { assertB2BWorkspacesEnabled } from '@/lib/featureFlags';
+import { authModalUrl } from '@/lib/authRoutes';
 
 export async function createWorkspace(_prevState, formData) {
   assertB2BWorkspacesEnabled();
   const { userId } = await auth();
-  if (!userId) redirect('/signin');
+  if (!userId) redirect(authModalUrl('signin'));
 
   const name = formData.get('name')?.toString()?.trim();
   if (!name || name.length < 2) {

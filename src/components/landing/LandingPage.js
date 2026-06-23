@@ -11,7 +11,6 @@ import Solutions from '@/components/landing_sections/Solutions';
 import FooterLanding from '@/components/landing_sections/FooterLanding';
 import Resources from '@/components/landing_sections/Resources';
 import Pricing from '@/components/landing_sections/Pricing';
-import { landingFont } from '@/lib/landingFont';
 import { scrollToLandingSection } from '@/lib/landingScroll';
 import LandingAmbient from '@/components/landing/LandingAmbient';
 
@@ -58,7 +57,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className={`landing-page relative ${landingFont.className} ${landingFont.variable}`}>
+    <div className="relative">
       <LandingAmbient />
       <NavbarLanding 
         onSignInClick={() => openAuth('signin')} 

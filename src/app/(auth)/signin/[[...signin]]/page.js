@@ -1,18 +1,6 @@
-'use client';
-
-import { SignIn } from '@clerk/nextjs';
-import AuthPageShell, { useClerkAppearance } from '@/components/auth/AuthPageShell';
+import { redirect } from 'next/navigation';
+import { authModalUrl } from '@/lib/authRoutes';
 
 export default function SignInPage() {
-  const appearance = useClerkAppearance();
-
-  return (
-    <AuthPageShell>
-      <SignIn
-        fallbackRedirectUrl="/home"
-        signUpUrl="/signup"
-        appearance={appearance}
-      />
-    </AuthPageShell>
-  );
+  redirect(authModalUrl('signin'));
 }

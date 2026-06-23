@@ -57,14 +57,6 @@ export default function Features() {
         or CSS-in-JS libraries. 
       */}
       <style jsx global>{`
-        /* Import Fonts - These should ideally be in _document.js or layout */
-        @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-
-        /* Material Symbols style override */
-        .material-symbols-outlined {
-          font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-
         /* Keyframes - Must also be defined in tailwind.config.js for class usage */
         @keyframes float-slow {
           0% { transform: translateY(0px); }

@@ -308,6 +308,34 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Override root Poppins on body — keep Inter everywhere except icon glyphs */
+.landing-page :where(:not(.material-symbols-outlined)) {
+  font-family: inherit;
+}
+
+.landing-page button,
+.landing-page input,
+.landing-page textarea,
+.landing-page select {
+  font-family: inherit;
+}
+
+.landing-page .material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
 .landing-page #features,
 .landing-page #solutions,
 .landing-page #resources,

@@ -1,6 +1,7 @@
 'use client';
 
-import { ClerkLoading, RedirectToSignIn, SignedIn, SignedOut } from '@clerk/nextjs';
+import { ClerkLoading, SignedIn, SignedOut } from '@clerk/nextjs';
+import RedirectToAuthModal from '@/components/auth/RedirectToAuthModal';
 
 export default function OrgAreaShell({ children }) {
   return (
@@ -11,7 +12,7 @@ export default function OrgAreaShell({ children }) {
         </div>
       </ClerkLoading>
       <SignedOut>
-        <RedirectToSignIn />
+        <RedirectToAuthModal />
       </SignedOut>
       <SignedIn>{children}</SignedIn>
     </>

@@ -17,10 +17,12 @@ import {
   Mail,
 } from 'lucide-react';
 import { useWorkspace } from '@/hooks/useWorkspace';
+import { useAppNotifications } from '@/hooks/useAppNotifications';
+import { useSoundscapePlayback } from '@/hooks/useSoundscapePlayback';
 import { formatWorkspaceSyncError } from '@/lib/workspace/userMessages';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { getSupabaseClient, setSupabaseAuthToken, getUserStorageItem, getUserStorageJson, setUserStorageItem } from '@/utils/userStorage';
+import { getSupabaseClient, setSupabaseAuthToken, getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
 import { localDateKey, localStartOfDay } from '@/lib/dateRanges';
 import { getClerkSupabaseToken } from '@/lib/clerkSupabaseToken';
 import { useTimer } from '@/contexts/TimerContext';
@@ -46,9 +48,7 @@ import {
   dashboardStatBadgeClass,
   dashboardStatIconBoxClass,
 } from '@/lib/appShellClasses';
-import { getSoundscapeSoundName } from '@/lib/soundscapeConstants';
 
-const FOCUS_GOAL_MINUTES = 120; // 2 hours default daily goal
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function formatWorkspaceWhen(iso) {
@@ -74,6 +74,7 @@ export default function Dashboard() {
   const avatarUrl = user?.imageUrl || 'https://i.pravatar.cc/150?u=default';
 
   const [weeklyFocusSeconds, setWeeklyFocusSeconds] = useState([]);
+  const [priorWeekTotalSeconds, setPriorWeekTotalSeconds] = useState(0);
   const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [homeLoading, setHomeLoading] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -100,74 +101,25 @@ export default function Dashboard() {
     currentMeeting,
     upcomingMeetings,
     notifications: workspaceNotifications,
-    unreadCount,
     sync: syncWorkspace,
     loading: workspaceLoading,
   } = useWorkspace({ enabled: Boolean(isSignedIn && userId) });
 
-  const [soundscapeIsPlaying, setSoundscapeIsPlaying] = useState(false);
-  const [soundscapeActiveSounds, setSoundscapeActiveSounds] = useState([]);
-  const [spacesActive, setSpacesActive] = useState(false);
+  const {
+    notifications: appNotifications,
+    unreadCount: appUnreadCount,
+    loading: appNotificationsLoading,
+    markRead: markAppNotificationRead,
+  } = useAppNotifications({ enabled: Boolean(isSignedIn && userId) });
 
-  const syncSoundscapeFromStorage = useCallback((playingOverride) => {
-    if (typeof window === 'undefined' || !userId) return;
-    const sessionActive =
-      getUserStorageItem(userId, 'soundscape-session-active', 'soundscape-session-active') === 'true';
-    const playing = getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing') === 'true';
-    const isPlayingNow =
-      playingOverride !== undefined ? playingOverride : sessionActive && playing;
-    setSoundscapeIsPlaying(isPlayingNow);
-    const raw = getUserStorageJson(userId, 'soundscape-active-sounds', 'soundscape-active-sounds');
-    const list = Array.isArray(raw) ? raw : [];
-    const videoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
-    const videoVol = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
-    const spacesPlaying =
-      getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'false';
-    const spacesOn = !!(
-      spacesPlaying &&
-      videoId &&
-      videoVol &&
-      parseInt(videoVol, 10) > 0
-    );
-    setSpacesActive(spacesOn);
-    const withSpaces = list.filter((s) => s.id !== 'spaces');
-    if (spacesOn && !list.some((s) => s.id === 'spaces')) {
-      withSpaces.push({ id: 'spaces', name: 'Spaces', volume: parseInt(videoVol, 10) || 50 });
-    }
-    setSoundscapeActiveSounds(
-      withSpaces.map((s) => ({ id: s.id, name: getSoundscapeSoundName(s.id) || s.name || s.id }))
-    );
-    if (spacesOn && !isPlayingNow) {
-      setSoundscapeIsPlaying(true);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    syncSoundscapeFromStorage();
-    const interval = setInterval(() => syncSoundscapeFromStorage(), 2000);
-    const onPlayPause = (e) => {
-      syncSoundscapeFromStorage(
-        e.detail?.isPlaying !== undefined ? e.detail.isPlaying : undefined
-      );
-    };
-    const onVolume = () => syncSoundscapeFromStorage();
-    const onStop = () => {
-      setSoundscapeIsPlaying(false);
-      setSoundscapeActiveSounds([]);
-      setSpacesActive(false);
-    };
-    window.addEventListener('soundscape-play-pause-changed', onPlayPause);
-    window.addEventListener('soundscape-state-changed', onVolume);
-    window.addEventListener('focus-volume-changed', onVolume);
-    window.addEventListener('soundscape-stop-all', onStop);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('soundscape-play-pause-changed', onPlayPause);
-      window.removeEventListener('soundscape-state-changed', onVolume);
-      window.removeEventListener('focus-volume-changed', onVolume);
-      window.removeEventListener('soundscape-stop-all', onStop);
-    };
-  }, [userId, syncSoundscapeFromStorage]);
+  const {
+    displaySounds,
+    composerSounds,
+    showAsPlaying,
+    spacesActive,
+    togglePlayPause: toggleSoundscapePlayPause,
+    openComposer: openSoundscapeComposer,
+  } = useSoundscapePlayback(userId);
 
   useEffect(() => {
     const el = productivityTrendRef.current;
@@ -190,36 +142,6 @@ export default function Dashboard() {
       window.removeEventListener('resize', syncHeight);
     };
   }, [homeLoading, weeklyFocusSeconds.length]);
-
-  const toggleSoundscapePlayPause = useCallback(() => {
-    if (typeof window === 'undefined' || !userId) return;
-    const next = !soundscapeIsPlaying;
-
-    setUserStorageItem(userId, 'soundscape-is-playing', next ? 'true' : 'false');
-    setUserStorageItem(userId, 'soundscape-session-active', next ? 'true' : 'false');
-    if (next) {
-      setUserStorageItem(userId, 'focus-spaces-paused', 'false');
-    } else {
-      setUserStorageItem(userId, 'focus-spaces-paused', 'true');
-    }
-    setSoundscapeIsPlaying(next);
-    window.dispatchEvent(
-      new CustomEvent('soundscape-play-pause-changed', {
-        detail: { isPlaying: next, bootstrapSpaces: next },
-      })
-    );
-    if (!next) {
-      window.dispatchEvent(
-        new CustomEvent('focus-volume-changed', { detail: { volume: 0, playbackOnly: true } })
-      );
-    } else {
-      window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
-    }
-  }, [userId, soundscapeIsPlaying]);
-
-  const openSoundscapeComposer = useCallback(() => {
-    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('open-soundscape-composer'));
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -248,9 +170,9 @@ export default function Dashboard() {
         return;
       }
       const now = new Date();
-      const weekAgo = new Date(now);
-      weekAgo.setDate(weekAgo.getDate() - 6);
-      const weekStart = localStartOfDay(weekAgo);
+      const twoWeeksAgo = new Date(now);
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 13);
+      const periodStart = localStartOfDay(twoWeeksAgo);
 
       const [weekRes, tasksRes] = await Promise.all([
         supabase
@@ -258,7 +180,7 @@ export default function Dashboard() {
           .select('completed_at, duration_seconds')
           .eq('user_id', userId)
           .eq('phase', 'session')
-          .gte('completed_at', weekStart)
+          .gte('completed_at', periodStart)
           .order('completed_at', { ascending: true }),
         supabase
           .from('tasks')
@@ -272,8 +194,8 @@ export default function Dashboard() {
 
       const weekData = weekRes.data || [];
       const byDay = {};
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(weekAgo);
+      for (let i = 0; i < 14; i++) {
+        const d = new Date(twoWeeksAgo);
         d.setDate(d.getDate() + i);
         byDay[localDateKey(d)] = 0;
       }
@@ -281,9 +203,18 @@ export default function Dashboard() {
         const key = localDateKey(new Date(row.completed_at));
         if (byDay[key] !== undefined) byDay[key] += row.duration_seconds || 0;
       });
-      const dayOrder = [];
+
+      let priorTotal = 0;
       for (let i = 0; i < 7; i++) {
-        const d = new Date(weekAgo);
+        const d = new Date(twoWeeksAgo);
+        d.setDate(d.getDate() + i);
+        priorTotal += byDay[localDateKey(d)] || 0;
+      }
+      setPriorWeekTotalSeconds(priorTotal);
+
+      const dayOrder = [];
+      for (let i = 7; i < 14; i++) {
+        const d = new Date(twoWeeksAgo);
         d.setDate(d.getDate() + i);
         dayOrder.push(d);
       }
@@ -348,9 +279,7 @@ export default function Dashboard() {
     ? new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
     : '';
   const productiveSecondsToday = todayFocusSeconds;
-  const goalSeconds = FOCUS_GOAL_MINUTES * 60;
-  const focusPercent =
-    goalSeconds > 0 ? Math.min(100, Math.round((productiveSecondsToday / goalSeconds) * 100)) : 0;
+  const productiveMinutesToday = Math.round(productiveSecondsToday / 60);
   const vsYesterday =
     yesterdayLoggedFocusSeconds > 0
       ? Math.round(((productiveSecondsToday - yesterdayLoggedFocusSeconds) / yesterdayLoggedFocusSeconds) * 100)
@@ -377,6 +306,65 @@ export default function Dashboard() {
           weeklyFocusMinutes.reduce((a, d) => a + d.minutes, 0) / weeklyFocusMinutes.length
         )
       : 0;
+
+  const currentWeekTotalSeconds = useMemo(
+    () =>
+      weeklyFocusSeconds.reduce(
+        (sum, d) => sum + d.seconds + (d.key === todayKey ? unloggedFocusSeconds : 0),
+        0
+      ),
+    [weeklyFocusSeconds, unloggedFocusSeconds, todayKey]
+  );
+  const hasPriorWeekBaseline = priorWeekTotalSeconds > 0;
+  const vsPriorWeek = hasPriorWeekBaseline
+    ? Math.round(
+        ((currentWeekTotalSeconds - priorWeekTotalSeconds) / priorWeekTotalSeconds) * 100
+      )
+    : currentWeekTotalSeconds > 0
+      ? 100
+      : 0;
+
+  const focusPaceBenchmark = useMemo(() => {
+    if (yesterdayLoggedFocusSeconds > 0) {
+      return {
+        targetSeconds: yesterdayLoggedFocusSeconds,
+        targetMinutes: Math.round(yesterdayLoggedFocusSeconds / 60),
+        shortLabel: 'yesterday',
+        captionLabel: 'yesterday',
+      };
+    }
+    if (weekAvg > 0) {
+      return {
+        targetSeconds: weekAvg * 60,
+        targetMinutes: weekAvg,
+        shortLabel: 'weekly avg',
+        captionLabel: 'your weekly average',
+      };
+    }
+    const peak = productivityPeakDay;
+    if (peak && peak.key !== todayKey && peak.minutes > 0) {
+      return {
+        targetSeconds: peak.minutes * 60,
+        targetMinutes: peak.minutes,
+        shortLabel: peak.label,
+        captionLabel: `${peak.label} (best this week)`,
+      };
+    }
+    return null;
+  }, [yesterdayLoggedFocusSeconds, weekAvg, productivityPeakDay, todayKey]);
+
+  const focusPacePercent = focusPaceBenchmark
+    ? Math.min(100, Math.round((productiveSecondsToday / focusPaceBenchmark.targetSeconds) * 100))
+    : 0;
+  const focusPaceAheadMinutes = focusPaceBenchmark
+    ? Math.max(0, Math.round((productiveSecondsToday - focusPaceBenchmark.targetSeconds) / 60))
+    : 0;
+  const focusPaceRemainingMinutes = focusPaceBenchmark
+    ? Math.max(0, focusPaceBenchmark.targetMinutes - productiveMinutesToday)
+    : 0;
+  const hasFocusPaceBaseline = focusPaceBenchmark != null;
+  const hasYesterdayFocus = yesterdayLoggedFocusSeconds > 0;
+
   const productiveHours = Math.floor(productiveSecondsToday / 3600);
   const productiveMinutes = Math.floor((productiveSecondsToday % 3600) / 60);
   const productiveRemainderSeconds = productiveSecondsToday % 60;
@@ -487,9 +475,9 @@ export default function Dashboard() {
               aria-label="Notifications and quick actions"
             >
               <Bell size={18} className="sm:w-5 sm:h-5" />
-              {unreadCount > 0 ? (
+              {appUnreadCount > 0 ? (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-indigo-600 text-white text-[10px] font-bold">
-                  {unreadCount > 9 ? '9+' : unreadCount}
+                  {appUnreadCount > 9 ? '9+' : appUnreadCount}
                 </span>
               ) : needsGoogleResyncPrompt && !workspaceLoading ? (
                 <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-card" aria-hidden />
@@ -503,59 +491,63 @@ export default function Dashboard() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notifications</p>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
-                  {workspaceLoading && !workspaceNotifications.length ? (
+                  {appNotificationsLoading && appNotifications.length === 0 ? (
                     <div className="px-4 py-4 text-center text-muted-foreground text-sm">Loading…</div>
-                  ) : workspaceNotifications.length === 0 ? (
+                  ) : appNotifications.length === 0 ? (
                     <div className="px-4 py-4 text-center text-muted-foreground text-sm">
-                      {needsGoogleResyncPrompt && !workspaceLoading ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotificationsOpen(false);
-                            openIntegrationsSettings();
-                          }}
-                          className="text-indigo-600 font-semibold hover:underline"
-                        >
-                          Enable Calendar or Gmail →
-                        </button>
-                      ) : needsWorkspaceSync && !workspaceLoading ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotificationsOpen(false);
-                            openIntegrationsSettings();
-                          }}
-                          className="text-indigo-600 font-semibold hover:underline"
-                        >
-                          Sync Gmail & Calendar →
-                        </button>
-                      ) : (
-                        "You're all caught up."
-                      )}
+                      You&apos;re all caught up.
                     </div>
                   ) : (
-                    workspaceNotifications
-                      .filter((n) => !n.is_read)
-                      .slice(0, 8)
-                      .map((n) => (
-                      <a
-                        key={n.id}
-                        href={n.link_url || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setNotificationsOpen(false)}
-                        className="flex gap-3 px-4 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border-b border-border last:border-0"
-                      >
-                        <Mail size={16} className="text-indigo-500 shrink-0 mt-0.5" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground truncate">{n.subject}</p>
-                          <p className="text-xs text-muted-foreground truncate">{n.preview}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {formatWorkspaceWhen(n.received_at)} · Gmail
-                          </p>
-                        </div>
-                      </a>
-                    ))
+                    appNotifications.slice(0, 8).map((n) => {
+                      const content = (
+                        <>
+                          <Bell size={16} className="text-indigo-500 shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">{n.title}</p>
+                            {n.body ? (
+                              <p className="text-xs text-muted-foreground truncate">{n.body}</p>
+                            ) : null}
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {formatWorkspaceWhen(n.created_at)}
+                            </p>
+                          </div>
+                        </>
+                      );
+                      const className = `flex gap-3 px-4 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border-b border-border last:border-0 ${!n.is_read ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`;
+                      const onOpen = () => {
+                        if (!n.is_read) void markAppNotificationRead(n.id);
+                        setNotificationsOpen(false);
+                      };
+                      if (n.link_url) {
+                        const isExternal = /^https?:\/\//i.test(n.link_url);
+                        return isExternal ? (
+                          <a
+                            key={n.id}
+                            href={n.link_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={onOpen}
+                            className={className}
+                          >
+                            {content}
+                          </a>
+                        ) : (
+                          <Link key={n.id} href={n.link_url} onClick={onOpen} className={className}>
+                            {content}
+                          </Link>
+                        );
+                      }
+                      return (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={onOpen}
+                          className={`${className} w-full text-left cursor-pointer`}
+                        >
+                          {content}
+                        </button>
+                      );
+                    })
                   )}
                 </div>
                 <div className="border-t border-border px-2 pt-2">
@@ -657,11 +649,17 @@ export default function Dashboard() {
                     </div>
                     <span className="text-muted-foreground font-semibold text-[10px] sm:text-xs tracking-wider uppercase">Productive time</span>
                   </div>
-                  <div className={`${vsYesterday >= 0 ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/45 dark:to-green-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-500/25' : 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/45 dark:to-orange-950/30 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-500/25'} text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 shadow-sm border`}>
-                    <ArrowUpRight size={11} className={`sm:w-3.5 sm:h-3.5 ${vsYesterday < 0 ? 'rotate-180' : ''}`} />
-                    <span className="font-bold">{vsYesterday >= 0 ? '+' : ''}{vsYesterday}%</span>
-                    <span className="font-medium ml-0.5 hidden sm:inline shrink-0 text-[8px] opacity-80">vs yesterday</span>
-                  </div>
+                  {hasYesterdayFocus ? (
+                    <div className={`${vsYesterday >= 0 ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/45 dark:to-green-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-500/25' : 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/45 dark:to-orange-950/30 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-500/25'} text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 shadow-sm border`}>
+                      <ArrowUpRight size={11} className={`sm:w-3.5 sm:h-3.5 ${vsYesterday < 0 ? 'rotate-180' : ''}`} />
+                      <span className="font-bold">{vsYesterday >= 0 ? '+' : ''}{vsYesterday}%</span>
+                      <span className="font-medium ml-0.5 hidden sm:inline shrink-0 text-[8px] opacity-80">vs yesterday</span>
+                    </div>
+                  ) : (
+                    <div className="text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl shrink-0 shadow-sm border bg-muted/50 text-muted-foreground border-border">
+                      First day
+                    </div>
+                  )}
                 </div>
                 
                 <div className="mb-3 sm:mb-4 md:mb-5">
@@ -670,7 +668,7 @@ export default function Dashboard() {
                     <span className="text-base sm:text-lg md:text-xl text-muted-foreground font-medium">h</span>
                     <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground leading-none ml-2">{productiveMinutes}</span>
                     <span className="text-base sm:text-lg md:text-xl text-muted-foreground font-medium">m</span>
-                    {isFocusTimerRunningToday && productiveRemainderSeconds > 0 ? (
+                    {isFocusTimerRunningToday ? (
                       <>
                         <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground leading-none ml-2">{productiveRemainderSeconds}</span>
                         <span className="text-sm sm:text-base text-muted-foreground font-medium">s</span>
@@ -687,16 +685,57 @@ export default function Dashboard() {
                 </div>
                 
                 <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Progress</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs sm:text-sm font-bold text-foreground">{focusPercent}%</span>
-                      <span className="text-[10px] sm:text-xs text-muted-foreground font-medium">of goal</span>
-                    </div>
+                  <div className="flex justify-between items-center mb-2 gap-2">
+                    <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide shrink-0">
+                      Daily pace
+                    </span>
+                    <span className="text-[10px] sm:text-xs text-muted-foreground font-medium text-right">
+                      {hasFocusPaceBaseline ? (
+                        focusPaceAheadMinutes > 0 ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            Ahead of {focusPaceBenchmark.captionLabel} by {focusPaceAheadMinutes}m
+                          </span>
+                        ) : (
+                          <>
+                            <span className="font-bold text-foreground">{focusPacePercent}%</span>
+                            {' · '}
+                            {productiveMinutesToday}m of {focusPaceBenchmark.targetMinutes}m ({focusPaceBenchmark.shortLabel})
+                          </>
+                        )
+                      ) : productiveSecondsToday > 0 ? (
+                        <>{productiveMinutesToday}m logged today</>
+                      ) : (
+                        'Starts tomorrow'
+                      )}
+                    </span>
                   </div>
                   <div className="h-2.5 sm:h-3 bg-muted rounded-full overflow-hidden shadow-inner relative">
-                    <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 rounded-full relative overflow-hidden shadow-sm transition-all duration-500" style={{ width: `${focusPercent}%` }} />
+                    {hasFocusPaceBaseline ? (
+                      <div
+                        className={`h-full rounded-full relative overflow-hidden shadow-sm transition-all duration-500 ${
+                          focusPaceAheadMinutes > 0
+                            ? 'bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600'
+                            : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600'
+                        }`}
+                        style={{ width: `${Math.max(focusPacePercent, productiveSecondsToday > 0 ? 4 : 0)}%` }}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 border border-dashed border-muted-foreground/25 rounded-full" />
+                    )}
                   </div>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-2">
+                    {hasFocusPaceBaseline ? (
+                      focusPaceAheadMinutes > 0
+                        ? `${productiveMinutesToday}m focused today — past ${focusPaceBenchmark.captionLabel}`
+                        : focusPaceRemainingMinutes > 0
+                          ? `${focusPaceRemainingMinutes}m to match ${focusPaceBenchmark.captionLabel}`
+                          : productiveSecondsToday > 0
+                            ? `Matched ${focusPaceBenchmark.captionLabel} for today`
+                            : `Start the focus timer to build toward ${focusPaceBenchmark.captionLabel}`
+                    ) : productiveSecondsToday > 0
+                      ? `${productiveMinutesToday}m focused today — pace vs yesterday begins tomorrow`
+                      : 'No history to compare yet. Focus today and this bar tracks your pace from tomorrow.'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -727,15 +766,15 @@ export default function Dashboard() {
                    <Music size={11} className="sm:w-3.5 sm:h-3.5" /> SOUNDSCAPE
                  </div>
                  <div className={`flex items-center gap-1.5 sm:gap-2 backdrop-blur-sm px-2.5 sm:px-3 py-1.5 rounded-full text-[9px] sm:text-[10px] font-semibold shrink-0 shadow-lg border transition-colors ${
-                   soundscapeIsPlaying 
+                   showAsPlaying 
                      ? 'bg-red-500/30 text-red-200 border-red-500/20' 
                      : 'bg-gray-500/30 text-gray-300 border-gray-500/20'
                  }`}>
                    <div className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors ${
-                     soundscapeIsPlaying 
+                     showAsPlaying 
                        ? 'bg-red-400 animate-pulse shadow-red-400/50' 
                        : 'bg-gray-400'
-                   }`} /> {soundscapeIsPlaying ? 'LIVE' : 'PAUSED'}
+                   }`} /> {showAsPlaying ? 'LIVE' : 'PAUSED'}
                  </div>
                </div>
                
@@ -745,15 +784,15 @@ export default function Dashboard() {
                       <div 
                         key={i} 
                         className={`w-1.5 sm:w-2 bg-gradient-to-t from-indigo-400 via-purple-400 to-pink-400 rounded-full shadow-lg shadow-indigo-500/30 transition-opacity ${
-                          soundscapeIsPlaying ? 'opacity-100' : 'opacity-50'
+                          showAsPlaying ? 'opacity-100' : 'opacity-50'
                         }`}
                         style={{
-                          animationName: soundscapeIsPlaying ? 'dance' : 'none',
-                          animationDuration: soundscapeIsPlaying ? `${0.7 + (i % 3) * 0.1}s` : '0s',
+                          animationName: showAsPlaying ? 'dance' : 'none',
+                          animationDuration: showAsPlaying ? `${0.7 + (i % 3) * 0.1}s` : '0s',
                           animationTimingFunction: 'ease-in-out',
-                          animationIterationCount: soundscapeIsPlaying ? 'infinite' : '1',
+                          animationIterationCount: showAsPlaying ? 'infinite' : '1',
                           animationDelay: `${i * 0.05}s`,
-                          height: soundscapeIsPlaying ? `${60 + (i % 5) * 10}%` : '40%',
+                          height: showAsPlaying ? `${60 + (i % 5) * 10}%` : '40%',
                           minHeight: '4px'
                         }}
                       />
@@ -761,13 +800,15 @@ export default function Dashboard() {
                  </div>
 
                  <h3 className="text-base sm:text-lg md:text-xl font-semibold mb-0.5">
-                   {soundscapeActiveSounds.length > 0
-                     ? soundscapeActiveSounds.map((s) => s.name).join(', ')
-                     : 'No sounds in mix'}
+                   {displaySounds.length > 0
+                     ? displaySounds.map((s) => s.name).join(', ')
+                     : showAsPlaying
+                       ? 'Spaces'
+                       : 'No sounds in mix'}
                  </h3>
                  <p className="text-[10px] sm:text-xs text-gray-300 mb-3 sm:mb-4 md:mb-5 font-medium uppercase tracking-wide">
                    {spacesActive ? 'Spaces · On' : 'Spaces · Off'}
-                   {soundscapeActiveSounds.length > 0 ? ' · Mix' : ' · Open Soundscape to add sounds'}
+                   {composerSounds.length > 0 ? ' · Mix' : !showAsPlaying ? ' · Open Soundscape to add sounds' : ''}
                  </p>
                  
                  <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -782,9 +823,9 @@ export default function Dashboard() {
                      <button 
                        onClick={toggleSoundscapePlayPause}
                        className="w-9 h-9 sm:w-10 sm:h-10 bg-white/90 rounded-full flex items-center justify-center text-indigo-900 hover:scale-110 transition-transform shadow-lg hover:shadow-xl cursor-pointer"
-                       title={soundscapeIsPlaying ? 'Pause' : 'Play'}
+                       title={showAsPlaying ? 'Pause' : 'Play'}
                      >
-                       {soundscapeIsPlaying ? (
+                       {showAsPlaying ? (
                          <Pause size={18} className="sm:w-5 sm:h-5" fill="currentColor" />
                        ) : (
                          <Play size={18} className="sm:w-5 sm:h-5 ml-0.5" fill="currentColor" />
@@ -821,10 +862,33 @@ export default function Dashboard() {
                   </div>
                   <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1">Weekly focus efficiency</p>
                 </div>
-                <div className={dashboardStatBadgeClass}>
-                  <ArrowUpRight size={12} className="sm:w-3.5 sm:h-3.5" />
-                  <span className="font-bold">+15%</span>
-                </div>
+                {homeLoading ? (
+                  <div className={`${dashboardStatBadgeClass} opacity-60`}>
+                    <span className="font-bold">…</span>
+                  </div>
+                ) : hasPriorWeekBaseline || currentWeekTotalSeconds > 0 ? (
+                  <div
+                    className={`${
+                      vsPriorWeek >= 0
+                        ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/45 dark:to-green-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-500/25'
+                        : 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/45 dark:to-orange-950/30 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-500/25'
+                    } text-[10px] sm:text-xs font-semibold px-3 sm:px-3.5 py-1.5 rounded-full shrink-0 shadow-sm border flex items-center gap-1.5`}
+                  >
+                    <ArrowUpRight
+                      size={12}
+                      className={`sm:w-3.5 sm:h-3.5 ${vsPriorWeek < 0 ? 'rotate-180' : ''}`}
+                    />
+                    <span className="font-bold">
+                      {vsPriorWeek >= 0 ? '+' : ''}
+                      {vsPriorWeek}%
+                    </span>
+                    <span className="font-medium hidden sm:inline text-[9px] opacity-80">vs prior week</span>
+                  </div>
+                ) : (
+                  <div className="text-[10px] sm:text-xs font-semibold px-3 sm:px-3.5 py-1.5 rounded-full shrink-0 shadow-sm border bg-muted/50 text-muted-foreground border-border">
+                    First week
+                  </div>
+                )}
               </div>
               
               {/* Enhanced SVG Chart - real weekly data */}

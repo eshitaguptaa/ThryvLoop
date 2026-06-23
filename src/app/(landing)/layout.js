@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import LandingJsonLd from '@/components/landing/LandingJsonLd';
+import { landingFont } from '@/lib/landingFont';
 import { DEFAULT_DESCRIPTION, getSiteUrl, SEO_KEYWORDS, SITE_NAME, SITE_TAGLINE } from '@/lib/siteConfig';
 
 const siteUrl = getSiteUrl();
@@ -56,9 +57,9 @@ export const metadata = {
 
 export default function LandingLayout({ children }) {
   return (
-    <>
+    <div className={`landing-page ${landingFont.variable} ${landingFont.className}`}>
       <LandingJsonLd />
       {children}
-    </>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Mail } from 'lucide-react';
 import { auth } from '@clerk/nextjs/server';
 import { notFound, redirect } from 'next/navigation';
+import { authModalUrl } from '@/lib/authRoutes';
 import InviteMemberForm from '@/components/b2b/InviteMemberForm';
 import MembersListClient from '@/components/b2b/MembersListClient';
 import RevokeInviteButton from '@/components/b2b/RevokeInviteButton';
@@ -44,7 +45,7 @@ function formatInvitedAgo(createdAt) {
 
 export default async function MembersPage({ params }) {
   const { userId } = await auth();
-  if (!userId) redirect('/signin');
+  if (!userId) redirect(authModalUrl('signin'));
 
   const { orgSlug } = await params;
   const membership = await getMembershipForSlug(userId, orgSlug);

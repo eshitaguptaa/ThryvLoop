@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { authModalUrl } from '@/lib/authRoutes';
 import WorkspaceDirectory from '@/components/b2b/WorkspaceDirectory';
 import {
   workspaceCardClass,
@@ -16,7 +17,7 @@ import { enrichMembershipsForDirectory } from '@/lib/workspaceSummaries';
 
 export default async function WorkspacesPage() {
   const { userId } = await auth();
-  if (!userId) redirect('/signin');
+  if (!userId) redirect(authModalUrl('signin'));
 
   const client = await clerkClient();
   const list = await client.users.getOrganizationMembershipList({ userId, limit: 100 });

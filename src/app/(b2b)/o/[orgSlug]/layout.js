@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { authModalUrl } from '@/lib/authRoutes';
 import AcceptOrgInvitation from '@/components/b2b/AcceptOrgInvitation';
 import OrgWorkspaceNav from '@/components/b2b/OrgWorkspaceNav';
 import SetActiveOrg from '@/components/b2b/SetActiveOrg';
@@ -23,7 +24,7 @@ function JoiningFallback() {
 
 export default async function OrgSlugLayout({ children, params }) {
   const { userId } = await auth();
-  if (!userId) redirect('/signin');
+  if (!userId) redirect(authModalUrl('signin'));
 
   const { orgSlug } = await params;
   const decodedSlug = decodeOrgSlug(orgSlug);

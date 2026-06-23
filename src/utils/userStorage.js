@@ -90,6 +90,7 @@ export function removeUserStorageItem(userId, key) {
 }
 
 const FOCUS_TIMER_STATE_KEY = 'focus_timer_state';
+export { FOCUS_TIMER_STATE_KEY };
 const FOCUS_TIMER_RECIPES_KEY = 'focus_timer_recipes';
 
 /**

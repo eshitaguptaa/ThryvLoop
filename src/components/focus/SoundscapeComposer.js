@@ -15,11 +15,13 @@ import {
   enforceSingleInstanceCategories,
 } from '@/lib/soundscapeConstants';
 import { bootstrapSpacesAudioIfEmpty as runBootstrapSpacesAudio } from '@/lib/soundscapeBootstrap';
+import { resumeSoundscapeFromUserGesture } from '@/lib/soundscapeGesturePlay';
 import {
   getOrCreateSoundscapeAudio,
   removeSoundscapeAudio,
   soundscapeSoundTimestamps,
   stopAllSoundscapeAudioElements,
+  warmSoundscapeMix,
 } from '@/lib/soundscapeAudioEngine';
 import {
   getSupabaseClient,
@@ -41,6 +43,9 @@ import {
   toggleSpacesMute,
 } from '@/lib/spacesVolumeControl';
 import WorkspaceIntegrations from '@/components/workspace/WorkspaceIntegrations';
+
+/** Quick fade-in on play/resume — audible immediately, no hard pop. */
+const PLAYBACK_FADE_MS = 280;
 
 export default function SoundscapeComposer({
   isOpen,
@@ -146,7 +151,7 @@ export default function SoundscapeComposer({
   };
 
   /** Update YouTube playback level (ducking or explicit Spaces level from composer). */
-  const dispatchSpacesPlaybackVolume = (baseVolume, { forceLevel = false } = {}) => {
+  const dispatchSpacesPlaybackVolume = (baseVolume, { forceLevel = false, rampMs = 0 } = {}) => {
     if (typeof window === 'undefined') return;
     const playbackVolume = getEffectiveSpacesVolume(baseVolume);
     window.dispatchEvent(
@@ -156,6 +161,7 @@ export default function SoundscapeComposer({
           playbackOnly: true,
           baseVolume,
           forceLevel,
+          rampMs,
         },
       })
     );
@@ -372,9 +378,13 @@ export default function SoundscapeComposer({
   const saveStateTimeoutRef = useRef(null);
   const activeSoundsRef = useRef(activeSounds);
   const globalVolumeRef = useRef(globalVolume);
+  const soloSoundIdRef = useRef(soloSoundId);
+  const fadeIntervalsRef = useRef({});
+  const fadingSoundIdsRef = useRef(new Set());
 
   activeSoundsRef.current = activeSounds;
   globalVolumeRef.current = globalVolume;
+  soloSoundIdRef.current = soloSoundId;
 
   const bootstrapSpacesAudioIfEmpty = () =>
     runBootstrapSpacesAudio({
@@ -870,55 +880,139 @@ export default function SoundscapeComposer({
     return icons[recipeId] || <div className={className} />;
   };
 
+  const clearAudioFade = (soundId) => {
+    if (!soundId) return;
+    const intervalId = fadeIntervalsRef.current[soundId];
+    if (intervalId) {
+      clearInterval(intervalId);
+      delete fadeIntervalsRef.current[soundId];
+    }
+    fadingSoundIdsRef.current.delete(soundId);
+  };
+
+  const clearAllAudioFades = () => {
+    Object.keys(fadeIntervalsRef.current).forEach((soundId) => clearAudioFade(soundId));
+  };
+
+  const getSoundTargetVolume = (sound, masterVol, soloId) => {
+    const base = (sound.volume / 100) * (masterVol / 100);
+    if (soloId !== null && sound.id !== soloId) return 0;
+    return base;
+  };
+
   // Helper function to fade out audio smoothly
-  const fadeOutAudio = (audio, duration = 500) => {
+  const fadeOutAudio = (audio, duration = 500, soundId = null) => {
     return new Promise((resolve) => {
       if (!audio) {
         resolve();
         return;
       }
-      
+
+      if (soundId) clearAudioFade(soundId);
+
       const startVolume = audio.volume;
       const startTime = Date.now();
-      
+
       const fadeInterval = setInterval(() => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        
+
         audio.volume = startVolume * (1 - progress);
-        
+
         if (progress >= 1) {
           clearInterval(fadeInterval);
           audio.pause();
           audio.src = '';
           resolve();
         }
-      }, 16); // ~60fps
+      }, 16);
     });
   };
 
-  // Helper function to fade in audio smoothly
-  const fadeInAudio = (audio, targetVolume, duration = 500) => {
-    if (!audio) return;
-    
+  // Helper function to fade in audio smoothly (starts playback at once, ramps volume)
+  const fadeInAudio = (audio, targetVolume, duration = PLAYBACK_FADE_MS, soundId = null) => {
+    if (!audio || targetVolume <= 0) return;
+
+    const fadeKey = soundId || audio.src || 'unknown';
+    clearAudioFade(fadeKey);
+    fadingSoundIdsRef.current.add(fadeKey);
+
     audio.volume = 0;
-    audio.play().catch(() => {
-      // Auto-play might be blocked
+    void audio.play().catch(() => {
+      clearAudioFade(fadeKey);
     });
-    
+
     const startTime = Date.now();
-    
-    const fadeInterval = setInterval(() => {
+
+    fadeIntervalsRef.current[fadeKey] = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      audio.volume = targetVolume * progress;
-      
+      const eased = progress * progress;
+
+      audio.volume = targetVolume * eased;
+
       if (progress >= 1) {
-        clearInterval(fadeInterval);
+        audio.volume = targetVolume;
+        clearAudioFade(fadeKey);
       }
-    }, 16); // ~60fps
+    }, 16);
   };
+
+  const startActiveSoundsPlayback = useCallback(({ immediate = false } = {}) => {
+    const sounds = activeSoundsRef.current;
+    const masterVol = globalVolumeRef.current;
+    const soloId = soloSoundIdRef.current;
+
+    sounds.forEach((sound) => {
+      const src = SOUNDSCAPE_SOUND_FILES[sound.id];
+      if (!src) return;
+
+      const { audio } = getOrCreateSoundscapeAudio(sound.id, src);
+      audioRefs.current[sound.id] = audio;
+      const targetVolume = getSoundTargetVolume(sound, masterVol, soloId);
+      if (targetVolume <= 0) {
+        audio.pause();
+        return;
+      }
+      if (immediate) {
+        audio.volume = targetVolume;
+        if (audio.paused) void audio.play().catch(() => {});
+        return;
+      }
+      fadeInAudio(audio, targetVolume, PLAYBACK_FADE_MS, sound.id);
+    });
+  }, []);
+
+  const resumeSpacesPlaybackFromWidget = useCallback(({ immediate = false } = {}) => {
+    if (typeof window === 'undefined') return;
+    if (isSpacesPausedByUser()) return;
+    if (!getBackgroundVideoId() || getSpacesVolume() <= 0) return;
+
+    setItem('focus-spaces-paused', 'false');
+    setSpacesMuted(false);
+    if (!immediate) {
+      window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
+    }
+    lastPlaybackVolumeRef.current = null;
+    dispatchSpacesPlaybackVolume(getSpacesVolume(), {
+      forceLevel: true,
+      rampMs: immediate ? 0 : PLAYBACK_FADE_MS,
+    });
+    if (!immediate) {
+      window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
+    }
+  }, [userId, spacesVolume]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !userId) return;
+    const warm = () => warmSoundscapeMix(activeSoundsRef.current);
+    warm();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') warm();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [activeSounds, userId]);
 
   // Defer hydration flag only — sounds load synchronously from localStorage on mount.
   useEffect(() => {
@@ -1018,50 +1112,51 @@ export default function SoundscapeComposer({
     }
   }, [isPlaying, userId]);
 
+  const handlePlayPauseChange = useCallback((e) => {
+    if (e.detail?.isPlaying === undefined) return;
+    const nextPlaying = e.detail.isPlaying;
+    const immediate = Boolean(e.detail.immediate);
+    setItem('soundscape-is-playing', nextPlaying ? 'true' : 'false');
+    setItem('soundscape-session-active', nextPlaying ? 'true' : 'false');
+    if (nextPlaying) {
+      hasStartedPlaybackRef.current = true;
+      setSessionActive(true);
+      if (e.detail.bootstrapSpaces) {
+        setItem('focus-spaces-paused', 'false');
+        setSpacesMuted(false);
+        bootstrapSpacesAudioIfEmpty();
+      }
+      resumeSpacesPlaybackFromWidget({ immediate });
+      startActiveSoundsPlayback({ immediate });
+      setIsPlaying(true);
+    } else {
+      clearAllAudioFades();
+      setSessionActive(false);
+      setIsPlaying(false);
+      Object.values(audioRefs.current).forEach((audio) => {
+        if (audio) audio.pause();
+      });
+      if (e.detail.muteSpaces) {
+        masterMutedSpacesRef.current = false;
+        setSpacesMuted(true);
+        setItem('focus-spaces-paused', 'true');
+        lastPlaybackVolumeRef.current = null;
+        dispatchSpacesPlaybackVolume(0, { forceLevel: true });
+      } else {
+        lastPlaybackVolumeRef.current = 0;
+        dispatchSpacesPlaybackVolume(0, { forceLevel: true });
+      }
+    }
+  }, [resumeSpacesPlaybackFromWidget, startActiveSoundsPlayback, userId]);
+
   // Listen for play/pause changes from MusicWidget / home dashboard / composer controls
   useEffect(() => {
-    const handlePlayPauseChange = (e) => {
-      if (e.detail?.isPlaying !== undefined) {
-        const nextPlaying = e.detail.isPlaying;
-        setItem('soundscape-is-playing', nextPlaying ? 'true' : 'false');
-        setItem('soundscape-session-active', nextPlaying ? 'true' : 'false');
-        if (nextPlaying) {
-          hasStartedPlaybackRef.current = true;
-          setSessionActive(true);
-          if (e.detail.bootstrapSpaces) {
-            setItem('focus-spaces-paused', 'false');
-            setSpacesMuted(false);
-          }
-          if (e.detail.bootstrapSpaces) {
-            bootstrapSpacesAudioIfEmpty();
-          }
-          setIsPlaying(true);
-        } else {
-          setSessionActive(false);
-          setIsPlaying(false);
-          Object.values(audioRefs.current).forEach((audio) => {
-            if (audio) audio.pause();
-          });
-          if (e.detail.muteSpaces) {
-            masterMutedSpacesRef.current = false;
-            setSpacesMuted(true);
-            setItem('focus-spaces-paused', 'true');
-            lastPlaybackVolumeRef.current = null;
-            dispatchSpacesPlaybackVolume(0, { forceLevel: true });
-          } else {
-            lastPlaybackVolumeRef.current = 0;
-            dispatchSpacesPlaybackVolume(0, { forceLevel: true });
-          }
-        }
-      }
-    };
-    
     window.addEventListener('soundscape-play-pause-changed', handlePlayPauseChange);
-    
+
     return () => {
       window.removeEventListener('soundscape-play-pause-changed', handlePlayPauseChange);
     };
-  }, [userId]);
+  }, [handlePlayPauseChange]);
 
   // Initialize and manage audio - keep playing even when modal is closed
   useEffect(() => {
@@ -1085,8 +1180,14 @@ export default function SoundscapeComposer({
       const audio = audioRefs.current[soundId];
       if (!audio) return;
       if (isPlaying && hasStartedPlaybackRef.current) {
-        if (audio.paused) {
-          audio.play().catch(() => {});
+        if (audio.paused && !fadingSoundIdsRef.current.has(soundId)) {
+          const sound = activeSounds.find((s) => s.id === soundId);
+          if (sound) {
+            const targetVolume = getSoundTargetVolume(sound, globalVolume, soloSoundId);
+            if (targetVolume > 0) {
+              fadeInAudio(audio, targetVolume, PLAYBACK_FADE_MS, soundId);
+            }
+          }
         }
       } else {
         audio.pause();
@@ -1104,7 +1205,7 @@ export default function SoundscapeComposer({
         }
       }
     });
-  }, [activeSounds, globalVolume, isPlaying, isOpen, audioSyncKey]);
+  }, [activeSounds, globalVolume, isPlaying, isOpen, audioSyncKey, soloSoundId]);
 
   // Keep soundscape audio running after client-side navigation
   useEffect(() => {
@@ -1234,30 +1335,20 @@ export default function SoundscapeComposer({
     };
   }, [activeSounds, globalVolume, spacesVolume, userId]);
 
-  // Update audio volumes when they change
+  // Update audio volumes when they change (skip sounds mid fade-in)
   useEffect(() => {
+    if (!isPlaying) return;
     activeSounds.forEach((sound) => {
       const audio = audioRefs.current[sound.id];
-      if (audio) {
-        if (isPlaying) {
-          if (audio.paused) {
-            audio.play().catch(() => {});
-          }
-        } else {
-          audio.pause();
-        }
-        
-        if (isPlaying) {
-          if (soloSoundId !== null) {
-            if (sound.id === soloSoundId) {
-              audio.volume = (sound.volume / 100) * (globalVolume / 100);
-            } else {
-              audio.volume = 0;
-            }
-          } else {
-            audio.volume = (sound.volume / 100) * (globalVolume / 100);
-          }
-        }
+      if (!audio || fadingSoundIdsRef.current.has(sound.id)) return;
+
+      if (soloSoundId !== null) {
+        audio.volume =
+          sound.id === soloSoundId
+            ? (sound.volume / 100) * (globalVolume / 100)
+            : 0;
+      } else {
+        audio.volume = (sound.volume / 100) * (globalVolume / 100);
       }
     });
   }, [activeSounds, globalVolume, soloSoundId, isPlaying]);
@@ -1985,9 +2076,10 @@ export default function SoundscapeComposer({
                   setItem('soundscape-session-active', newPlayingState ? 'true' : 'false');
                   setSessionActive(newPlayingState);
                   if (newPlayingState) {
+                    resumeSoundscapeFromUserGesture(userId);
                     lastPlaybackVolumeRef.current = null;
                     if (getBackgroundVideoId() && spacesVolume > 0) {
-                      dispatchSpacesPlaybackVolume(spacesVolume, { forceLevel: true });
+                      dispatchSpacesPlaybackVolume(spacesVolume, { forceLevel: true, rampMs: 0 });
                     }
                   } else {
                     lastPlaybackVolumeRef.current = 0;
@@ -1998,6 +2090,7 @@ export default function SoundscapeComposer({
                     detail: {
                       isPlaying: newPlayingState,
                       bootstrapSpaces: newPlayingState,
+                      immediate: newPlayingState,
                     },
                   }));
                 }}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSignIn, useSignUp } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -48,6 +48,7 @@ function unlockBodyScroll() {
 
 export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isMobile = useMobileViewport();
   const { isLoaded: isSignInLoaded, signIn, setActive } = useSignIn();
   const { isLoaded: isSignUpLoaded, signUp, setActive: setActiveSignUp } = useSignUp();
@@ -58,6 +59,9 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [lastName, setLastName] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [forgotStep, setForgotStep] = useState(null);
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -66,6 +70,9 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     setErrorMessage('');
     setIsVerifying(false);
     setVerificationCode('');
+    setForgotStep(null);
+    setResetCode('');
+    setNewPassword('');
   }, [initialMode, isOpen]);
 
   useEffect(() => {
@@ -88,6 +95,13 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const unlockScroll = useCallback(() => {
     unlockBodyScroll();
   }, []);
+
+  const navigateAfterAuth = useCallback(() => {
+    const redirectUrl = searchParams.get('redirect_url');
+    const destination = redirectUrl?.startsWith('/') ? redirectUrl : '/home';
+    onClose();
+    router.push(destination);
+  }, [searchParams, onClose, router]);
 
   const modalVariants = isMobile
     ? {
@@ -132,8 +146,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
-        onClose();
-        router.push('/home');
+        navigateAfterAuth();
         return;
       }
 
@@ -145,8 +158,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
         if (firstFactor.status === 'complete') {
           await setActive({ session: firstFactor.createdSessionId });
-          onClose();
-          router.push('/home');
+          navigateAfterAuth();
           return;
         }
       }
@@ -175,8 +187,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
       if (result.status === 'complete') {
         await setActiveSignUp({ session: result.createdSessionId });
-        onClose();
-        router.push('/home');
+        navigateAfterAuth();
         return;
       }
 
@@ -184,6 +195,59 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       setIsVerifying(true);
     } catch (error) {
       const message = error?.errors?.[0]?.longMessage || error?.errors?.[0]?.message || 'Sign up failed.';
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPasswordRequest = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      if (!isSignInLoaded) return;
+      await signIn.create({
+        strategy: 'reset_password_email_code',
+        identifier: email,
+      });
+      setForgotStep('reset');
+    } catch (error) {
+      const message =
+        error?.errors?.[0]?.longMessage || error?.errors?.[0]?.message || 'Failed to send reset code.';
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPasswordReset = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      if (!isSignInLoaded) return;
+      const firstFactor = await signIn.attemptFirstFactor({
+        strategy: 'reset_password_email_code',
+        code: resetCode,
+      });
+
+      if (firstFactor.status !== 'needs_new_password') {
+        setErrorMessage('Invalid or expired code. Please try again.');
+        return;
+      }
+
+      const resetResult = await signIn.resetPassword({ password: newPassword });
+      if (resetResult.status === 'complete') {
+        await setActive({ session: resetResult.createdSessionId });
+        navigateAfterAuth();
+        return;
+      }
+
+      setErrorMessage('Unable to reset password. Please try again.');
+    } catch (error) {
+      const message =
+        error?.errors?.[0]?.longMessage || error?.errors?.[0]?.message || 'Password reset failed.';
       setErrorMessage(message);
     } finally {
       setIsLoading(false);
@@ -199,8 +263,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       const result = await signUp.attemptEmailAddressVerification({ code: verificationCode });
       if (result.status === 'complete') {
         await setActiveSignUp({ session: result.createdSessionId });
-        onClose();
-        router.push('/home');
+        navigateAfterAuth();
         return;
       }
       setErrorMessage('Verification failed. Please try again.');
@@ -276,18 +339,30 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   />
                 </div>
                 <h2 id="auth-modal-title" className="text-xl sm:text-2xl font-extrabold text-foreground mb-0.5">
-                  {mode === 'signin' ? 'Welcome Back' : isVerifying ? 'Verify Email' : 'Get Started'}
+                  {forgotStep
+                    ? forgotStep === 'request'
+                      ? 'Forgot Password'
+                      : 'Reset Password'
+                    : mode === 'signin'
+                      ? 'Welcome Back'
+                      : isVerifying
+                        ? 'Verify Email'
+                        : 'Get Started'}
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-snug">
-                  {mode === 'signin'
-                    ? 'Sign in to continue to ThryvLoop'
-                    : isVerifying
-                      ? 'Enter the verification code sent to your email'
-                      : 'Create your account and start your journey'}
+                  {forgotStep
+                    ? forgotStep === 'request'
+                      ? 'Enter your email and we will send you a reset code'
+                      : 'Enter the code from your email and choose a new password'
+                    : mode === 'signin'
+                      ? 'Sign in to continue to ThryvLoop'
+                      : isVerifying
+                        ? 'Enter the verification code sent to your email'
+                        : 'Create your account and start your journey'}
                 </p>
               </div>
 
-              {!isVerifying && (
+              {!isVerifying && !forgotStep && (
                 <div className="flex gap-2 mb-2.5 p-1.5 bg-muted rounded-xl">
                   <button
                     type="button"
@@ -306,7 +381,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                 </div>
               )}
 
-              {!isVerifying && (
+              {!isVerifying && !forgotStep && (
                 <>
                   <div className="space-y-1.5 mb-2.5">
                     <button
@@ -349,7 +424,91 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
               )}
               <div id="clerk-captcha" className="mt-2" />
 
-              {!isVerifying ? (
+              {forgotStep ? (
+                <form
+                  onSubmit={forgotStep === 'request' ? handleForgotPasswordRequest : handleForgotPasswordReset}
+                  className="space-y-1.5 sm:space-y-1.75"
+                >
+                  <div>
+                    <label htmlFor="forgot-email" className={labelClass}>
+                      Email Address
+                    </label>
+                    <input
+                      id="forgot-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={forgotStep === 'reset'}
+                      className={inputClass}
+                      placeholder="you@example.com"
+                    />
+                  </div>
+
+                  {forgotStep === 'reset' && (
+                    <>
+                      <div>
+                        <label htmlFor="resetCode" className={labelClass}>
+                          Reset Code
+                        </label>
+                        <input
+                          id="resetCode"
+                          type="text"
+                          value={resetCode}
+                          onChange={(e) => setResetCode(e.target.value)}
+                          required
+                          className={inputClass}
+                          placeholder="Enter code from email"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="newPassword" className={labelClass}>
+                          New Password
+                        </label>
+                        <input
+                          id="newPassword"
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          required
+                          minLength={8}
+                          className={inputClass}
+                          placeholder="••••••••"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full min-h-12 py-3.5 rounded-lg sm:py-2.5 text-base sm:text-sm font-semibold bg-linear-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transition-all duration-200 hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-2 sm:mt-2.5"
+                  >
+                    {isLoading
+                      ? forgotStep === 'request'
+                        ? 'Sending code...'
+                        : 'Resetting password...'
+                      : forgotStep === 'request'
+                        ? 'Send Reset Code'
+                        : 'Reset Password'}
+                  </button>
+
+                  <p className="mt-3 text-center text-sm text-muted-foreground">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotStep(null);
+                        setResetCode('');
+                        setNewPassword('');
+                        setErrorMessage('');
+                      }}
+                      className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer"
+                    >
+                      Back to sign in
+                    </button>
+                  </p>
+                </form>
+              ) : !isVerifying ? (
                 <form onSubmit={mode === 'signin' ? handleSignIn : handleSignUp} className="space-y-1.5 sm:space-y-1.75">
                   {mode === 'signup' && (
                     <div className="flex gap-2">
@@ -415,16 +574,13 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                   </div>
 
                   {mode === 'signin' && (
-                    <div className="flex items-center justify-between text-xs sm:text-sm pt-1">
-                      <label className="flex items-center text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-border bg-muted text-indigo-600 focus:ring-indigo-500/20"
-                        />
-                        <span className="ml-2">Remember me</span>
-                      </label>
+                    <div className="flex justify-end text-xs sm:text-sm pt-1">
                       <button
                         type="button"
+                        onClick={() => {
+                          setForgotStep('request');
+                          setErrorMessage('');
+                        }}
                         className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer"
                       >
                         Forgot password?
@@ -476,7 +632,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                 </form>
               )}
 
-              {!isVerifying && (
+              {!isVerifying && !forgotStep && (
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   {mode === 'signin' ? (
                     <>

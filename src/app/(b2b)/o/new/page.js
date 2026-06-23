@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { authModalUrl } from '@/lib/authRoutes';
 import CreateWorkspaceForm from '@/components/b2b/CreateWorkspaceForm';
 import {
   workspaceCardClass,
@@ -13,7 +14,7 @@ import {
 
 export default async function NewWorkspacePage() {
   const { userId } = await auth();
-  if (!userId) redirect('/signin');
+  if (!userId) redirect(authModalUrl('signin'));
 
   return (
     <div className={workspaceSurfaceClass}>

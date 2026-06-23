@@ -38,11 +38,15 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,100..700,0..1,-50..200&display=swap"
+        />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className={`${poppins.className} ${poppins.variable} bg-background text-foreground`}>
         <ThemeProvider>
-          <ClerkProvider>
+          <ClerkProvider signInUrl="/?auth=signin" signUpUrl="/?auth=signup">
             <AppSessionProviders>{children}</AppSessionProviders>
           </ClerkProvider>
         </ThemeProvider>

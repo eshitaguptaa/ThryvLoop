@@ -12,12 +12,6 @@ export default function sitemap() {
       priority: 1,
     },
     {
-      url: `${base}/signin`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-    {
       url: `${base}/signup`,
       lastModified: now,
       changeFrequency: 'monthly',

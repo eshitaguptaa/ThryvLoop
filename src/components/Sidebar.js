@@ -10,6 +10,7 @@ import SoundscapeComposer from '@/components/focus/SoundscapeComposer';
 import { normalizeSettingsPanel } from '@/lib/openFocusSettings';
 import { getUserStorageJson, removeUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 import { suspendClerkAuthRequests } from '@/lib/clerkSupabaseToken';
+import { pauseAndFlushFocusTimerOnLogout } from '@/lib/focusTimerPersist';
 import ThemeToggle from '@/components/ThemeToggle';
 import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 
@@ -357,6 +358,7 @@ export default function Sidebar({ className = '' }) {
       removeUserStorageItem(userId, 'soundscape-session-active');
       removeUserStorageItem(userId, 'focus-spaces-paused');
     }
+    await pauseAndFlushFocusTimerOnLogout();
     suspendClerkAuthRequests();
     await signOut({ redirectUrl: '/' });
   };

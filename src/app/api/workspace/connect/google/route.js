@@ -5,6 +5,7 @@ import {
   createOAuthState,
   WORKSPACE_OAUTH_COOKIE,
 } from '@/lib/workspace/oauth';
+import { authModalUrl } from '@/lib/authRoutes';
 import { getAppOrigin } from '@/lib/org';
 import { rateLimitResponse } from '@/lib/security/rateLimit';
 
@@ -12,7 +13,7 @@ export async function GET() {
   const { userId } = await auth();
   const base = getAppOrigin();
   if (!userId) {
-    return NextResponse.redirect(new URL('/signin', base));
+    return NextResponse.redirect(new URL(authModalUrl('signin'), base));
   }
 
   const limited = rateLimitResponse(userId, 'workspace-connect-google', { limit: 10, windowMs: 60_000 });

@@ -1,6 +1,7 @@
 'use client';
 
-import { ClerkLoading, RedirectToSignIn, SignedIn, SignedOut } from '@clerk/nextjs';
+import { ClerkLoading, SignedIn, SignedOut } from '@clerk/nextjs';
+import RedirectToAuthModal from '@/components/auth/RedirectToAuthModal';
 import ClerkGoogleWorkspaceBridge from '@/components/workspace/ClerkGoogleWorkspaceBridge';
 
 export default function ProtectedShell({ children }) {
@@ -12,7 +13,7 @@ export default function ProtectedShell({ children }) {
         </div>
       </ClerkLoading>
       <SignedOut>
-        <RedirectToSignIn />
+        <RedirectToAuthModal />
       </SignedOut>
       <SignedIn>
         <ClerkGoogleWorkspaceBridge />

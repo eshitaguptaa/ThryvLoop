@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback, us
 import { useUser, useAuth } from '@clerk/nextjs';
 import {
   getUserStorageItem,
+  getUserStorageJson,
   setUserStorageItem,
   setUserStorageJson,
   setSupabaseAuthToken,
@@ -15,6 +16,13 @@ import { localDateKey } from '@/lib/dateRanges';
 import { fetchTodayAndYesterdayFocusSeconds } from '@/lib/focusSessions';
 import { getClerkSupabaseToken } from '@/lib/clerkSupabaseToken';
 import { getFocusContentCenter } from '@/lib/focusWidgetLayout';
+import {
+  buildFocusTimerPersistPayload,
+  persistFocusTimerState,
+  registerFocusTimerLogoutPauseFlush,
+  registerFocusTimerUrgentFlush,
+  sendFocusTimerStateKeepalive,
+} from '@/lib/focusTimerPersist';
 
 export const TimerContext = createContext(null);
 
@@ -23,6 +31,12 @@ const DEFAULT_SHORT_BREAK = 5;
 const DEFAULT_LONG_BREAK = 15;
 const DEFAULT_COUNTDOWN = 5;
 const POMODOROS_BEFORE_LONG_BREAK = 2;
+/** Max single stopwatch stretch we restore (12h). */
+const MAX_STOPWATCH_SECONDS = 12 * 60 * 60;
+/** Reject values that look like ms timestamps or corrupt data. */
+const MAX_TIMER_SECONDS = 24 * 60 * 60;
+/** Do not add more than this much away-time when resuming a running timer. */
+const MAX_ELAPSED_AWAY_SECONDS = 12 * 60 * 60;
 
 function getStoredInt(userId, key, fallback) {
   if (typeof window === 'undefined') return fallback;
@@ -84,6 +98,273 @@ function discardStaleFocusProgress({
   };
 }
 
+function parseUpdatedAtMs(value) {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    // Millisecond epoch timestamps only (13-digit-ish); ignore small numbers.
+    return value > 1e11 ? value : 0;
+  }
+  const asNum = parseInt(String(value), 10);
+  if (!Number.isNaN(asNum) && asNum > 1e11) return asNum;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function isPlausibleTimerSeconds(
+  timeVal,
+  timerMode,
+  phase,
+  sessionMinutes,
+  shortBreakMinutes,
+  longBreakMinutes,
+  countdownMinutes
+) {
+  if (!Number.isFinite(timeVal) || timeVal < 0 || timeVal > MAX_TIMER_SECONDS) return false;
+  if (timerMode === 'stopwatch') return timeVal <= MAX_STOPWATCH_SECONDS;
+  if (timerMode === 'countdown') return timeVal <= (countdownMinutes || DEFAULT_COUNTDOWN) * 60 + 5;
+  const cap =
+    (phase === 'shortBreak'
+      ? shortBreakMinutes
+      : phase === 'longBreak'
+        ? longBreakMinutes
+        : sessionMinutes) *
+      60 +
+    5;
+  return timeVal <= cap;
+}
+
+function sanitizeTimerSeconds(
+  timeVal,
+  timerMode,
+  phase,
+  sessionMinutes,
+  shortBreakMinutes,
+  longBreakMinutes,
+  countdownMinutes
+) {
+  if (
+    isPlausibleTimerSeconds(
+      timeVal,
+      timerMode,
+      phase,
+      sessionMinutes,
+      shortBreakMinutes,
+      longBreakMinutes,
+      countdownMinutes
+    )
+  ) {
+    return timeVal;
+  }
+  return getFreshFocusTime(timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes);
+}
+
+/** Prefer local tick data when remote has a fresh timestamp but stale/corrupt time. */
+function pickTimerSnapshot(local, remote) {
+  const remoteMs = getRemoteUpdatedAtMs(remote);
+  const localMs = local?.updatedAtMs ?? 0;
+
+  if (!local) {
+    return remote && typeof remote === 'object' ? { ...remote, updatedAtMs: remoteMs } : null;
+  }
+  if (!remote || typeof remote !== 'object') return local;
+
+  const remoteTime = remote.timer?.time;
+  const localTime = local.timer?.time;
+  const mode =
+    local.timer?.mode === 'stopwatch' || local.timer?.mode === 'countdown'
+      ? local.timer.mode
+      : remote.timer?.mode;
+  const phase = local.timer?.phase ?? remote.timer?.phase ?? 'session';
+  const settings = local.settings || remote.settings || {};
+  const sm = settings.sessionMinutes ?? DEFAULT_SESSION;
+  const sbm = settings.shortBreakMinutes ?? DEFAULT_SHORT_BREAK;
+  const lbm = settings.longBreakMinutes ?? DEFAULT_LONG_BREAK;
+  const cm = settings.countdownMinutes ?? DEFAULT_COUNTDOWN;
+
+  const remoteTimeBad =
+    typeof remoteTime === 'number' &&
+    !isPlausibleTimerSeconds(remoteTime, mode, phase, sm, sbm, lbm, cm);
+  const localTimeOk =
+    typeof localTime === 'number' &&
+    isPlausibleTimerSeconds(localTime, mode, phase, sm, sbm, lbm, cm);
+
+  if (localMs >= remoteMs || (remoteTimeBad && localTimeOk)) {
+    return local;
+  }
+
+  return { ...remote, updatedAtMs: remoteMs };
+}
+
+/** Account for time that passed while the page was closed with the timer running. */
+function adjustTimerForElapsedAway({
+  timeVal,
+  wasRunning,
+  updatedAtMs,
+  timerMode,
+  phase,
+  sessionMinutes,
+  shortBreakMinutes,
+  longBreakMinutes,
+  countdownMinutes,
+}) {
+  const saneTime = sanitizeTimerSeconds(
+    timeVal,
+    timerMode,
+    phase,
+    sessionMinutes,
+    shortBreakMinutes,
+    longBreakMinutes,
+    countdownMinutes
+  );
+
+  if (!wasRunning || updatedAtMs <= 0) {
+    return { timeVal: saneTime, isRunning: false };
+  }
+
+  const elapsedSec = Math.min(
+    MAX_ELAPSED_AWAY_SECONDS,
+    Math.max(0, Math.floor((Date.now() - updatedAtMs) / 1000))
+  );
+  if (elapsedSec === 0) {
+    return { timeVal: saneTime, isRunning: true };
+  }
+
+  if (timerMode === 'stopwatch') {
+    return { timeVal: saneTime + elapsedSec, isRunning: true };
+  }
+
+  const remaining = saneTime - elapsedSec;
+  if (remaining > 0) {
+    return { timeVal: remaining, isRunning: true };
+  }
+
+  return { timeVal: 0, isRunning: false };
+}
+
+function readLocalTimerSnapshot(userId) {
+  if (typeof window === 'undefined' || !userId) return null;
+
+  const updatedAtMs = parseUpdatedAtMs(
+    getUserStorageItem(userId, 'focus-timer-updated-at', 'focus-timer-updated-at')
+  );
+  const timeRaw = getUserStorageItem(userId, 'focus-timer-time', 'focus-timer-time');
+  if (timeRaw == null || timeRaw === '') return null;
+  const time = parseInt(timeRaw, 10);
+  if (Number.isNaN(time) || time < 0) return null;
+
+  const modeRaw = getUserStorageItem(userId, 'focus-timer-mode', 'focus-timer-mode');
+  const phaseRaw = getUserStorageItem(userId, 'focus-timer-phase', 'focus-timer-phase');
+  const mode = modeRaw === 'stopwatch' || modeRaw === 'countdown' ? modeRaw : 'pomodoro';
+  const phase = phaseRaw === 'shortBreak' || phaseRaw === 'longBreak' ? phaseRaw : 'session';
+  const runDateRaw = getUserStorageItem(userId, 'focus-timer-run-date', 'focus-timer-run-date');
+
+  return {
+    updatedAtMs,
+    timer: {
+      time,
+      isRunning: getUserStorageItem(userId, 'focus-timer-running', 'focus-timer-running') === 'true',
+      mode,
+      phase,
+      focusRunDate: runDateRaw || null,
+      updatedAt: updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : null,
+    },
+    sessions: {
+      today: getStoredInt(userId, 'focus-timer-sessions-today', 0),
+      date: getUserStorageItem(userId, 'focus-timer-sessions-date', 'focus-timer-sessions-date') || localDateKey(),
+      cycle: getStoredInt(userId, 'focus-timer-pomodoros-in-cycle', 0),
+    },
+    settings: {
+      timerMode: getUserStorageItem(userId, 'focus-settings-timer-mode', 'focus-settings-timer-mode'),
+      sessionMinutes: getStoredInt(userId, 'focus-settings-session-minutes', DEFAULT_SESSION),
+      shortBreakMinutes: getStoredInt(userId, 'focus-settings-short-break-minutes', DEFAULT_SHORT_BREAK),
+      longBreakMinutes: getStoredInt(userId, 'focus-settings-long-break-minutes', DEFAULT_LONG_BREAK),
+      countdownMinutes: getStoredInt(userId, 'focus-settings-countdown-minutes', DEFAULT_COUNTDOWN),
+      autoStartBreaks: getStoredBool(userId, 'focus-settings-auto-start-breaks', true),
+      alarmVolume: getStoredInt(userId, 'focus-settings-alarm-volume', 60),
+      tickSound: getStoredBool(userId, 'focus-settings-tick-sound', true),
+    },
+    position: getUserStorageJson(userId, 'focus-timer-position', 'focus-timer-position'),
+    size: getUserStorageJson(userId, 'focus-timer-size', 'focus-timer-size'),
+  };
+}
+
+function getRemoteUpdatedAtMs(remote) {
+  if (!remote?.timer) return 0;
+  return parseUpdatedAtMs(remote.timer.updatedAt);
+}
+
+function applyTimerSnapshotFields(snapshot, today) {
+  const timer = snapshot.timer || {};
+  const sessions = snapshot.sessions || {};
+  const settings = snapshot.settings || {};
+  const mode =
+    timer.mode === 'stopwatch' || timer.mode === 'countdown'
+      ? timer.mode
+      : settings.timerMode === 'stopwatch' || settings.timerMode === 'countdown'
+        ? settings.timerMode
+        : 'pomodoro';
+  const ph = timer.phase === 'shortBreak' || timer.phase === 'longBreak' ? timer.phase : 'session';
+  const sm = settings.sessionMinutes ?? DEFAULT_SESSION;
+  const sbm = settings.shortBreakMinutes ?? DEFAULT_SHORT_BREAK;
+  const lbm = settings.longBreakMinutes ?? DEFAULT_LONG_BREAK;
+  const cm = settings.countdownMinutes ?? DEFAULT_COUNTDOWN;
+
+  let timeVal = typeof timer.time === 'number' ? timer.time : sm * 60;
+  timeVal = sanitizeTimerSeconds(timeVal, mode, ph, sm, sbm, lbm, cm);
+  const runDate = resolveFocusRunDate(timer.focusRunDate, timer.updatedAt);
+  const discarded = discardStaleFocusProgress({
+    timeVal,
+    runDate,
+    timerMode: mode,
+    phase: ph,
+    sessionMinutes: sm,
+    shortBreakMinutes: sbm,
+    longBreakMinutes: lbm,
+    countdownMinutes: cm,
+  });
+  timeVal = discarded.timeVal;
+
+  const updatedAtMs = parseUpdatedAtMs(timer.updatedAt) || snapshot.updatedAtMs || 0;
+  const adjusted = adjustTimerForElapsedAway({
+    timeVal,
+    wasRunning: Boolean(timer.isRunning),
+    updatedAtMs,
+    timerMode: mode,
+    phase: ph,
+    sessionMinutes: sm,
+    shortBreakMinutes: sbm,
+    longBreakMinutes: lbm,
+    countdownMinutes: cm,
+  });
+
+  const sessionsToday = (sessions.date ?? today) === today ? Math.max(0, sessions.today ?? 0) : 0;
+  const sessionsDateVal = (sessions.date ?? today) === today ? (sessions.date ?? today) : today;
+  const cycleCount = Math.max(
+    0,
+    Math.min(POMODOROS_BEFORE_LONG_BREAK, sessions.cycle ?? sessions.pomodorosInCycle ?? 0)
+  );
+
+  return {
+    mode,
+    ph,
+    sm,
+    sbm,
+    lbm,
+    cm,
+    timeVal: adjusted.timeVal,
+    isRunning: adjusted.isRunning,
+    focusRunDate: discarded.focusRunDate,
+    sessionsToday,
+    sessionsDateVal,
+    cycleCount,
+    autoStartBreaks: settings.autoStartBreaks !== false,
+    alarmVolume: Math.max(0, Math.min(100, settings.alarmVolume ?? 60)),
+    tickSound: settings.tickSound !== false,
+    position: snapshot.position,
+    size: snapshot.size,
+  };
+}
+
 /** Whether this mode/phase should contribute to productive focus time. */
 function isFocusSegmentMode(timerMode, phase) {
   if (timerMode === 'stopwatch') return true;
@@ -101,6 +382,39 @@ function getRunSegmentElapsed(timerMode, phase, currentTime, runStartTime) {
     return Math.max(0, Math.floor(runStartTime) - Math.floor(currentTime));
   }
   return 0;
+}
+
+function readSegmentTracking(userId) {
+  if (!userId || typeof window === 'undefined') return { start: null, logged: 0 };
+  const startRaw = getUserStorageItem(userId, 'focus-timer-segment-start', 'focus-timer-segment-start');
+  const loggedRaw = getUserStorageItem(userId, 'focus-timer-segment-logged', 'focus-timer-segment-logged');
+  const startParsed = startRaw != null && startRaw !== '' ? parseInt(startRaw, 10) : null;
+  const loggedParsed = loggedRaw != null && loggedRaw !== '' ? parseInt(loggedRaw, 10) : 0;
+  return {
+    start: startParsed != null && !Number.isNaN(startParsed) && startParsed >= 0 ? startParsed : null,
+    logged: Number.isNaN(loggedParsed) ? 0 : Math.max(0, loggedParsed),
+  };
+}
+
+function writeSegmentTracking(userId, runStart, segmentLogged) {
+  if (typeof window === 'undefined' || !userId) return;
+  setUserStorageItem(userId, 'focus-timer-segment-start', runStart != null ? String(runStart) : '');
+  setUserStorageItem(userId, 'focus-timer-segment-logged', String(Math.max(0, segmentLogged)));
+}
+
+/** Restore play-segment refs so productivity time stays in sync after refresh. */
+function restoreSegmentTracking({ userId, timerMode, phase, timeVal, isRunning, focusRunDate, today }) {
+  if (!isRunning || !isFocusSegmentMode(timerMode, phase) || focusRunDate !== today) {
+    return { runStart: null, segmentLogged: 0 };
+  }
+  const saved = readSegmentTracking(userId);
+  if (saved.start != null) {
+    const elapsed = getRunSegmentElapsed(timerMode, phase, timeVal, saved.start);
+    if (elapsed >= saved.logged) {
+      return { runStart: saved.start, segmentLogged: saved.logged };
+    }
+  }
+  return { runStart: timeVal, segmentLogged: 0 };
 }
 
 function computeResponsiveTimerSize() {
@@ -162,19 +476,26 @@ export function TimerProvider({ children }) {
   const [size, setSize] = useState({ width: 450, height: 450 });
   const userPositionedRef = useRef(false);
 
-  const audioContextRef = useRef(null);
+  const userIdRef = useRef(userId);
+  const supabaseTokenRef = useRef(null);
+  userIdRef.current = userId;
   /** `time` value when the current play segment started. */
   const runStartTimeRef = useRef(null);
   /** Seconds from the current play segment already written to focus_sessions. */
   const segmentLoggedRef = useRef(0);
+  const wasRunningRef = useRef(false);
+  const prevTimerModeRef = useRef(null);
+  const prevPhaseRef = useRef(phase);
   const timeRef = useRef(time);
   const timerModeRef = useRef(timerMode);
   const pomodorosInCycleRef = useRef(pomodorosInCycle);
   const phaseRef = useRef(phase);
+  const focusRunDateRef = useRef(focusRunDate);
   timeRef.current = time;
   timerModeRef.current = timerMode;
   phaseRef.current = phase;
   pomodorosInCycleRef.current = pomodorosInCycle;
+  focusRunDateRef.current = focusRunDate;
 
   const refreshLoggedFocusTotals = useCallback(async () => {
     if (!userId || !isSignedIn) {
@@ -205,19 +526,37 @@ export function TimerProvider({ children }) {
     [userId, isSignedIn, getSupabaseToken, refreshLoggedFocusTotals]
   );
 
-  const logRunSegment = useCallback(
-    async (modeOverride) => {
-      const mode = timerModeRef.current;
-      const phaseVal = phaseRef.current;
-      if (!isFocusSegmentMode(mode, phaseVal)) return;
-      const segmentElapsed = getRunSegmentElapsed(mode, phaseVal, timeRef.current, runStartTimeRef.current);
-      const toLog = segmentElapsed - segmentLoggedRef.current;
-      if (toLog < 1) return;
-      segmentLoggedRef.current += toLog;
+  /**
+   * Persist elapsed focus time for the current run segment.
+   * Captures elapsed synchronously so callers can clear refs immediately after invoking.
+   */
+  const flushRunSegment = useCallback(
+    async (modeOverride, { mode: modeSnap, phase: phaseSnap, focusDate: focusDateSnap } = {}) => {
+      if (!userIdRef.current) return 0;
+
+      const mode = modeSnap ?? timerModeRef.current;
+      const phaseVal = phaseSnap ?? phaseRef.current;
+      const runDate = focusDateSnap ?? focusRunDateRef.current;
+      if (!isFocusSegmentMode(mode, phaseVal)) return 0;
+      if (runDate !== localDateKey()) return 0;
+
+      const runStart = runStartTimeRef.current;
+      const currentTime = timeRef.current;
+      const alreadyLogged = segmentLoggedRef.current;
+      const segmentElapsed = getRunSegmentElapsed(mode, phaseVal, currentTime, runStart);
+      const toLog = segmentElapsed - alreadyLogged;
+      if (toLog < 1) return 0;
+
+      segmentLoggedRef.current = alreadyLogged + toLog;
+      if (userIdRef.current) {
+        writeSegmentTracking(userIdRef.current, runStart, segmentLoggedRef.current);
+      }
+      setTodayLoggedFocusSeconds((prev) => prev + toLog);
       const logMode =
         modeOverride ||
         (mode === 'stopwatch' ? 'stopwatch' : mode === 'countdown' ? 'countdown' : 'pomodoro');
       await logSession({ durationSeconds: toLog, phase: 'session', mode: logMode });
+      return toLog;
     },
     [logSession]
   );
@@ -348,74 +687,18 @@ export function TimerProvider({ children }) {
     if (typeof window === 'undefined' || !userId || !isSignedIn) return;
     let cancelled = false;
     const load = async () => {
+      const local = readLocalTimerSnapshot(userId);
       const token = await getSupabaseToken();
       if (token) setSupabaseAuthToken(token);
       const remote = await getFocusTimerStateFromSupabase(userId);
       if (cancelled) return;
+
       const today = localDateKey();
-      if (remote && typeof remote === 'object') {
-        const timer = remote.timer || {};
-        const sessions = remote.sessions || {};
-        const settings = remote.settings || {};
-        const mode = timer.mode ?? 'pomodoro';
-        const ph = timer.phase ?? 'session';
-        const sm = settings.sessionMinutes ?? DEFAULT_SESSION;
-        const sbm = settings.shortBreakMinutes ?? DEFAULT_SHORT_BREAK;
-        const lbm = settings.longBreakMinutes ?? DEFAULT_LONG_BREAK;
-        const cm = settings.countdownMinutes ?? DEFAULT_COUNTDOWN;
-        setTimerMode(mode);
-        setPhase(ph);
-        setSessionMinutes(sm);
-        setShortBreakMinutes(sbm);
-        setLongBreakMinutes(lbm);
-        setCountdownMinutes(cm);
-        setAutoStartBreaks(settings.autoStartBreaks !== false);
-        setAlarmVolume(Math.max(0, Math.min(100, settings.alarmVolume ?? 60)));
-        setTickSound(settings.tickSound !== false);
-        const sessionsToday = (sessions.date ?? today) === today ? Math.max(0, sessions.today ?? 0) : 0;
-        const sessionsDateVal = (sessions.date ?? today) === today ? (sessions.date ?? today) : today;
-        const cycleCount = Math.max(0, Math.min(POMODOROS_BEFORE_LONG_BREAK, sessions.cycle ?? sessions.pomodorosInCycle ?? 0));
-        setSessionsCompletedToday(sessionsToday);
-        setSessionsDate(sessionsDateVal);
-        setPomodorosInCycle(cycleCount);
-        pomodorosInCycleRef.current = cycleCount;
-        let timeVal = typeof timer.time === 'number' ? timer.time : sm * 60;
-        const runDate = resolveFocusRunDate(timer.focusRunDate, timer.updatedAt);
-        const discarded = discardStaleFocusProgress({
-          timeVal,
-          runDate,
-          timerMode: mode,
-          phase: ph,
-          sessionMinutes: sm,
-          shortBreakMinutes: sbm,
-          longBreakMinutes: lbm,
-          countdownMinutes: cm,
-        });
-        timeVal = discarded.timeVal;
-        runStartTimeRef.current = null;
-        segmentLoggedRef.current = 0;
-        setFocusRunDate(discarded.focusRunDate);
-        setTime(timeVal);
-        setIsRunning(false);
-        if (remote.size && typeof remote.size.width === 'number' && typeof remote.size.height === 'number') {
-          setSize(remote.size);
-        }
-        setUserStorageItem(userId, 'focus-timer-time', String(timeVal));
-        setUserStorageItem(userId, 'focus-timer-updated-at', Date.now().toString());
-        setUserStorageItem(userId, 'focus-timer-running', 'false');
-        setUserStorageItem(userId, 'focus-timer-mode', mode);
-        setUserStorageItem(userId, 'focus-timer-phase', ph);
-        setUserStorageItem(userId, 'focus-timer-sessions-today', String(sessionsToday));
-        setUserStorageItem(userId, 'focus-timer-sessions-date', sessionsDateVal);
-        setUserStorageItem(userId, 'focus-timer-pomodoros-in-cycle', String(cycleCount));
-        setUserStorageItem(userId, 'focus-timer-run-date', discarded.focusRunDate || '');
-        setSupabaseHydrated(true);
-      } else {
+      const snapshot = pickTimerSnapshot(local, remote);
+
+      if (!snapshot) {
         loadSettingsFromStorage();
         const sm = getStoredInt(userId, 'focus-settings-session-minutes', DEFAULT_SESSION);
-        const sbm = getStoredInt(userId, 'focus-settings-short-break-minutes', DEFAULT_SHORT_BREAK);
-        const lbm = getStoredInt(userId, 'focus-settings-long-break-minutes', DEFAULT_LONG_BREAK);
-        const cm = getStoredInt(userId, 'focus-settings-countdown-minutes', DEFAULT_COUNTDOWN);
         const savedDate = getUserStorageItem(userId, 'focus-timer-sessions-date', 'focus-timer-sessions-date');
         const savedSessions = getUserStorageItem(userId, 'focus-timer-sessions-today', 'focus-timer-sessions-today');
         if (savedDate === today && savedSessions != null) {
@@ -428,64 +711,81 @@ export function TimerProvider({ children }) {
           setUserStorageItem(userId, 'focus-timer-sessions-today', '0');
         }
         const savedCycle = getUserStorageItem(userId, 'focus-timer-pomodoros-in-cycle', 'focus-timer-pomodoros-in-cycle');
-        const cycleCount = savedCycle != null && savedCycle !== ''
-          ? Math.max(0, Math.min(POMODOROS_BEFORE_LONG_BREAK, parseInt(savedCycle, 10) || 0))
-          : 0;
+        const cycleCount =
+          savedCycle != null && savedCycle !== ''
+            ? Math.max(0, Math.min(POMODOROS_BEFORE_LONG_BREAK, parseInt(savedCycle, 10) || 0))
+            : 0;
         setPomodorosInCycle(cycleCount);
         pomodorosInCycleRef.current = cycleCount;
-        const savedMode = getUserStorageItem(userId, 'focus-timer-mode', 'focus-timer-mode');
-        const savedPhase = getUserStorageItem(userId, 'focus-timer-phase', 'focus-timer-phase');
-        const mode = savedMode === 'stopwatch' || savedMode === 'countdown' ? savedMode : 'pomodoro';
-        const ph = savedPhase === 'shortBreak' || savedPhase === 'longBreak' ? savedPhase : 'session';
-        if (savedMode === 'stopwatch' || savedMode === 'countdown') setTimerMode(savedMode);
-        if (savedPhase === 'shortBreak' || savedPhase === 'longBreak') setPhase(savedPhase);
-        const savedTime = getUserStorageItem(userId, 'focus-timer-time', 'focus-timer-time');
-        const savedRunning = getUserStorageItem(userId, 'focus-timer-running', 'focus-timer-running');
-        const savedUpdatedAt = getUserStorageItem(userId, 'focus-timer-updated-at', 'focus-timer-updated-at');
-        const savedRunDate = getUserStorageItem(userId, 'focus-timer-run-date', 'focus-timer-run-date');
-        const nextTime = savedTime ? parseInt(savedTime, 10) : null;
-        let timeVal;
-        if (nextTime != null && !Number.isNaN(nextTime) && nextTime >= 0) {
-          timeVal = nextTime;
-        } else if (mode === 'stopwatch') {
-          timeVal = 0;
-        } else if (mode === 'countdown') {
-          timeVal = cm * 60;
-        } else if (ph === 'shortBreak') {
-          timeVal = sbm * 60;
-        } else if (ph === 'longBreak') {
-          timeVal = lbm * 60;
-        } else {
-          timeVal = sm * 60;
-        }
-        const runDate = resolveFocusRunDate(
-          savedRunDate || null,
-          savedUpdatedAt ? new Date(parseInt(savedUpdatedAt, 10)).toISOString() : null
-        );
-        const discarded = discardStaleFocusProgress({
-          timeVal,
-          runDate,
-          timerMode: mode,
-          phase: ph,
-          sessionMinutes: sm,
-          shortBreakMinutes: sbm,
-          longBreakMinutes: lbm,
-          countdownMinutes: cm,
-        });
-        runStartTimeRef.current = null;
-        segmentLoggedRef.current = 0;
-        setFocusRunDate(discarded.focusRunDate);
-        setTime(discarded.timeVal);
-        setUserStorageItem(userId, 'focus-timer-time', String(discarded.timeVal));
-        setUserStorageItem(userId, 'focus-timer-run-date', discarded.focusRunDate || '');
-        setIsRunning(false);
         setSupabaseHydrated(true);
+        settingsAppliedRef.current = true;
+        initialLoadDoneRef.current = true;
+        return;
       }
+
+      const fields = applyTimerSnapshotFields(snapshot, today);
+
+      const resolvedRunDate =
+        fields.isRunning && isFocusSegmentMode(fields.mode, fields.ph)
+          ? fields.focusRunDate || today
+          : fields.focusRunDate;
+
+      const segment = restoreSegmentTracking({
+        userId,
+        timerMode: fields.mode,
+        phase: fields.ph,
+        timeVal: fields.timeVal,
+        isRunning: fields.isRunning,
+        focusRunDate: resolvedRunDate,
+        today,
+      });
+      runStartTimeRef.current = segment.runStart;
+      segmentLoggedRef.current = segment.segmentLogged;
+      wasRunningRef.current = fields.isRunning;
+      prevTimerModeRef.current = fields.mode;
+      prevPhaseRef.current = fields.ph;
+      writeSegmentTracking(userId, segment.runStart, segment.segmentLogged);
+
+      setTimerMode(fields.mode);
+      setPhase(fields.ph);
+      setSessionMinutes(fields.sm);
+      setShortBreakMinutes(fields.sbm);
+      setLongBreakMinutes(fields.lbm);
+      setCountdownMinutes(fields.cm);
+      setAutoStartBreaks(fields.autoStartBreaks);
+      setAlarmVolume(fields.alarmVolume);
+      setTickSound(fields.tickSound);
+      setSessionsCompletedToday(fields.sessionsToday);
+      setSessionsDate(fields.sessionsDateVal);
+      setPomodorosInCycle(fields.cycleCount);
+      pomodorosInCycleRef.current = fields.cycleCount;
+
+      setFocusRunDate(resolvedRunDate);
+      setTime(fields.timeVal);
+      setIsRunning(fields.isRunning);
+
+      if (fields.size && typeof fields.size.width === 'number' && typeof fields.size.height === 'number') {
+        setSize(fields.size);
+      }
+
+      setUserStorageItem(userId, 'focus-timer-time', String(fields.timeVal));
+      setUserStorageItem(userId, 'focus-timer-updated-at', Date.now().toString());
+      setUserStorageItem(userId, 'focus-timer-running', fields.isRunning ? 'true' : 'false');
+      setUserStorageItem(userId, 'focus-timer-mode', fields.mode);
+      setUserStorageItem(userId, 'focus-timer-phase', fields.ph);
+      setUserStorageItem(userId, 'focus-timer-sessions-today', String(fields.sessionsToday));
+      setUserStorageItem(userId, 'focus-timer-sessions-date', fields.sessionsDateVal);
+      setUserStorageItem(userId, 'focus-timer-pomodoros-in-cycle', String(fields.cycleCount));
+      setUserStorageItem(userId, 'focus-timer-run-date', resolvedRunDate || '');
+
+      setSupabaseHydrated(true);
       settingsAppliedRef.current = true;
       initialLoadDoneRef.current = true;
     };
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId, isSignedIn, getSupabaseToken, loadSettingsFromStorage]);
 
   useEffect(() => {
@@ -500,7 +800,12 @@ export function TimerProvider({ children }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const handler = (e) => {
+    const handler = async (e) => {
+      const modeSnap = timerModeRef.current;
+      const phaseSnap = phaseRef.current;
+      const focusDateSnap = focusRunDateRef.current;
+      await flushRunSegment(undefined, { mode: modeSnap, phase: phaseSnap, focusDate: focusDateSnap });
+
       const d = e?.detail;
       if (d) {
         if (d.timerMode === 'stopwatch' || d.timerMode === 'countdown') setTimerMode(d.timerMode);
@@ -527,7 +832,7 @@ export function TimerProvider({ children }) {
     };
     window.addEventListener('focus-settings-applied', handler);
     return () => window.removeEventListener('focus-settings-applied', handler);
-  }, [loadSettingsFromStorage, getDurationSeconds]);
+  }, [loadSettingsFromStorage, getDurationSeconds, flushRunSegment]);
 
   const applyDefaultTimerLayout = useCallback(() => {
     setSize(computeResponsiveTimerSize());
@@ -569,6 +874,11 @@ export function TimerProvider({ children }) {
     setUserStorageItem(userId, 'focus-timer-mode', timerMode);
     setUserStorageItem(userId, 'focus-timer-phase', phase);
     setUserStorageItem(userId, 'focus-timer-run-date', focusRunDate || '');
+    if (isRunning && isFocusSegmentMode(timerMode, phase)) {
+      writeSegmentTracking(userId, runStartTimeRef.current, segmentLoggedRef.current);
+    } else {
+      writeSegmentTracking(userId, null, 0);
+    }
   }, [isRunning, time, userId, timerMode, phase, focusRunDate]);
 
   useEffect(() => {
@@ -591,22 +901,171 @@ export function TimerProvider({ children }) {
   }, [size, userId]);
 
   const supabaseSaveTimeoutRef = useRef(null);
+  const timerPersistStateRef = useRef({});
+
+  timerPersistStateRef.current = {
+    time,
+    isRunning,
+    timerMode,
+    phase,
+    focusRunDate,
+    sessionMinutes,
+    shortBreakMinutes,
+    longBreakMinutes,
+    countdownMinutes,
+    autoStartBreaks,
+    alarmVolume,
+    tickSound,
+    sessionsCompletedToday,
+    sessionsDate,
+    pomodorosInCycle,
+    position,
+    size,
+  };
+
+  const persistTimerToSupabase = useCallback(
+    async ({ keepalive = false } = {}) => {
+      if (typeof window === 'undefined' || !userId || !supabaseHydrated || !settingsAppliedRef.current) return;
+
+      const s = { ...timerPersistStateRef.current, time: timeRef.current };
+      const state = buildFocusTimerPersistPayload(s);
+      const token = (await getSupabaseToken()) || supabaseTokenRef.current;
+      if (token) {
+        supabaseTokenRef.current = token;
+        setSupabaseAuthToken(token);
+      }
+
+      await persistFocusTimerState({
+        userId,
+        state,
+        accessToken: token,
+        keepalive,
+      });
+    },
+    [userId, supabaseHydrated, getSupabaseToken]
+  );
+
+  const urgentFlushTimerPersist = useCallback(async (overrides = {}) => {
+    const activeUserId = userIdRef.current;
+    if (!activeUserId || !initialLoadDoneRef.current) return;
+
+    const s = { ...timerPersistStateRef.current, time: timeRef.current, ...overrides };
+    const state = buildFocusTimerPersistPayload(s);
+    const token = (await getSupabaseToken()) || supabaseTokenRef.current;
+
+    setUserStorageItem(activeUserId, 'focus-timer-time', String(s.time));
+    setUserStorageItem(activeUserId, 'focus-timer-updated-at', Date.now().toString());
+    setUserStorageItem(activeUserId, 'focus-timer-running', s.isRunning ? 'true' : 'false');
+    setUserStorageItem(activeUserId, 'focus-timer-mode', s.timerMode);
+    setUserStorageItem(activeUserId, 'focus-timer-phase', s.phase);
+    setUserStorageItem(activeUserId, 'focus-timer-run-date', s.focusRunDate || '');
+
+    if (token) {
+      supabaseTokenRef.current = token;
+      setSupabaseAuthToken(token);
+      sendFocusTimerStateKeepalive(activeUserId, state, token);
+      await setFocusTimerStateToSupabase(activeUserId, state);
+    }
+  }, [getSupabaseToken]);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !userId || !supabaseHydrated || !settingsAppliedRef.current) return;
+    if (isRunning) return;
     if (supabaseSaveTimeoutRef.current) clearTimeout(supabaseSaveTimeoutRef.current);
     supabaseSaveTimeoutRef.current = setTimeout(() => {
       supabaseSaveTimeoutRef.current = null;
-      const state = {
-        timer: { time, isRunning, updatedAt: new Date().toISOString(), mode: timerMode, phase, focusRunDate },
-        sessions: { today: sessionsCompletedToday, date: sessionsDate || localDateKey(), cycle: pomodorosInCycle },
-        settings: { timerMode, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, autoStartBreaks, alarmVolume, tickSound },
-        position: position && typeof position.x === 'number' ? position : undefined,
-        size: size && size.width >= 350 && size.height >= 300 ? size : undefined,
-      };
-      setFocusTimerStateToSupabase(userId, state);
-    }, 2500);
-    return () => { if (supabaseSaveTimeoutRef.current) clearTimeout(supabaseSaveTimeoutRef.current); };
-  }, [userId, time, isRunning, timerMode, phase, focusRunDate, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, autoStartBreaks, alarmVolume, tickSound, sessionsCompletedToday, sessionsDate, pomodorosInCycle, position, size, supabaseHydrated]);
+      void persistTimerToSupabase();
+    }, 800);
+    return () => {
+      if (supabaseSaveTimeoutRef.current) clearTimeout(supabaseSaveTimeoutRef.current);
+    };
+  }, [
+    userId,
+    isRunning,
+    time,
+    timerMode,
+    phase,
+    focusRunDate,
+    sessionMinutes,
+    shortBreakMinutes,
+    longBreakMinutes,
+    countdownMinutes,
+    autoStartBreaks,
+    alarmVolume,
+    tickSound,
+    sessionsCompletedToday,
+    sessionsDate,
+    pomodorosInCycle,
+    position,
+    size,
+    supabaseHydrated,
+    persistTimerToSupabase,
+  ]);
+
+  useEffect(() => {
+    if (!isRunning || !userId || !supabaseHydrated || !settingsAppliedRef.current) return;
+    void persistTimerToSupabase();
+    const id = setInterval(() => {
+      void persistTimerToSupabase();
+    }, 10_000);
+    return () => clearInterval(id);
+  }, [isRunning, userId, supabaseHydrated, persistTimerToSupabase]);
+
+  useEffect(() => {
+    if (!userId || !supabaseHydrated || !initialLoadDoneRef.current) return;
+    void persistTimerToSupabase();
+  }, [isRunning, userId, supabaseHydrated, persistTimerToSupabase]);
+
+  const pauseTimerForLogout = useCallback(async () => {
+    const activeUserId = userIdRef.current;
+    if (!activeUserId || !initialLoadDoneRef.current) return;
+
+    const s = { ...timerPersistStateRef.current, time: timeRef.current };
+    if (s.isRunning && s.focusRunDate === localDateKey() && isFocusSegmentMode(s.timerMode, s.phase)) {
+      await flushRunSegment(undefined, {
+        mode: s.timerMode,
+        phase: s.phase,
+        focusDate: s.focusRunDate,
+      });
+    }
+
+    setIsRunning(false);
+    await urgentFlushTimerPersist({ isRunning: false });
+  }, [flushRunSegment, urgentFlushTimerPersist]);
+
+  useEffect(() => {
+    return registerFocusTimerUrgentFlush(urgentFlushTimerPersist);
+  }, [urgentFlushTimerPersist]);
+
+  useEffect(() => {
+    return registerFocusTimerLogoutPauseFlush(pauseTimerForLogout);
+  }, [pauseTimerForLogout]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const flushOnHide = () => {
+      if (document.visibilityState !== 'hidden') return;
+      void (async () => {
+        await flushRunSegment();
+        await urgentFlushTimerPersist();
+      })();
+    };
+
+    const flushOnPageHide = () => {
+      void (async () => {
+        await flushRunSegment();
+        await urgentFlushTimerPersist();
+      })();
+    };
+
+    document.addEventListener('visibilitychange', flushOnHide);
+    window.addEventListener('pagehide', flushOnPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', flushOnHide);
+      window.removeEventListener('pagehide', flushOnPageHide);
+    };
+  }, [urgentFlushTimerPersist, flushRunSegment]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -621,12 +1080,28 @@ export function TimerProvider({ children }) {
     setFocusRunDate(today);
   }, [isRunning, focusRunDate, timerMode, phase, time, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes]);
 
-  /** Start a new play segment whenever the timer begins running. */
-  const wasRunningRef = useRef(false);
+  /** Reset segment tracking when pomodoro phase changes while the timer keeps running. */
   useEffect(() => {
-    if (isRunning && !wasRunningRef.current) {
+    if (prevPhaseRef.current === phase) return;
+    const wasFocus = isFocusSegmentMode(timerMode, prevPhaseRef.current);
+    const isFocus = isFocusSegmentMode(timerMode, phase);
+    if (wasFocus && !isFocus) {
+      segmentLoggedRef.current = 0;
+      runStartTimeRef.current = null;
+    } else if (!wasFocus && isFocus && isRunning) {
       runStartTimeRef.current = timeRef.current;
       segmentLoggedRef.current = 0;
+    }
+    prevPhaseRef.current = phase;
+  }, [phase, timerMode, isRunning]);
+
+  /** Start a new play segment whenever the timer begins running. */
+  useEffect(() => {
+    if (isRunning && !wasRunningRef.current) {
+      if (runStartTimeRef.current == null) {
+        runStartTimeRef.current = timeRef.current;
+        segmentLoggedRef.current = 0;
+      }
     }
     wasRunningRef.current = isRunning;
   }, [isRunning]);
@@ -643,7 +1118,9 @@ export function TimerProvider({ children }) {
           clearInterval(interval);
           if (timerMode === 'countdown') {
             playPhaseStartRing();
-            if (userId) void logRunSegment('countdown');
+            if (userId) void flushRunSegment('countdown');
+            runStartTimeRef.current = null;
+            segmentLoggedRef.current = 0;
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('celebration-trigger', { detail: { type: 'focus_session', sessionMinutes: countdownMinutes, mode: 'countdown' } }));
             }
@@ -652,7 +1129,7 @@ export function TimerProvider({ children }) {
           }
           if (timerMode === 'pomodoro') {
             if (phase === 'session') {
-              if (userId) void logRunSegment('pomodoro');
+              if (userId) void flushRunSegment('pomodoro');
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('celebration-trigger', { detail: { type: 'focus_session', sessionMinutes, mode: 'pomodoro' } }));
               }
@@ -666,6 +1143,8 @@ export function TimerProvider({ children }) {
               setPhase(doLongBreak ? 'longBreak' : 'shortBreak');
               const breakMins = doLongBreak ? longBreakMinutes : shortBreakMinutes;
               const nextTime = breakMins * 60;
+              segmentLoggedRef.current = 0;
+              runStartTimeRef.current = autoStartBreaks ? nextTime : null;
               if (autoStartBreaks) setTimeout(() => setIsRunning(true), 100);
               else setIsRunning(false);
               return nextTime;
@@ -674,6 +1153,8 @@ export function TimerProvider({ children }) {
               playPhaseStartRing();
               setPhase('session');
               const nextTime = sessionMinutes * 60;
+              segmentLoggedRef.current = 0;
+              runStartTimeRef.current = autoStartBreaks ? nextTime : null;
               if (autoStartBreaks) setTimeout(() => setIsRunning(true), 100);
               else setIsRunning(false);
               return nextTime;
@@ -684,6 +1165,8 @@ export function TimerProvider({ children }) {
               setPomodorosInCycle(0);
               setPhase('session');
               const nextTime = sessionMinutes * 60;
+              segmentLoggedRef.current = 0;
+              runStartTimeRef.current = autoStartBreaks ? nextTime : null;
               if (autoStartBreaks) setTimeout(() => setIsRunning(true), 100);
               else setIsRunning(false);
               return nextTime;
@@ -696,9 +1179,9 @@ export function TimerProvider({ children }) {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, autoStartBreaks, playAlarm, playPhaseStartRing, playTick, tickSound, longBreakMinutes, countdownMinutes, userId, logRunSegment]);
+  }, [isRunning, timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, autoStartBreaks, playAlarm, playPhaseStartRing, playTick, tickSound, longBreakMinutes, countdownMinutes, userId, flushRunSegment]);
 
-  /** Persist focus time in 1-minute chunks while the timer runs (all modes). */
+  /** Persist focus time in chunks while the timer runs (all modes). */
   useEffect(() => {
     if (!isRunning || !userId || focusRunDate !== localDateKey()) return;
     const checkpoint = () => {
@@ -709,26 +1192,43 @@ export function TimerProvider({ children }) {
         timeRef.current,
         runStartTimeRef.current
       );
-      if (segmentElapsed - segmentLoggedRef.current >= 60) {
-        void logRunSegment();
+      if (segmentElapsed - segmentLoggedRef.current >= 1) {
+        void flushRunSegment();
       }
     };
     checkpoint();
     const id = setInterval(checkpoint, 10_000);
     return () => clearInterval(id);
-  }, [isRunning, userId, timerMode, phase, logRunSegment, focusRunDate]);
+  }, [isRunning, userId, timerMode, phase, flushRunSegment, focusRunDate]);
 
   useEffect(() => {
-    runStartTimeRef.current = null;
-    segmentLoggedRef.current = 0;
-  }, [timerMode]);
+    if (!initialLoadDoneRef.current) return;
+    if (prevTimerModeRef.current === null) {
+      prevTimerModeRef.current = timerMode;
+      return;
+    }
+    if (prevTimerModeRef.current === timerMode) return;
+    const prevMode = prevTimerModeRef.current;
+    void (async () => {
+      await flushRunSegment(undefined, {
+        mode: prevMode,
+        phase: phaseRef.current,
+        focusDate: focusRunDateRef.current,
+      });
+      runStartTimeRef.current = null;
+      segmentLoggedRef.current = 0;
+      if (userIdRef.current) writeSegmentTracking(userIdRef.current, null, 0);
+    })();
+    prevTimerModeRef.current = timerMode;
+  }, [timerMode, flushRunSegment]);
 
   const handlePlayPause = useCallback(() => {
     if (isRunning) {
-      if (userId && focusRunDate === localDateKey()) {
-        void logRunSegment();
-      }
-      setIsRunning(false);
+      void (async () => {
+        await flushRunSegment();
+        setIsRunning(false);
+        await urgentFlushTimerPersist({ isRunning: false });
+      })();
       return;
     }
     const today = localDateKey();
@@ -740,61 +1240,60 @@ export function TimerProvider({ children }) {
     }
     setFocusRunDate(today);
     setIsRunning(true);
-  }, [timerMode, isRunning, time, userId, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, focusRunDate, logRunSegment]);
+  }, [timerMode, isRunning, time, userId, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, focusRunDate, flushRunSegment, urgentFlushTimerPersist]);
 
   const handleReset = useCallback(() => {
-    if (isRunning && userId && focusRunDate === localDateKey()) {
-      void logRunSegment();
-    }
-    runStartTimeRef.current = null;
-    segmentLoggedRef.current = 0;
-    setFocusRunDate(null);
-    setTime(timerMode === 'stopwatch' ? 0 : getDurationSeconds());
-    setIsRunning(false);
-  }, [timerMode, getDurationSeconds, isRunning, userId, focusRunDate, logRunSegment]);
+    void (async () => {
+      await flushRunSegment();
+      runStartTimeRef.current = null;
+      segmentLoggedRef.current = 0;
+      setFocusRunDate(null);
+      setTime(timerMode === 'stopwatch' ? 0 : getDurationSeconds());
+      setIsRunning(false);
+    })();
+  }, [timerMode, getDurationSeconds, flushRunSegment]);
 
   const handleSwitchPomodoroPhase = useCallback((newPhase) => {
     if (timerMode !== 'pomodoro' || newPhase === phase) return;
-    if (phase === 'session' && isRunning && userId && focusRunDate === localDateKey()) {
-      void logRunSegment('pomodoro');
-    }
-    runStartTimeRef.current = null;
-    segmentLoggedRef.current = 0;
-    setPhase(newPhase);
-    if (newPhase === 'session') setTime(sessionMinutes * 60);
-    else if (newPhase === 'shortBreak') setTime(shortBreakMinutes * 60);
-    else setTime(longBreakMinutes * 60);
-    setIsRunning(false);
-  }, [timerMode, phase, isRunning, userId, sessionMinutes, shortBreakMinutes, longBreakMinutes, focusRunDate, logRunSegment]);
+    void (async () => {
+      if (phase === 'session') {
+        await flushRunSegment('pomodoro');
+      }
+      runStartTimeRef.current = null;
+      segmentLoggedRef.current = 0;
+      setPhase(newPhase);
+      if (newPhase === 'session') setTime(sessionMinutes * 60);
+      else if (newPhase === 'shortBreak') setTime(shortBreakMinutes * 60);
+      else setTime(longBreakMinutes * 60);
+      setIsRunning(false);
+    })();
+  }, [timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, flushRunSegment]);
 
   const handlePomodoroForward = useCallback(() => {
     if (timerMode !== 'pomodoro') return;
-    if (phase === 'session' && isRunning && userId && focusRunDate === localDateKey()) {
-      void logRunSegment('pomodoro');
-    }
-    runStartTimeRef.current = null;
-    segmentLoggedRef.current = 0;
+    void (async () => {
+      if (phase === 'session') {
+        await flushRunSegment('pomodoro');
+      }
+      runStartTimeRef.current = null;
+      segmentLoggedRef.current = 0;
 
-    if (phase === 'session') {
-      const nextInCycle = pomodorosInCycleRef.current + 1;
-      pomodorosInCycleRef.current = nextInCycle;
-      setPomodorosInCycle(nextInCycle);
-      setSessionsCompletedToday((n) => n + 1);
-      setSessionsDate(localDateKey());
-      const doLongBreak = nextInCycle >= POMODOROS_BEFORE_LONG_BREAK;
-      setPhase(doLongBreak ? 'longBreak' : 'shortBreak');
-      setTime(doLongBreak ? longBreakMinutes * 60 : shortBreakMinutes * 60);
-    } else if (phase === 'shortBreak') {
-      setPhase('session');
-      setTime(sessionMinutes * 60);
-    } else {
-      pomodorosInCycleRef.current = 0;
-      setPomodorosInCycle(0);
-      setPhase('session');
-      setTime(sessionMinutes * 60);
-    }
-    setIsRunning(false);
-  }, [timerMode, phase, isRunning, userId, sessionMinutes, shortBreakMinutes, longBreakMinutes, focusRunDate, logRunSegment]);
+      if (phase === 'session') {
+        // Skip to break without counting an incomplete session toward today's total.
+        setPhase('shortBreak');
+        setTime(shortBreakMinutes * 60);
+      } else if (phase === 'shortBreak') {
+        setPhase('session');
+        setTime(sessionMinutes * 60);
+      } else {
+        pomodorosInCycleRef.current = 0;
+        setPomodorosInCycle(0);
+        setPhase('session');
+        setTime(sessionMinutes * 60);
+      }
+      setIsRunning(false);
+    })();
+  }, [timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, flushRunSegment]);
 
   const value = {
     timerMode,
