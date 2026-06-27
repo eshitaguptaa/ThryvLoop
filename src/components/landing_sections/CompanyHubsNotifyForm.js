@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
 
 export default function CompanyHubsNotifyForm() {
   const [email, setEmail] = useState('');
@@ -72,6 +73,8 @@ export default function CompanyHubsNotifyForm() {
           {message}
         </p>
       ) : null}
+
+      <LegalAuthConsent variant="waitlist" className="mt-4 max-w-lg mx-auto" />
     </>
   );
 }

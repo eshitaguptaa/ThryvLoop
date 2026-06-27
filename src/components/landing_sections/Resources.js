@@ -187,7 +187,7 @@ export default function Resources() {
               </p>
               {/* Link color: --primary */}
               <Link
-                href="#"
+                href="/help"
                 className="inline-flex items-center font-bold text-[var(--primary)] group/link"
               >
                 <span>Visit Full Help Center</span>

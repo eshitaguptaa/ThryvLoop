@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSignIn, useSignUp } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
+import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
 
 const inputClass =
   'w-full px-3 py-1.25 rounded-lg sm:py-1.5 bg-muted border border-border focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-sm sm:text-base text-foreground placeholder:text-muted-foreground';
@@ -379,6 +380,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                     Sign Up
                   </button>
                 </div>
+              )}
+
+              {!isVerifying && !forgotStep && mode === 'signup' && (
+                <LegalAuthConsent className="mb-2.5" />
               )}
 
               {!isVerifying && !forgotStep && (

@@ -1,11 +1,24 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import ThemeToggle from '@/components/ThemeToggle';
 import { LANDING_SECTIONS, scrollToLandingSection } from '@/lib/landingScroll';
+
+/** Landing nav sections hidden on standalone marketing/legal pages. */
+const STANDALONE_LANDING_PATHS = ['/help', '/privacy', '/terms', '/dpa', '/billing'];
+
+function isStandaloneLandingPage(pathname) {
+  if (!pathname) return false;
+  return STANDALONE_LANDING_PATHS.some((path) => pathname.startsWith(path));
+}
+
+const STANDALONE_HIDDEN_SECTIONS = new Set(
+  LANDING_SECTIONS.map(({ id }) => id),
+);
 
 const panelEase = [0.32, 0.72, 0, 1];
 const panelTransition = { duration: 0.32, ease: panelEase };
@@ -62,7 +75,19 @@ function MenuIcon({ open }) {
 }
 
 export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isStandalonePage = isStandaloneLandingPage(pathname);
+  const navSections = useMemo(
+    () =>
+      isStandalonePage
+        ? LANDING_SECTIONS.filter(({ id }) => !STANDALONE_HIDDEN_SECTIONS.has(id))
+        : LANDING_SECTIONS,
+    [isStandalonePage],
+  );
+  const showSectionNav = navSections.length > 0;
 
   const unlockScroll = useCallback(() => {
     unlockBodyScrollUnlessAuthOpen();
@@ -90,14 +115,20 @@ export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
   const handleNavClick = (event, sectionId) => {
     event.preventDefault();
     closeMenu();
+    if (isStandalonePage) {
+      router.push(`/#${sectionId}`);
+      return;
+    }
     scrollToLandingSection(sectionId);
   };
 
-  const scrollToTop = (event) => {
-    event.preventDefault();
+  const handleLogoClick = (event) => {
     closeMenu();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    window.history.replaceState(null, '', '/');
+    if (pathname === '/') {
+      event.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.history.replaceState(null, '', '/');
+    }
   };
 
   const handleSignIn = () => {
@@ -113,10 +144,14 @@ export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
   return (
     <>
       <nav className="fixed top-0 w-full h-16 bg-background/95 backdrop-blur-md z-[1000] border-b border-border">
-        <div className="max-w-[1280px] mx-auto h-full px-4 sm:px-6 lg:px-8 grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4">
+        <div
+          className={`max-w-[1280px] mx-auto h-full px-4 sm:px-6 lg:px-8 grid items-center gap-3 sm:gap-4 ${
+            showSectionNav ? 'grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto_1fr]' : 'grid-cols-[1fr_auto]'
+          }`}
+        >
           <Link
             href="/"
-            onClick={scrollToTop}
+            onClick={handleLogoClick}
             className="flex items-center gap-2 no-underline justify-self-start min-w-0"
           >
             <Image
@@ -131,19 +166,21 @@ export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
             </span>
           </Link>
 
-          <ul className="hidden lg:flex items-center justify-center gap-3 xl:gap-5 list-none m-0 p-0 min-w-0">
-            {LANDING_SECTIONS.map(({ id, label }) => (
-              <li key={id}>
-                <a
-                  href={`#${id}`}
-                  onClick={(event) => handleNavClick(event, id)}
-                  className="text-muted-foreground font-medium text-sm no-underline transition-colors hover:text-foreground whitespace-nowrap"
-                >
-                  {label}
-                </a>
-              </li>
-            ))}
-          </ul>
+          {showSectionNav && (
+            <ul className="hidden lg:flex items-center justify-center gap-3 xl:gap-5 list-none m-0 p-0 min-w-0">
+              {navSections.map(({ id, label }) => (
+                <li key={id}>
+                  <a
+                    href={isStandalonePage ? `/#${id}` : `#${id}`}
+                    onClick={(event) => handleNavClick(event, id)}
+                    className="text-muted-foreground font-medium text-sm no-underline transition-colors hover:text-foreground whitespace-nowrap"
+                  >
+                    {label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className="flex gap-1.5 sm:gap-2 lg:gap-3 items-center justify-self-end shrink-0">
             <ThemeToggle variant="landing" />
@@ -225,33 +262,35 @@ export default function NavbarLanding({ onSignInClick, onGetStartedClick }) {
                 </button>
               </div>
 
-              <nav className="flex-1 overflow-y-auto overscroll-contain px-4 py-5">
-                <p className="px-3 mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Explore
-                </p>
-                <ul className="list-none m-0 p-0 space-y-1.5">
-                  {LANDING_SECTIONS.map(({ id, label }) => (
-                    <li key={id}>
-                      <a
-                        href={`#${id}`}
-                        onClick={(event) => handleNavClick(event, id)}
-                        className="group flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 no-underline text-foreground font-medium transition-colors hover:bg-indigo-500/8 active:bg-indigo-500/12"
-                      >
-                        <span>{label}</span>
-                        <svg
-                          className="w-4 h-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-indigo-500"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden
+              {showSectionNav && (
+                <nav className="flex-1 overflow-y-auto overscroll-contain px-4 py-5">
+                  <p className="px-3 mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Explore
+                  </p>
+                  <ul className="list-none m-0 p-0 space-y-1.5">
+                    {navSections.map(({ id, label }) => (
+                      <li key={id}>
+                        <a
+                          href={isStandalonePage ? `/#${id}` : `#${id}`}
+                          onClick={(event) => handleNavClick(event, id)}
+                          className="group flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 no-underline text-foreground font-medium transition-colors hover:bg-indigo-500/8 active:bg-indigo-500/12"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+                          <span>{label}</span>
+                          <svg
+                            className="w-4 h-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-indigo-500"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              )}
 
               <div className="shrink-0 border-t border-border/80 bg-muted/30 px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3">
                 <button

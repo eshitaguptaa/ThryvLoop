@@ -17,6 +17,11 @@ import { AssistantProvider } from '@/contexts/AssistantContext';
 function isPublicAppRoute(pathname) {
   if (!pathname) return false;
   if (pathname === '/') return true;
+  if (pathname.startsWith('/help')) return true;
+  if (pathname.startsWith('/privacy')) return true;
+  if (pathname.startsWith('/terms')) return true;
+  if (pathname.startsWith('/dpa')) return true;
+  if (pathname.startsWith('/billing')) return true;
   if (pathname.startsWith('/signup')) return true;
   if (pathname.startsWith('/auth')) return true;
   return false;
