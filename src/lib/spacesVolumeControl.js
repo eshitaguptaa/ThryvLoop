@@ -102,7 +102,7 @@ export function applySpacesBaseVolume(
   if (clamped > 0) {
     window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
     window.dispatchEvent(
-      new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: true } }),
+      new CustomEvent('soundscape-play-pause-changed', { detail: { isPlaying: true, syncOnly: true } }),
     );
   }
 

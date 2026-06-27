@@ -190,10 +190,6 @@ export default function Solutions() {
               >
                 Start Your 14-Day Free Trial <span style={{ transition: "transform 0.3s ease" }} className="group-hover:translate-x-1">→</span>
               </Link>
-
-              <p className="mt-4 text-sm" style={{ color: "var(--muted-foreground)" }}>
-                No credit card required
-              </p>
             </div>
             </ScrollItem>
 

@@ -48,10 +48,34 @@ export function warmSoundscapeAudio(soundId, src) {
 /** Start or resume a layer at full level during a user gesture (no fade). */
 export function playSoundscapeAudioImmediate(soundId, src, targetVolume) {
   if (targetVolume <= 0) return null;
-  const audio = warmSoundscapeAudio(soundId, src);
+  const { audio } = getOrCreateSoundscapeAudio(soundId, src);
+  try {
+    audio.load();
+  } catch {
+    // play() will retry
+  }
   audio.volume = targetVolume;
   void audio.play().catch(() => {});
   return audio;
+}
+
+/**
+ * Play every layer in a mix immediately — must run inside a user gesture (click).
+ * @param {Array<{ id: string, volume: number }>} sounds
+ * @param {number} masterVol 0–100
+ * @param {string|null} soloId
+ */
+export function playSoundscapeMixImmediate(sounds, masterVol, soloId = null) {
+  if (!Array.isArray(sounds) || masterVol <= 0) return;
+  sounds.forEach((sound) => {
+    if (!sound?.id || sound.id === 'spaces') return;
+    const src = SOUNDSCAPE_SOUND_FILES[sound.id];
+    if (!src) return;
+    let layerVol = (sound.volume / 100) * (masterVol / 100);
+    if (soloId !== null && sound.id !== soloId) layerVol = 0;
+    if (layerVol <= 0) return;
+    playSoundscapeAudioImmediate(sound.id, src, layerVol);
+  });
 }
 
 /** Preload all sounds in the current mix. */
