@@ -1,4 +1,5 @@
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { toGoogleCalendarEventDateTime } from '@/lib/calendarDateUtils';
 import { getValidAccessToken } from '@/lib/workspace/connections';
 import { formatGoogleApiError } from '@/lib/workspace/googleApiErrors';
 import {
@@ -8,6 +9,12 @@ import {
 
 const PRIMARY_EVENTS_URL =
   'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+
+const GOOGLE_TIMEZONE_URL =
+  'https://www.googleapis.com/calendar/v3/users/me/settings/timezone';
+
+/** @type {Map<string, { value: string, expiresAt: number }>} */
+const googleTimeZoneCache = new Map();
 
 /**
  * @param {string} userId
@@ -31,6 +38,54 @@ async function getGoogleWriteContext(userId) {
   return { ok: true, token };
 }
 
+/** @param {string} token */
+async function fetchGoogleCalendarTimeZone(token) {
+  const cached = googleTimeZoneCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const res = await fetch(GOOGLE_TIMEZONE_URL, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = await res.json();
+  if (!res.ok || typeof json.value !== 'string' || !json.value.trim()) {
+    return null;
+  }
+
+  const value = json.value.trim();
+  googleTimeZoneCache.set(token, { value, expiresAt: Date.now() + 10 * 60 * 1000 });
+  return value;
+}
+
+/**
+ * @param {{
+ *   startsAt: Date;
+ *   endsAt: Date;
+ *   startsAtLocal?: string | null;
+ *   endsAtLocal?: string | null;
+ *   timeZone?: string | null;
+ * }} input
+ * @param {string | null | undefined} fallbackTimeZone
+ */
+function buildGoogleEventDateTimes(input, fallbackTimeZone) {
+  const timeZone =
+    (typeof input.timeZone === 'string' && input.timeZone.trim() ? input.timeZone.trim() : null) ||
+    (typeof fallbackTimeZone === 'string' && fallbackTimeZone.trim() ? fallbackTimeZone.trim() : null);
+
+  if (!timeZone) {
+    return {
+      start: { dateTime: input.startsAt.toISOString() },
+      end: { dateTime: input.endsAt.toISOString() },
+    };
+  }
+
+  return {
+    start: toGoogleCalendarEventDateTime(input.startsAt, timeZone, input.startsAtLocal),
+    end: toGoogleCalendarEventDateTime(input.endsAt, timeZone, input.endsAtLocal),
+  };
+}
+
 /**
  * @param {{
  *   title: string;
@@ -40,18 +95,24 @@ async function getGoogleWriteContext(userId) {
  *   location?: string | null;
  *   showAs: string;
  *   remindBeforeMinutes?: number | null;
+ *   timeZone?: string | null;
+ *   startsAtLocal?: string | null;
+ *   endsAtLocal?: string | null;
  * }} input
+ * @param {string | null | undefined} fallbackTimeZone
  */
-function buildGoogleEventBody(input) {
+function buildGoogleEventBody(input, fallbackTimeZone) {
+  const { start, end } = buildGoogleEventDateTimes(input, fallbackTimeZone);
+
   /** @type {Record<string, unknown>} */
   const body = {
     summary: input.title,
-    start: { dateTime: input.startsAt.toISOString(), timeZone: 'UTC' },
-    end: { dateTime: input.endsAt.toISOString(), timeZone: 'UTC' },
+    start,
+    end,
     transparency: input.showAs === 'free' ? 'transparent' : 'opaque',
   };
-  if (input.description) body.description = input.description;
-  if (input.location) body.location = input.location;
+  if (input.description?.trim()) body.description = input.description.trim();
+  if (input.location?.trim()) body.location = input.location.trim();
   if (input.remindBeforeMinutes != null && input.remindBeforeMinutes > 0) {
     body.reminders = {
       useDefault: false,
@@ -71,6 +132,9 @@ function buildGoogleEventBody(input) {
  *   location?: string | null;
  *   showAs: string;
  *   remindBeforeMinutes?: number | null;
+ *   timeZone?: string | null;
+ *   startsAtLocal?: string | null;
+ *   endsAtLocal?: string | null;
  * }} input
  * @returns {Promise<{ ok: true, googleEventId: string } | { ok: false, error: string }>}
  */
@@ -81,18 +145,21 @@ export async function createGoogleCalendarEvent(userId, input) {
     return ctx;
   }
 
+  const googleTimeZone = input.timeZone ? null : await fetchGoogleCalendarTimeZone(ctx.token);
+  const body = buildGoogleEventBody(input, googleTimeZone);
+
   const res = await fetch(PRIMARY_EVENTS_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${ctx.token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(buildGoogleEventBody(input)),
+    body: JSON.stringify(body),
   });
   const json = await res.json();
   if (!res.ok) {
     const error = formatGoogleApiError(json, 'Failed to create Google Calendar event');
-    console.error('[google-calendar-push] create failed:', userId, res.status, error);
+    console.error('[google-calendar-push] create failed:', userId, res.status, error, body);
     return { ok: false, error };
   }
   if (!json.id) return { ok: false, error: 'Google Calendar did not return an event id' };
@@ -110,6 +177,9 @@ export async function createGoogleCalendarEvent(userId, input) {
  *   location?: string | null;
  *   showAs: string;
  *   remindBeforeMinutes?: number | null;
+ *   timeZone?: string | null;
+ *   startsAtLocal?: string | null;
+ *   endsAtLocal?: string | null;
  * }} input
  * @returns {Promise<{ ok: true } | { ok: false, error: string }>}
  */
@@ -117,13 +187,16 @@ export async function updateGoogleCalendarEvent(userId, googleEventId, input) {
   const ctx = await getGoogleWriteContext(userId);
   if (!ctx.ok) return ctx;
 
+  const googleTimeZone = input.timeZone ? null : await fetchGoogleCalendarTimeZone(ctx.token);
+  const body = buildGoogleEventBody(input, googleTimeZone);
+
   const res = await fetch(`${PRIMARY_EVENTS_URL}/${encodeURIComponent(googleEventId)}`, {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${ctx.token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(buildGoogleEventBody(input)),
+    body: JSON.stringify(body),
   });
   const json = await res.json();
   if (!res.ok) {

@@ -17,6 +17,22 @@ export function isValidTheme(value) {
   return THEME_OPTIONS.includes(value);
 }
 
+/** Resolve whether the boot loader should use the dark palette (sync, before React paint). */
+export function resolveLoaderThemeDark() {
+  if (typeof window === 'undefined') return true;
+  const root = document.documentElement;
+  if (root.classList.contains('dark')) return true;
+  if (root.classList.contains('light')) return false;
+  try {
+    const stored = localStorage.getItem(NEXT_THEMES_STORAGE_KEY);
+    if (stored === 'light') return false;
+    if (stored === 'dark') return true;
+  } catch {
+    // ignore
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 /** Read theme from next-themes localStorage (shared across signed-in and signed-out pages). */
 export function readBrowserTheme() {
   if (typeof window === 'undefined') return null;

@@ -1,7 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Calendar, Heart, Loader2, MapPin, Trash2, Video, X, Bell } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlignLeft,
+  Bell,
+  Calendar,
+  Clock,
+  Heart,
+  Loader2,
+  MapPin,
+  Trash2,
+  Video,
+  X,
+} from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 import {
   DEFAULT_CALENDAR_REMIND_MINUTES,
@@ -13,22 +24,20 @@ import {
 import {
   parseCalendarDateTime,
   parseInstant,
+  resolveLocalTimeZone,
   toDatetimeLocalValue,
+  defaultRangeForCalendarDay,
 } from '@/lib/calendarDateUtils';
 import { findOverlappingEvents } from '@/lib/calendarEventLayout';
+import CalendarDateTimeField from '@/components/workspace/CalendarDateTimeField';
+
+const fieldLabelClass = 'block text-sm font-semibold text-foreground mb-2';
 
 const inputClass =
-  'w-full px-4 py-3 border-2 border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm text-foreground shadow-sm hover:shadow-md transition-shadow disabled:bg-muted disabled:opacity-70';
+  'w-full rounded-xl border border-border bg-background px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60 transition-[box-shadow,border-color] [color-scheme:light] dark:[color-scheme:dark]';
 
-const labelClass = 'block text-sm font-semibold text-foreground mb-2';
-
-function defaultRangeForDay(day) {
-  const start = new Date(day);
-  start.setHours(9, 0, 0, 0);
-  const end = new Date(day);
-  end.setHours(10, 0, 0, 0);
-  return { start, end };
-}
+const sectionClass =
+  'rounded-2xl border border-border bg-muted/20 dark:bg-muted/10 p-6 space-y-5';
 
 function formatEventWhen(startsAt, endsAt) {
   const start = new Date(startsAt);
@@ -86,6 +95,8 @@ export default function CalendarEventModal({
   const [remindEnabled, setRemindEnabled] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [activePicker, setActivePicker] = useState(null);
+  const initializedForOpenRef = useRef(false);
 
   const displayError = localError || saveError;
 
@@ -116,11 +127,18 @@ export default function CalendarEventModal({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedForOpenRef.current = false;
+      return;
+    }
+    if (initializedForOpenRef.current) return;
+    initializedForOpenRef.current = true;
+
     setConfirmDelete(false);
     setLocalError('');
+    setActivePicker(null);
     if (mode === 'create') {
-      const range = initialRange ?? defaultRangeForDay(anchorDay || new Date());
+      const range = initialRange ?? defaultRangeForCalendarDay(anchorDay || new Date());
       setTitle('');
       setDescription('');
       setLocation('');
@@ -197,18 +215,37 @@ export default function CalendarEventModal({
       location,
       startsAt: start.toISOString(),
       endsAt: end.toISOString(),
+      startsAtLocal: startsAt,
+      endsAtLocal: endsAt,
       showAs,
       remindBeforeMinutes: remindEnabled ? DEFAULT_CALENDAR_REMIND_MINUTES : null,
+      timeZone: resolveLocalTimeZone(),
     });
   };
 
+  const modalTitle =
+    mode === 'create' ? 'New event' : event?.source === 'google' ? 'Event details' : 'Edit event';
+
+  const modalSubtitle =
+    mode === 'create'
+      ? hasGoogleConnection
+        ? 'Saved to ThryvLoop & Google Calendar'
+        : 'On your ThryvLoop calendar'
+      : event?.source === 'google'
+        ? 'From Google Calendar'
+        : event?.syncedToGoogle
+          ? 'Syncs to Google Calendar'
+          : 'ThryvLoop event';
+
   const remindToggle = (
-    <div className="flex items-center justify-between gap-4 rounded-xl border-2 border-indigo-100/80 bg-indigo-50/40 px-4 py-3.5">
+    <div className="flex items-center justify-between gap-5 rounded-xl border border-border bg-background px-5 py-4">
       <div className="flex items-start gap-3 min-w-0">
-        <Bell size={18} className="text-indigo-600 shrink-0 mt-0.5" aria-hidden />
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+          <Bell size={18} aria-hidden />
+        </div>
         <div>
           <p className="text-sm font-semibold text-foreground">Remind me</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-1">
             {DEFAULT_CALENDAR_REMIND_MINUTES} minutes before · in-app alert
             {typeof Notification !== 'undefined' && Notification.permission === 'granted'
               ? ' + notification'
@@ -223,12 +260,14 @@ export default function CalendarEventModal({
         aria-label={`Remind me ${DEFAULT_CALENDAR_REMIND_MINUTES} minutes before`}
         disabled={saving}
         onClick={() => void handleRemindToggle(!remindEnabled)}
-        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 ${
-          remindEnabled ? 'bg-indigo-600 border-indigo-600' : 'bg-muted border-border'
+        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-2 focus:ring-offset-card disabled:opacity-50 ${
+          remindEnabled
+            ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
+            : 'border-border bg-muted'
         }`}
       >
         <span
-          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-card shadow ring-0 transition-transform mt-0.5 ${
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition-transform mt-0.5 ${
             remindEnabled ? 'translate-x-5' : 'translate-x-0.5'
           }`}
         />
@@ -236,23 +275,35 @@ export default function CalendarEventModal({
     </div>
   );
 
-  const modalTitle =
-    mode === 'create' ? 'New Event' : event?.source === 'google' ? 'Event Details' : 'Edit Event';
-
-  const modalSubtitle =
-    mode === 'create'
-      ? hasGoogleConnection
-        ? 'Creates in ThryvLoop and pushes to Google Calendar'
-        : 'Schedule on your ThryvLoop calendar'
-      : event?.source === 'google'
-        ? 'Synced from Google Calendar'
-        : event?.syncedToGoogle
-          ? 'Updates ThryvLoop and Google Calendar'
-          : 'Update this event';
+  const availabilityToggle = (
+    <div className="flex rounded-xl border border-border bg-background p-1.5 gap-1.5">
+      {[
+        { value: 'busy', label: 'Busy' },
+        { value: 'free', label: 'Free' },
+      ].map((option) => {
+        const active = showAs === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            disabled={!isEditable || saving}
+            onClick={() => setShowAs(option.value)}
+            className={`flex-1 rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
+              active
+                ? 'bg-indigo-600 text-white shadow-sm dark:bg-indigo-500'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-6"
       onClick={onClose}
       role="presentation"
     >
@@ -260,296 +311,295 @@ export default function CalendarEventModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-event-modal-title"
-        className="bg-card rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-border/80"
+        className="flex w-full max-w-2xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between z-10 rounded-t-2xl">
-          <div className="flex items-center gap-3 min-w-0">
-            <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                isGoogleView ? 'bg-indigo-100' : 'bg-violet-100'
-              }`}
-            >
-              <Calendar
-                size={22}
-                className={isGoogleView ? 'text-indigo-600' : 'text-violet-600'}
-              />
-            </div>
-            <div className="min-w-0">
-              <p className="text-indigo-500 text-[10px] font-semibold uppercase tracking-widest">
-                {modalSubtitle}
-              </p>
-              <h2 id="calendar-event-modal-title" className="text-xl sm:text-2xl font-bold text-foreground truncate">
-                {modalTitle}
-              </h2>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="text-muted-foreground hover:text-muted-foreground transition-colors p-1 shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {isGoogleView && event?.source === 'google' ? (
-          <div className="p-6 space-y-5">
-            <div className="rounded-xl border-2 border-border bg-gradient-to-br from-indigo-50/80 to-violet-50/50 p-4">
-              <p className="text-lg font-bold text-foreground leading-snug">{event.title}</p>
-              <p className="text-sm text-muted-foreground mt-2 font-medium">
-                {formatEventWhen(event.startsAt, event.endsAt)}
-              </p>
-              {event.showAs === 'free' ? (
-                <span className="inline-block mt-3 text-xs font-semibold text-muted-foreground bg-card/80 border border-border rounded-lg px-2.5 py-1">
-                  Shown as free
-                </span>
-              ) : null}
-              {event.isOnlineMeeting ? (
-                <p className="text-sm text-indigo-600 font-semibold mt-3 flex items-center gap-2">
-                  <Video size={16} />
-                  Google Meet
+        {/* Header */}
+        <div className="relative shrink-0 border-b border-border px-6 py-5 sm:px-8 sm:py-6">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 opacity-90" />
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
+                <Calendar size={24} aria-hidden />
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                  {modalSubtitle}
                 </p>
-              ) : null}
+                <h2
+                  id="calendar-event-modal-title"
+                  className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-foreground"
+                >
+                  {modalTitle}
+                </h2>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              This event is managed in Google Calendar. Make changes there, then use{' '}
-              <span className="font-semibold text-foreground">Sync</span> on the calendar page to refresh.
-            </p>
-            {remindToggle}
             <button
               type="button"
               onClick={onClose}
-              className="w-full px-4 py-3 border-2 border-border rounded-xl text-foreground font-medium hover:bg-muted/60 transition-colors"
+              disabled={saving}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              aria-label="Close"
             >
-              Close
+              <X size={22} />
             </button>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="p-6 space-y-5">
-            {displayError ? (
-              <div
-                role="alert"
-                className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium"
-              >
-                {displayError}
-              </div>
-            ) : null}
+        </div>
 
-            {overlappingEvents.length > 0 ? (
-              <div
-                role="status"
-                className="rounded-xl border-2 border-amber-100 bg-gradient-to-br from-amber-50/90 to-orange-50/50 px-4 py-3.5 text-sm text-amber-950"
-              >
-                <div className="flex gap-3">
-                  <Heart size={18} className="shrink-0 text-amber-500 mt-0.5" aria-hidden />
-                  <div>
-                    <p className="font-semibold text-amber-900">
-                      {overlappingEvents.length === 1
-                        ? 'You already have something here'
-                        : 'This overlaps with other events'}
-                    </p>
-                    <ul className="mt-1.5 space-y-1 text-amber-900/90">
-                      {overlappingEvents.slice(0, 3).map((ev) => (
-                        <li key={ev.id || `${ev.startsAt}-${ev.title}`}>
-                          <span className="font-medium">{ev.title || '(No title)'}</span>
-                          {' · '}
-                          {parseInstant(ev.startsAt).toLocaleTimeString([], {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
-                          {' – '}
-                          {parseInstant(ev.endsAt).toLocaleTimeString([], {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
-                        </li>
-                      ))}
-                    </ul>
-                    {overlappingEvents.length > 3 ? (
-                      <p className="mt-1 text-xs text-amber-800/80">
-                        +{overlappingEvents.length - 3} more
-                      </p>
-                    ) : null}
-                    <p className="mt-2 text-xs text-amber-800/90 leading-relaxed">
-                      No worries if you meant to stack these — you can still save. We just wanted
-                      to give you a heads-up.
-                    </p>
-                  </div>
+        {/* Body — lock scroll while a date/time picker is open so the fixed panel stays aligned */}
+        <div
+          className={`min-h-0 flex-1 ${activePicker ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        >
+          {isGoogleView && event?.source === 'google' ? (
+            <div className="space-y-6 p-6 sm:p-8">
+              <div className="rounded-2xl border border-border bg-muted/20 dark:bg-muted/10 p-6">
+                <p className="text-xl font-bold text-foreground leading-snug">{event.title}</p>
+                <p className="mt-3 text-base text-muted-foreground">{formatEventWhen(event.startsAt, event.endsAt)}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {event.showAs === 'free' ? (
+                    <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      Free
+                    </span>
+                  ) : null}
+                  {event.isOnlineMeeting ? (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                      <Video size={12} />
+                      Google Meet
+                    </span>
+                  ) : null}
                 </div>
               </div>
-            ) : null}
-
-            <div>
-              <label htmlFor="cal-title" className={labelClass}>
-                Title *
-              </label>
-              <input
-                id="cal-title"
-                type="text"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  clearErrors();
-                }}
-                required
-                maxLength={500}
-                disabled={!isEditable || saving}
-                placeholder="Meeting, focus block, reminder…"
-                className={inputClass}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="cal-starts" className={labelClass}>
-                  Starts
-                </label>
-                <input
-                  id="cal-starts"
-                  type="datetime-local"
-                  value={startsAt}
-                  onChange={(e) => {
-                    setStartsAt(e.target.value);
-                    clearErrors();
-                  }}
-                  required
-                  disabled={!isEditable || saving}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label htmlFor="cal-ends" className={labelClass}>
-                  Ends
-                </label>
-                <input
-                  id="cal-ends"
-                  type="datetime-local"
-                  value={endsAt}
-                  onChange={(e) => {
-                    setEndsAt(e.target.value);
-                    clearErrors();
-                  }}
-                  required
-                  disabled={!isEditable || saving}
-                  className={inputClass}
-                />
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  For overnight events (e.g. 11 PM–midnight), set the end <span className="font-medium">date</span> to the next day.
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="cal-show-as" className={labelClass}>
-                Availability
-              </label>
-              <select
-                id="cal-show-as"
-                value={showAs}
-                onChange={(e) => setShowAs(e.target.value)}
-                disabled={!isEditable || saving}
-                className={inputClass}
-              >
-                <option value="busy">Busy</option>
-                <option value="free">Free</option>
-              </select>
-            </div>
-
-            {remindToggle}
-
-            <div>
-              <label htmlFor="cal-location" className={labelClass}>
-                Location
-              </label>
-              <div className="relative">
-                <MapPin size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <input
-                  id="cal-location"
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  disabled={!isEditable || saving}
-                  placeholder="Optional"
-                  className={`${inputClass} pl-10`}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="cal-notes" className={labelClass}>
-                Notes
-              </label>
-              <textarea
-                id="cal-notes"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                disabled={!isEditable || saving}
-                placeholder="Optional details"
-                className={`${inputClass} resize-none`}
-              />
-            </div>
-
-            {mode === 'edit' && onDelete ? (
-              <div className="pt-2 border-t border-border">
-                {confirmDelete ? (
-                  <div className="rounded-xl border-2 border-red-100 bg-red-50/80 p-4 space-y-3">
-                    <p className="text-sm font-semibold text-red-800">Delete this event permanently?</p>
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => void onDelete()}
-                        className="flex-1 px-4 py-2.5 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                        Delete
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(false)}
-                        className="flex-1 px-4 py-2.5 rounded-xl font-medium text-foreground bg-card border-2 border-border hover:bg-muted/60"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(true)}
-                    className="text-sm font-semibold text-red-600 hover:text-red-700 flex items-center gap-2 px-1 py-1"
-                  >
-                    <Trash2 size={16} />
-                    Delete event
-                  </button>
-                )}
-              </div>
-            ) : null}
-
-            <div className="flex gap-3 pt-2">
+              <p className="text-base text-muted-foreground leading-relaxed">
+                Edit this event in Google Calendar, then use <span className="font-semibold text-foreground">Sync</span> on the calendar page to refresh.
+              </p>
+              {remindToggle}
               <button
                 type="button"
                 onClick={onClose}
-                disabled={saving}
-                className="flex-1 px-4 py-3 border-2 border-border rounded-xl text-foreground font-medium hover:bg-muted/60 transition-colors"
+                className="w-full rounded-xl border border-border bg-background px-5 py-3.5 text-base font-medium text-foreground transition-colors hover:bg-muted"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving || !isEditable}
-                className="flex-1 px-4 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-medium transition-colors shadow-lg disabled:opacity-50 inline-flex items-center justify-center gap-2"
-              >
-                {saving ? <Loader2 size={18} className="animate-spin" /> : null}
-                {mode === 'create' ? 'Create Event' : 'Save Changes'}
+                Close
               </button>
             </div>
-          </form>
-        )}
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6 p-6 sm:p-8">
+              {displayError ? (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-500/25 bg-red-500/10 px-5 py-4 text-sm text-red-700 dark:text-red-300"
+                >
+                  {displayError}
+                </div>
+              ) : null}
+
+              {overlappingEvents.length > 0 ? (
+                <div
+                  role="status"
+                  className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-5 py-4 text-sm"
+                >
+                  <div className="flex gap-3">
+                    <Heart size={20} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden />
+                    <div className="text-amber-950 dark:text-amber-100">
+                      <p className="font-semibold">
+                        {overlappingEvents.length === 1
+                          ? 'You already have something here'
+                          : 'Overlaps with other events'}
+                      </p>
+                      <ul className="mt-2 space-y-1 text-amber-900/90 dark:text-amber-100/85">
+                        {overlappingEvents.slice(0, 3).map((ev) => (
+                          <li key={ev.id || `${ev.startsAt}-${ev.title}`}>
+                            <span className="font-medium">{ev.title || '(No title)'}</span>
+                            {' · '}
+                            {parseInstant(ev.startsAt).toLocaleTimeString([], {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                            {' – '}
+                            {parseInstant(ev.endsAt).toLocaleTimeString([], {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                      {overlappingEvents.length > 3 ? (
+                        <p className="mt-1 text-xs opacity-80">+{overlappingEvents.length - 3} more</p>
+                      ) : null}
+                      <p className="mt-3 text-sm opacity-90 leading-relaxed">
+                        No worries if you meant to stack these — you can still save. We just wanted to give you a heads-up.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div>
+                <label htmlFor="cal-title" className={fieldLabelClass}>
+                  Title *
+                </label>
+                <input
+                  id="cal-title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    clearErrors();
+                  }}
+                  required
+                  maxLength={500}
+                  disabled={!isEditable || saving}
+                  placeholder="Meeting, focus block, reminder…"
+                  className={inputClass}
+                  autoFocus
+                />
+              </div>
+
+              <div className={sectionClass}>
+                <div className="flex items-center gap-2.5 text-base font-semibold text-foreground">
+                  <Clock size={18} className="text-indigo-600 dark:text-indigo-400" aria-hidden />
+                  When
+                </div>
+                <div className="grid grid-cols-1 gap-5">
+                  <CalendarDateTimeField
+                    id="cal-starts"
+                    label="Starts"
+                    value={startsAt}
+                    disabled={!isEditable || saving}
+                    open={activePicker === 'start'}
+                    onOpenChange={(next) => setActivePicker(next ? 'start' : null)}
+                    onChange={(next) => {
+                      setStartsAt(next);
+                      clearErrors();
+                    }}
+                  />
+                  <CalendarDateTimeField
+                    id="cal-ends"
+                    label="Ends"
+                    value={endsAt}
+                    disabled={!isEditable || saving}
+                    open={activePicker === 'end'}
+                    onOpenChange={(next) => setActivePicker(next ? 'end' : null)}
+                    onChange={(next) => {
+                      setEndsAt(next);
+                      clearErrors();
+                    }}
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  For overnight events (e.g. 11 PM–midnight), set the end <span className="font-medium">date</span> to the next day.
+                </p>
+              </div>
+
+              <div className={sectionClass}>
+                <div className="flex items-center gap-2.5 text-base font-semibold text-foreground">
+                  <AlignLeft size={18} className="text-indigo-600 dark:text-indigo-400" aria-hidden />
+                  Details
+                </div>
+                <div>
+                  <label htmlFor="cal-location" className={fieldLabelClass}>
+                    Location
+                  </label>
+                  <div className="relative">
+                    <MapPin
+                      size={18}
+                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <input
+                      id="cal-location"
+                      type="text"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      disabled={!isEditable || saving}
+                      placeholder="Optional"
+                      className={`${inputClass} pl-11`}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="cal-notes" className={fieldLabelClass}>
+                    Notes
+                  </label>
+                  <textarea
+                    id="cal-notes"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    disabled={!isEditable || saving}
+                    placeholder="Optional details"
+                    className={`${inputClass} resize-none`}
+                  />
+                </div>
+              </div>
+
+              <div className={sectionClass}>
+                <p className="text-base font-semibold text-foreground">Options</p>
+                <div>
+                  <label className={fieldLabelClass}>Availability</label>
+                  {availabilityToggle}
+                </div>
+                {remindToggle}
+              </div>
+
+              {mode === 'edit' && onDelete ? (
+                <div className="pt-2 border-t border-border">
+                  {confirmDelete ? (
+                    <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-5 space-y-4">
+                      <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                        Delete this event permanently?
+                      </p>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => void onDelete()}
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {saving ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(false)}
+                          className="flex-1 rounded-xl border border-border bg-background px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(true)}
+                      className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+                    >
+                      <Trash2 size={16} />
+                      Delete event
+                    </button>
+                  )}
+                </div>
+              ) : null}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={saving}
+                  className="flex-1 rounded-xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || !isEditable}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                >
+                  {saving ? <Loader2 size={18} className="animate-spin" /> : null}
+                  {mode === 'create' ? 'Create Event' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

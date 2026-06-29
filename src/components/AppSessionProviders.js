@@ -12,6 +12,10 @@ import UserPreferencesHydrator from '@/components/UserPreferencesHydrator';
 import AuthenticatedAppShell from '@/components/AuthenticatedAppShell';
 import CalendarReminderHost from '@/components/workspace/CalendarReminderHost';
 import { AssistantProvider } from '@/contexts/AssistantContext';
+import AuthTransitionHost from '@/components/auth/AuthTransitionHost';
+import ClerkShellLoader from '@/components/auth/ClerkShellLoader';
+import { useAuthTransitionActive } from '@/hooks/useAuthTransitionActive';
+import { isProtectedAppRoute } from '@/lib/authTransition';
 
 /** Routes that should not show the app sidebar / focus shell (marketing + auth). */
 function isPublicAppRoute(pathname) {
@@ -31,12 +35,22 @@ function isPublicAppRoute(pathname) {
 export default function AppSessionProviders({ children }) {
   const { isSignedIn, isLoaded } = useAuth();
   const pathname = usePathname();
+  const authTransition = useAuthTransitionActive();
+  const isSsoCallback = pathname?.startsWith('/auth/sso-callback') ?? false;
+  const hideUnderLoader =
+    authTransition &&
+    !isSsoCallback &&
+    (isProtectedAppRoute(pathname) || pathname === '/');
+  const clerkLoadingProtected =
+    !isLoaded && isProtectedAppRoute(pathname) && !authTransition;
 
   if (!isLoaded) {
     return (
       <>
         <UserPreferencesHydrator />
-        {children}
+        <AuthTransitionHost />
+        {clerkLoadingProtected ? <ClerkShellLoader /> : null}
+        {hideUnderLoader ? null : children}
       </>
     );
   }
@@ -45,6 +59,7 @@ export default function AppSessionProviders({ children }) {
     return (
       <>
         <UserPreferencesHydrator />
+        <AuthTransitionHost />
         {children}
       </>
     );
@@ -55,6 +70,7 @@ export default function AppSessionProviders({ children }) {
   return (
     <>
       <UserPreferencesHydrator />
+      <AuthTransitionHost />
       <SupabaseAuthBridge />
       <CelebrationProvider>
         <CelebrationModal />
@@ -63,7 +79,7 @@ export default function AppSessionProviders({ children }) {
         <AssistantProvider>
           <FocusProvider>
             <TimerProvider>
-              {showAppShell ? (
+              {hideUnderLoader ? null : showAppShell ? (
                 <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
               ) : (
                 children

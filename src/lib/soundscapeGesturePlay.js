@@ -3,8 +3,10 @@ import {
   normalizeActiveSound,
 } from '@/lib/soundscapeConstants';
 import { playSoundscapeAudioImmediate } from '@/lib/soundscapeAudioEngine';
-import { hasSpacesMediaConfigured, getStoredSpacesVolume } from '@/lib/spacesPlayback';
-import { loadYouTubeIframeApi } from '@/lib/youtubeIframeApi';
+import {
+  activateSpacesAudio,
+  shouldBootstrapSpacesOnPlay,
+} from '@/lib/soundscape/spacesPlaybackPolicy';
 import { getUserStorageItem, getUserStorageJson } from '@/utils/userStorage';
 
 function readActiveSounds(userId) {
@@ -21,7 +23,7 @@ function readGlobalVolume(userId) {
 
 /**
  * Start soundscape audio synchronously inside a click handler so the browser
- * does not defer play() after idle. Spaces YouTube is activated immediately too.
+ * does not defer play() after idle. Spaces joins only when policy allows.
  */
 export function resumeSoundscapeFromUserGesture(userId) {
   if (!userId || typeof window === 'undefined') return;
@@ -36,22 +38,7 @@ export function resumeSoundscapeFromUserGesture(userId) {
     playSoundscapeAudioImmediate(sound.id, src, layerVol);
   });
 
-  if (!hasSpacesMediaConfigured(userId)) return;
-
-  const spacesVol = getStoredSpacesVolume(userId);
-  const playbackVol = Math.round(spacesVol * (master / 100));
-
-  window.dispatchEvent(new CustomEvent('focus-spaces-activate'));
-  void loadYouTubeIframeApi();
-  window.dispatchEvent(
-    new CustomEvent('focus-volume-changed', {
-      detail: {
-        volume: playbackVol,
-        playbackOnly: true,
-        baseVolume: spacesVol,
-        forceLevel: true,
-        rampMs: 0,
-      },
-    })
-  );
+  if (shouldBootstrapSpacesOnPlay(userId)) {
+    activateSpacesAudio(userId, master);
+  }
 }

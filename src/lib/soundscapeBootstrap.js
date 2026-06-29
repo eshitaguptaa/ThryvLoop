@@ -1,15 +1,9 @@
-import { DEFAULT_BOOTSTRAP_SOUNDS, SOUNDSCAPE_SOUND_FILES } from '@/lib/soundscapeConstants';
-import { getOrCreateSoundscapeAudio } from '@/lib/soundscapeAudioEngine';
+import { DEFAULT_BOOTSTRAP_SOUNDS } from '@/lib/soundscapeConstants';
+import { soundscapeAudioManager } from '@/lib/soundscape/audioManager';
+import { persistTracks, persistSessionPlaying } from '@/lib/soundscape/persistence';
 
 /**
  * Start Spaces ambient audio when the mix is empty (e.g. first home mini player play).
- * @param {object} ctx
- * @param {() => number} ctx.getActiveSoundCount
- * @param {() => number} ctx.getSpacesVolume
- * @param {number} ctx.globalVolume
- * @param {import('react').MutableRefObject<boolean>} ctx.hasStartedPlaybackRef
- * @param {import('react').MutableRefObject<boolean>} ctx.initializedRef
- * @param {(value: boolean) => void} ctx.setSessionActive
  */
 export function bootstrapSpacesAudioIfEmpty(ctx) {
   if (ctx.getActiveSoundCount() > 0) return false;
@@ -35,49 +29,29 @@ export function bootstrapSpacesAudioIfEmpty(ctx) {
 }
 
 /**
- * Load the default soundscape mix and start audio during a user gesture (e.g. home play button).
- * @param {object} ctx
- * @param {() => number} ctx.getActiveSoundCount
- * @param {import('react').MutableRefObject<Record<string, HTMLAudioElement>>} ctx.audioRefs
- * @param {import('react').MutableRefObject<Record<string, number>>} ctx.soundTimestampsRef
- * @param {import('react').MutableRefObject<boolean>} ctx.hasStartedPlaybackRef
- * @param {import('react').MutableRefObject<boolean>} ctx.initializedRef
- * @param {number} ctx.globalVolume
- * @param {(sounds: object[]) => void} ctx.setActiveSounds
- * @param {(key: string, value: string) => void} ctx.setItem
- * @param {(key: string, value: object) => void} ctx.setJson
- * @param {(value: boolean) => void} ctx.setSessionActive
- * @param {(audio: HTMLAudioElement, targetVolume: number, duration?: number) => void} ctx.fadeInAudio
+ * Load the default soundscape mix and start audio during a user gesture.
  */
 export function bootstrapDefaultSoundsIfEmpty(ctx) {
   if (ctx.getActiveSoundCount() > 0) return false;
 
   const finalSounds = DEFAULT_BOOTSTRAP_SOUNDS.map((sound) => ({ ...sound }));
-  const now = Date.now();
-  finalSounds.forEach((sound) => {
-    ctx.soundTimestampsRef.current[sound.id] = now;
-  });
 
   ctx.hasStartedPlaybackRef.current = true;
   ctx.setSessionActive(true);
   ctx.initializedRef.current = true;
   ctx.setActiveSounds(finalSounds);
-  ctx.setJson('soundscape-active-sounds', finalSounds);
 
-  finalSounds.forEach((sound) => {
-    const src = SOUNDSCAPE_SOUND_FILES[sound.id];
-    if (!src) return;
-    const { audio, created } = getOrCreateSoundscapeAudio(sound.id, src);
-    ctx.audioRefs.current[sound.id] = audio;
-    const targetVolume = (sound.volume / 100) * (ctx.globalVolume / 100);
-    if (created || audio.paused) {
-      ctx.fadeInAudio(audio, targetVolume, 500);
-    }
-  });
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('soundscape-state-changed'));
+  if (ctx.userId) {
+    persistTracks(ctx.userId, finalSounds);
+    persistSessionPlaying(ctx.userId, true, { syncOnly: true });
+  } else {
+    ctx.setJson('soundscape-active-sounds', finalSounds);
   }
 
+  void soundscapeAudioManager.playMix(finalSounds, ctx.globalVolume, null, { immediate: true });
+
+  if (typeof window === 'undefined') return true;
+
+  window.dispatchEvent(new CustomEvent('soundscape-state-changed'));
   return true;
 }

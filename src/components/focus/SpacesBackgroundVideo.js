@@ -5,31 +5,13 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
-import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
+import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId, getSpacesDisplayName } from '@/lib/spacesConstants';
 import { isSpacesPausedByUser, isSpacesPlaybackIntent, hasSpacesMediaConfigured, shouldShowSpacesBackground } from '@/lib/spacesPlayback';
 import { loadYouTubeIframeApi } from '@/lib/youtubeIframeApi';
+import { buildYouTubeEmbedUrl, YOUTUBE_IFRAME_ALLOW, YOUTUBE_IFRAME_REFERRER_POLICY } from '@/lib/youtubeEmbed';
+import { useSpacesPictureInPicture } from '@/hooks/useSpacesPictureInPicture';
 
 const DEFAULT_VIDEO_ID = DEFAULT_SPACES_VIDEO_ID;
-
-function getYouTubeEmbedUrl(videoId) {
-  if (!videoId) return null;
-  const params = new URLSearchParams({
-    autoplay: '1',
-    mute: '1',
-    loop: '1',
-    playlist: videoId,
-    controls: '0',
-    modestbranding: '1',
-    rel: '0',
-    enablejsapi: '1',
-    origin: typeof window !== 'undefined' ? window.location.origin : '',
-    iv_load_policy: '3',
-    fs: '0',
-    cc_load_policy: '0',
-    playsinline: '1',
-  });
-  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
-}
 
 export default function SpacesBackgroundVideo() {
   const pathname = usePathname();
@@ -39,6 +21,7 @@ export default function SpacesBackgroundVideo() {
   const userId = user?.id || null;
   const playerRef = useRef(null);
   const iframeRef = useRef(null);
+  const shellRef = useRef(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [playerActivated, setPlayerActivated] = useState(false);
@@ -46,10 +29,11 @@ export default function SpacesBackgroundVideo() {
     () => resolveSpacesVideoId(backgroundVideoId)
   );
   const currentVideoIdRef = useRef(currentVideoId);
-  const embedSrcRef = useRef(getYouTubeEmbedUrl(currentVideoId));
+  const embedSrcRef = useRef(buildYouTubeEmbedUrl(currentVideoId));
   const playbackPositionIntervalRef = useRef(null);
   const pendingVideoSwitchRef = useRef(false);
   const volumeRef = useRef(volume);
+  const spacesBaseVolumeRef = useRef(volume);
   const playbackVolumeRef = useRef(null);
   const userIdRef = useRef(userId);
   const attachPlayerApiRef = useRef(null);
@@ -58,8 +42,10 @@ export default function SpacesBackgroundVideo() {
   const restoreAudioAfterVideoSwitchRef = useRef(null);
   const audioSyncTimeoutRef = useRef(null);
   const volumeRampIntervalRef = useRef(null);
+  const pendingSpacesPlaybackRef = useRef(false);
 
   volumeRef.current = volume;
+  spacesBaseVolumeRef.current = volume;
   userIdRef.current = userId;
 
   useEffect(() => {
@@ -83,18 +69,57 @@ export default function SpacesBackgroundVideo() {
     return isSpacesPlaybackIntent(userIdRef.current);
   }, []);
 
+  const shouldShowSpacesPip = useCallback(() => {
+    if (!isOnFocusRoute) return false;
+    const videoId = currentVideoIdRef.current || resolveSpacesVideoId(backgroundVideoId);
+    return !!videoId;
+  }, [backgroundVideoId, isOnFocusRoute]);
+
+  const getPipPlaybackSnapshot = useCallback(() => {
+    let startSeconds = 0;
+    try {
+      if (playerRef.current?.getCurrentTime) {
+        startSeconds = playerRef.current.getCurrentTime() || 0;
+      }
+    } catch (_) {}
+    return {
+      videoId: currentVideoIdRef.current || resolveSpacesVideoId(backgroundVideoId),
+      startSeconds,
+    };
+  }, [backgroundVideoId]);
+
+  useSpacesPictureInPicture({
+    enabled: isOnFocusRoute,
+    spaceLabel: getSpacesDisplayName(currentVideoId),
+    shouldShowPip: shouldShowSpacesPip,
+    getPipPlaybackSnapshot,
+  });
+
   const shouldRunPlayer = () => playerActivated;
+
+  const getMasterAdjustedBaseVolume = useCallback(() => {
+    const base = spacesBaseVolumeRef.current;
+    if (!userIdRef.current || base <= 0) return base;
+    const raw = getUserStorageItem(
+      userIdRef.current,
+      'soundscape-global-volume',
+      'soundscape-global-volume'
+    );
+    const parsed = raw ? parseInt(raw, 10) : 75;
+    const master = Number.isNaN(parsed) ? 75 : Math.max(0, Math.min(100, parsed));
+    return Math.round(base * (master / 100));
+  }, []);
 
   const resolvePlaybackVolume = useCallback(() => {
     if (isSpacesPaused()) return 0;
     if (!isSpacesPlaybackActive()) return 0;
-    if (volumeRef.current === 0) return 0;
+    if (spacesBaseVolumeRef.current <= 0) return 0;
     const ducked = playbackVolumeRef.current;
-    if (ducked === null || ducked === undefined) return volumeRef.current;
-    // Duck-to-zero from composer layering — not a master pause (handled above)
-    if (ducked === 0) return volumeRef.current;
+    if (ducked === null || ducked === undefined) return getMasterAdjustedBaseVolume();
+    // Transient duck from layering — restore base level unless user muted via slider
+    if (ducked === 0) return getMasterAdjustedBaseVolume();
     return ducked;
-  }, [isSpacesPaused, isSpacesPlaybackActive]);
+  }, [isSpacesPaused, isSpacesPlaybackActive, getMasterAdjustedBaseVolume]);
 
   const getPlaybackVolume = useCallback(() => {
     if (!shouldRunPlayer()) return 0;
@@ -171,18 +196,22 @@ export default function SpacesBackgroundVideo() {
     }, 16);
   }, [applyPlayerVolume, clearVolumeRamp]);
 
-  const startPlayback = useCallback((player = playerRef.current) => {
-    if (!player || !shouldRunPlayer()) return;
+  const startPlayback = useCallback((player = playerRef.current, volumeHint) => {
+    if (!player) return;
+    const forced = typeof volumeHint === 'number';
+    if (!forced && !shouldRunPlayer()) return;
+    const vol = forced ? volumeHint : resolvePlaybackVolume();
+    if (vol <= 0) return;
+    playbackVolumeRef.current = vol;
+    applyPlayerVolume(player, vol);
     try {
-      const vol = getPlaybackVolume();
-      applyPlayerVolume(player, vol);
       if (typeof player.playVideo === 'function') {
         player.playVideo();
       }
     } catch (e) {
       console.error('Error starting playback:', e);
     }
-  }, [applyPlayerVolume, getPlaybackVolume]);
+  }, [applyPlayerVolume, resolvePlaybackVolume]);
 
   const shouldKeepVideoVisible = useCallback(() => {
     return (
@@ -193,12 +222,19 @@ export default function SpacesBackgroundVideo() {
 
   const syncSpacesPlayback = useCallback(() => {
     if (!isSpacesPlaybackActive() || isSpacesPaused()) return;
-    playbackVolumeRef.current = volumeRef.current;
+    const vol = resolvePlaybackVolume();
+    if (vol <= 0) return;
+    playbackVolumeRef.current = vol;
     if (playerRef.current) {
-      applyPlayerVolume(playerRef.current, volumeRef.current);
-      startPlayback(playerRef.current);
+      applyPlayerVolume(playerRef.current, vol);
+      startPlayback(playerRef.current, vol);
+      pendingSpacesPlaybackRef.current = false;
+    } else {
+      pendingSpacesPlaybackRef.current = true;
+      setPlayerActivated(true);
+      void loadYouTubeIframeApi();
     }
-  }, [applyPlayerVolume, isSpacesPaused, isSpacesPlaybackActive, startPlayback]);
+  }, [applyPlayerVolume, isSpacesPaused, isSpacesPlaybackActive, resolvePlaybackVolume, startPlayback]);
 
   const scheduleAudioSync = useCallback(
     (player = playerRef.current) => {
@@ -338,7 +374,11 @@ export default function SpacesBackgroundVideo() {
         events: {
           onReady: (event) => {
             setPlayerReady(true);
-            if (playbackVolumeRef.current === null && isSpacesPlaybackActive()) {
+            if (
+              (playbackVolumeRef.current === null || playbackVolumeRef.current === undefined) &&
+              isSpacesPlaybackActive() &&
+              !isSpacesPaused()
+            ) {
               playbackVolumeRef.current = volumeRef.current;
             }
             const targetId = currentVideoIdRef.current;
@@ -353,6 +393,10 @@ export default function SpacesBackgroundVideo() {
             }
             startPlaybackRef.current?.(event.target);
             scheduleAudioSync(event.target);
+            if (pendingSpacesPlaybackRef.current || isSpacesPlaybackActive()) {
+              pendingSpacesPlaybackRef.current = false;
+              restoreAudioAfterVideoSwitchRef.current?.(event.target);
+            }
             window.dispatchEvent(new CustomEvent('focus-spaces-player-ready'));
             if (playbackPositionIntervalRef.current) {
               clearInterval(playbackPositionIntervalRef.current);
@@ -468,6 +512,9 @@ export default function SpacesBackgroundVideo() {
     const handleVolumeChange = (e) => {
       if (e.detail?.playbackOnly) {
         if (e.detail?.volume !== undefined) {
+          if (e.detail.baseVolume !== undefined) {
+            spacesBaseVolumeRef.current = e.detail.baseVolume;
+          }
           const forceLevel = Boolean(e.detail.forceLevel) || e.detail.baseVolume === 0;
           if (e.detail.volume === 0 && !isSpacesPaused() && !forceLevel) {
             return;
@@ -479,18 +526,37 @@ export default function SpacesBackgroundVideo() {
           if (pendingVideoSwitchRef.current) {
             return;
           }
+          if (!playerRef.current) {
+            pendingSpacesPlaybackRef.current = true;
+            setPlayerActivated(true);
+            void loadYouTubeIframeApi();
+            return;
+          }
           const rampMs = e.detail.rampMs || 0;
           if (rampMs > 0 && e.detail.volume > 0 && playerRef.current) {
             rampPlayerVolume(playerRef.current, e.detail.volume, rampMs);
           } else if (e.detail.volume > 0 && playerRef.current) {
+            playbackVolumeRef.current = e.detail.volume;
             applyPlayerVolume(playerRef.current, e.detail.volume);
-            startPlayback(playerRef.current);
+            try {
+              if (typeof playerRef.current.unMute === 'function') {
+                playerRef.current.unMute();
+              }
+              if (typeof playerRef.current.playVideo === 'function') {
+                playerRef.current.playVideo();
+              }
+            } catch (err) {
+              console.error('Error starting Spaces playback:', err);
+            }
           } else if (e.detail.volume === 0 && playerRef.current) {
             clearVolumeRamp();
             applyPlayerVolume(playerRef.current, 0);
           }
         }
         return;
+      }
+      if (e.detail?.volume !== undefined) {
+        spacesBaseVolumeRef.current = e.detail.volume;
       }
     };
     window.addEventListener('focus-volume-changed', handleVolumeChange);
@@ -523,6 +589,7 @@ export default function SpacesBackgroundVideo() {
       if (shouldKeepVideoVisible()) {
         setPlayerActivated(true);
         if (!playerRef.current) {
+          pendingSpacesPlaybackRef.current = true;
           void loadYouTubeIframeApi();
           return;
         }
@@ -530,7 +597,6 @@ export default function SpacesBackgroundVideo() {
         if (isSpacesPaused()) {
           applyPlayerVolume(playerRef.current, 0);
         } else if (isSpacesPlaybackActive()) {
-          playbackVolumeRef.current = null;
           syncSpacesPlayback();
           scheduleAudioSync(playerRef.current);
         } else {
@@ -552,6 +618,8 @@ export default function SpacesBackgroundVideo() {
         if (playerRef.current) {
           syncSpacesPlayback();
           scheduleAudioSync(playerRef.current);
+        } else {
+          pendingSpacesPlaybackRef.current = true;
         }
       }
     };
@@ -562,6 +630,25 @@ export default function SpacesBackgroundVideo() {
       window.removeEventListener('soundscape-play-pause-changed', handlePauseChanged);
     };
   }, [applyPlayerVolume, isSpacesPaused, isSpacesPlaybackActive, shouldKeepVideoVisible, syncSpacesPlayback, scheduleAudioSync]);
+
+  useEffect(() => {
+    const handleStopAll = () => {
+      pendingSpacesPlaybackRef.current = false;
+      playbackVolumeRef.current = 0;
+      if (playerRef.current) {
+        applyPlayerVolume(playerRef.current, 0);
+      }
+    };
+    window.addEventListener('soundscape-stop-all', handleStopAll);
+    return () => window.removeEventListener('soundscape-stop-all', handleStopAll);
+  }, [applyPlayerVolume]);
+
+  useEffect(() => {
+    if (!userId) {
+      pendingSpacesPlaybackRef.current = false;
+      playbackVolumeRef.current = 0;
+    }
+  }, [userId]);
 
   useEffect(() => {
     if (!playerReady) return;
@@ -599,49 +686,51 @@ export default function SpacesBackgroundVideo() {
       }}
       aria-hidden={!isOnFocusRoute}
     >
-      <div
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: '177.77777778vh',
-          height: '100vh',
-          minWidth: '100vw',
-          minHeight: '56.25vw',
-          transform: 'translate(-50%, -50%)',
-        }}
-      >
-        <iframe
-          ref={iframeRef}
-          id="youtube-background-player"
-          src={embedSrcRef.current}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-          onLoad={handleIframeLoad}
-          className="h-full w-full border-0"
-          title="Background Video"
-        />
-        {showLoadingOverlay && (
-          <div
-            className="absolute inset-0 z-20 flex items-center justify-center overflow-hidden"
-            style={{ background: 'linear-gradient(to bottom right, #111827, #000000, #111827)' }}
-          >
-            <div className="relative z-10 flex flex-col items-center gap-6">
-              <div className="relative h-24 w-24">
-                <div
-                  className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-[#5043F3] border-r-purple-500"
-                  style={{ animationDuration: '1.5s' }}
-                />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="h-3 w-3 animate-pulse rounded-full bg-[#5043F3]" />
+        <div
+          ref={shellRef}
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            width: '177.77777778vh',
+            height: '100vh',
+            minWidth: '100vw',
+            minHeight: '56.25vw',
+            transform: 'translate(-50%, -50%)',
+          }}
+        >
+          <iframe
+            ref={iframeRef}
+            id="youtube-background-player"
+            src={embedSrcRef.current}
+            allow={YOUTUBE_IFRAME_ALLOW}
+            referrerPolicy={YOUTUBE_IFRAME_REFERRER_POLICY}
+            allowFullScreen
+            onLoad={handleIframeLoad}
+            className="h-full w-full border-0"
+            title="Background Video"
+          />
+          {showLoadingOverlay && (
+            <div
+              className="absolute inset-0 z-20 flex items-center justify-center overflow-hidden"
+              style={{ background: 'linear-gradient(to bottom right, #111827, #000000, #111827)' }}
+            >
+              <div className="relative z-10 flex flex-col items-center gap-6">
+                <div className="relative h-24 w-24">
+                  <div
+                    className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-[#5043F3] border-r-purple-500"
+                    style={{ animationDuration: '1.5s' }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="h-3 w-3 animate-pulse rounded-full bg-[#5043F3]" />
+                  </div>
                 </div>
+                <p className="text-lg font-semibold tracking-wide text-white">Loading...</p>
               </div>
-              <p className="text-lg font-semibold tracking-wide text-white">Loading...</p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+        {isOnFocusRoute && <div className="absolute inset-0 bg-black/10" />}
       </div>
-      {isOnFocusRoute && <div className="absolute inset-0 bg-black/10" />}
-    </div>
   );
 }

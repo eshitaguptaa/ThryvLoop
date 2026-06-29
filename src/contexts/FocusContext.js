@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
-import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
+import { DEFAULT_SPACES_VIDEO_ID, DEFAULT_SPACES_VOLUME, resolveSpacesVideoId } from '@/lib/spacesConstants';
+import { ensureSpacesStorageDefaults } from '@/lib/spacesPlayback';
 
 export const FocusContext = createContext(null);
 
@@ -35,10 +36,11 @@ export function FocusProvider({ children }) {
   });
 
   const [volume, setVolumeState] = useState(() => {
-    if (typeof window === 'undefined') return 50;
+    if (typeof window === 'undefined') return DEFAULT_SPACES_VOLUME;
     const saved = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
-    const parsed = saved ? parseInt(saved, 10) : 50;
-    return Number.isNaN(parsed) ? 50 : Math.max(0, Math.min(100, parsed));
+    if (saved == null || saved === '') return DEFAULT_SPACES_VOLUME;
+    const parsed = parseInt(saved, 10);
+    return Number.isNaN(parsed) ? DEFAULT_SPACES_VOLUME : Math.max(0, Math.min(100, parsed));
   });
 
   // Save widget states to localStorage when they change
@@ -72,6 +74,18 @@ export function FocusProvider({ children }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const handler = (e) => {
+      if (e.detail?.playbackOnly) return;
+      if (typeof e.detail?.volume !== 'number' || Number.isNaN(e.detail.volume)) return;
+      setVolumeState(Math.max(0, Math.min(100, e.detail.volume)));
+    };
+    window.addEventListener('focus-volume-changed', handler);
+    return () => window.removeEventListener('focus-volume-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (userId) ensureSpacesStorageDefaults(userId);
     setShowTimer(loadWidgetState('timer', true));
     setShowMusic(loadWidgetState('music', true));
     setShowTask(loadWidgetState('task', true));
@@ -79,8 +93,11 @@ export function FocusProvider({ children }) {
     const savedVideoId = getUserStorageItem(userId, 'focus-background-video-id', 'focus-background-video-id');
     setBackgroundVideoId(resolveSpacesVideoId(savedVideoId));
     const savedVolume = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
-    const parsed = savedVolume ? parseInt(savedVolume, 10) : 50;
-    setVolumeState(Number.isNaN(parsed) ? 50 : Math.max(0, Math.min(100, parsed)));
+    const parsed =
+      savedVolume == null || savedVolume === ''
+        ? DEFAULT_SPACES_VOLUME
+        : parseInt(savedVolume, 10);
+    setVolumeState(Number.isNaN(parsed) ? DEFAULT_SPACES_VOLUME : Math.max(0, Math.min(100, parsed)));
   }, [userId]);
 
   const setVolume = (next) => {

@@ -17,8 +17,10 @@ import {
   Bar,
   Cell,
 } from 'recharts';
-import { 
-  Download, 
+import { appMutedTextClass } from '@/lib/appShellClasses';
+import AppPageLoader from '@/components/ui/AppPageLoader';
+import {
+  Download,
   TrendingUp,
   Target,
   CheckCircle2,
@@ -41,7 +43,6 @@ import {
   appContentClass,
   appPageTitleClass,
   appEyebrowClass,
-  appMutedTextClass,
 } from '@/lib/appShellClasses';
 
 const outfit = Outfit({
@@ -399,14 +400,7 @@ export default function AnalyticsDashboard() {
   const THRYV_PURPLE = '#5043F3';
 
   if (loading) {
-    return (
-      <div className={`${appSurfaceClass} ${outfit.className} flex items-center justify-center`}>
-        <div className="flex flex-col items-center gap-6">
-          <div className="w-12 h-12 border-2 border-indigo-200 border-t-[#5043F3] rounded-full animate-spin" />
-          <p className={`${appMutedTextClass} font-medium tracking-wide`}>Loading analytics</p>
-        </div>
-      </div>
-    );
+    return <AppPageLoader message="Loading analytics" />;
   }
 
   return (

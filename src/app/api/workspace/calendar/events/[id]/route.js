@@ -26,7 +26,9 @@ export async function PATCH(request, context) {
   }
 
   try {
-    const input = validateCalendarEventInput(body);
+    const input = validateCalendarEventInput(body, {
+      requestTimeZone: request.headers.get('x-user-timezone'),
+    });
     const { event, googleSyncError } = await updateUserCalendarEvent(userId, id, input);
     return NextResponse.json({ event, googleSyncError: googleSyncError ?? null });
   } catch (err) {

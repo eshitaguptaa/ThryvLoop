@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { openIntegrationsSettings } from '@/lib/openFocusSettings';
 import { useAuth } from '@clerk/nextjs';
@@ -22,6 +22,7 @@ import {
   isSameLocalDay,
   localDayKey,
   localMinutesFromMidnight,
+  parseInstant,
 } from '@/lib/calendarDateUtils';
 import { layoutDayEventsForGrid } from '@/lib/calendarEventLayout';
 import {
@@ -106,6 +107,38 @@ function slotRangeFromClick(day, clickY, gridBodyHeight) {
   return { start, end };
 }
 
+/** Minutes-from-midnight scroll target for the week time grid. */
+function getWeekScrollTargetMinutes(events, weekStart, weekDays, now) {
+  const weekRangeStart = startOfDay(weekStart);
+  const weekRangeEnd = endOfWeek(weekStart);
+  let earliestStart = null;
+
+  for (const ev of events) {
+    const start = parseInstant(ev.startsAt);
+    if (start >= weekRangeStart && start < weekRangeEnd) {
+      if (!earliestStart || start < earliestStart) earliestStart = start;
+    }
+  }
+
+  if (earliestStart) {
+    return Math.max(HOUR_START * 60, localMinutesFromMidnight(earliestStart) - 30);
+  }
+
+  if (weekDays.some((day) => isSameLocalDay(day, now))) {
+    return Math.max(HOUR_START * 60, localMinutesFromMidnight(now) - 60);
+  }
+
+  return 9 * 60;
+}
+
+function minutesToGridScrollTop(minutesFromMidnight) {
+  const clamped = Math.max(
+    HOUR_START * 60,
+    Math.min(HOUR_END * 60, minutesFromMidnight)
+  );
+  return TIME_GRID_INSET + ((clamped - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+}
+
 export default function WorkspaceCalendarView() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
@@ -125,6 +158,9 @@ export default function WorkspaceCalendarView() {
   const [createSlotRange, setCreateSlotRange] = useState(null);
   const [eventSaving, setEventSaving] = useState(false);
   const [modalSaveError, setModalSaveError] = useState('');
+  const gridScrollRef = useRef(null);
+  const shouldAutoScrollGridRef = useRef(true);
+  const [scrollFocusMinutes, setScrollFocusMinutes] = useState(null);
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
@@ -137,15 +173,16 @@ export default function WorkspaceCalendarView() {
     return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
   }, [selectedDay]);
 
-  const fetchCalendar = useCallback(async ({ preserveError = false } = {}) => {
+  const fetchCalendar = useCallback(async ({ preserveError = false, background = false, weekAnchor = null } = {}) => {
     if (!isLoaded || !isSignedIn) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!background) setLoading(true);
     if (!preserveError) setError('');
-    const rangeStart = startOfDay(weekStart);
-    const rangeEnd = addDays(startOfDay(weekStart), 7);
+    const anchorWeek = weekAnchor ? startOfWeek(weekAnchor) : weekStart;
+    const rangeStart = startOfDay(anchorWeek);
+    const rangeEnd = addDays(startOfDay(anchorWeek), 7);
     try {
       const res = await workspaceApiFetch(
         `/api/workspace/calendar?start=${encodeURIComponent(rangeStart.toISOString())}&end=${encodeURIComponent(rangeEnd.toISOString())}`,
@@ -167,7 +204,7 @@ export default function WorkspaceCalendarView() {
       setError(e instanceof Error ? e.message : 'Failed to load calendar');
       setEvents([]);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [isLoaded, isSignedIn, weekStart, getToken]);
 
@@ -194,10 +231,20 @@ export default function WorkspaceCalendarView() {
     }
   };
 
+  const focusCalendarOnEventStart = useCallback((startsAt) => {
+    const start = parseInstant(startsAt);
+    if (Number.isNaN(start.getTime())) return;
+    setSelectedDay(startOfDay(start));
+    setWeekStart(startOfWeek(start));
+    setScrollFocusMinutes(Math.max(HOUR_START * 60, localMinutesFromMidnight(start) - 30));
+    shouldAutoScrollGridRef.current = false;
+  }, []);
+
   const goToday = () => {
     const today = startOfDay(new Date());
     setWeekStart(startOfWeek(today));
     setSelectedDay(today);
+    shouldAutoScrollGridRef.current = true;
   };
 
   const openCreateModal = (slotRange = null) => {
@@ -252,6 +299,8 @@ export default function WorkspaceCalendarView() {
         return;
       }
       const googleSyncError = json.googleSyncError || null;
+      const savedStartsAt = json.event?.startsAt ?? payload.startsAt;
+      const savedWeekStart = startOfWeek(parseInstant(savedStartsAt));
       if (json.event) {
         setEvents((prev) => {
           const key = (e) => `${e.source}-${e.id}`;
@@ -261,6 +310,7 @@ export default function WorkspaceCalendarView() {
           );
         });
       }
+      focusCalendarOnEventStart(savedStartsAt);
       setModalOpen(false);
       setActiveEvent(null);
       setCreateSlotRange(null);
@@ -269,9 +319,9 @@ export default function WorkspaceCalendarView() {
         setError(
           `Event saved in ThryvLoop, but Google Calendar sync failed: ${googleSyncError}`
         );
-        await fetchCalendar({ preserveError: true });
+        await fetchCalendar({ preserveError: true, background: true, weekAnchor: savedWeekStart });
       } else {
-        await fetchCalendar();
+        await fetchCalendar({ background: true, weekAnchor: savedWeekStart });
       }
     } catch {
       setModalSaveError('Could not save this event. Please try again.');
@@ -293,6 +343,8 @@ export default function WorkspaceCalendarView() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to delete event');
       const googleSyncError = json.googleSyncError || null;
+      const deletedKey = `${activeEvent.source}-${activeEvent.id}`;
+      setEvents((prev) => prev.filter((e) => `${e.source}-${e.id}` !== deletedKey));
       setModalOpen(false);
       setActiveEvent(null);
       if (googleSyncError) {
@@ -356,6 +408,40 @@ export default function WorkspaceCalendarView() {
     const list = eventsByDay.get(selectedDay.toDateString()) || [];
     return [...list].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
   }, [eventsByDay, selectedDay]);
+
+  const gridScrollTargetMinutes = useMemo(
+    () => getWeekScrollTargetMinutes(events, weekStart, weekDays, new Date()),
+    [events, weekStart, weekDays]
+  );
+
+  useEffect(() => {
+    shouldAutoScrollGridRef.current = true;
+  }, [weekStart]);
+
+  useEffect(() => {
+    if (loading) return;
+    const el = gridScrollRef.current;
+    if (!el) return;
+
+    if (scrollFocusMinutes !== null) {
+      const frame = requestAnimationFrame(() => {
+        const targetTop = minutesToGridScrollTop(scrollFocusMinutes) - 48;
+        el.scrollTop = Math.max(0, targetTop);
+        setScrollFocusMinutes(null);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+
+    if (!shouldAutoScrollGridRef.current) return;
+
+    const frame = requestAnimationFrame(() => {
+      const targetTop = minutesToGridScrollTop(gridScrollTargetMinutes) - 48;
+      el.scrollTop = Math.max(0, targetTop);
+      shouldAutoScrollGridRef.current = false;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [loading, scrollFocusMinutes, gridScrollTargetMinutes, weekStart]);
 
   const now = new Date();
   const nowMinutes = eventMinutesFromMidnight(now);
@@ -601,7 +687,10 @@ export default function WorkspaceCalendarView() {
                     })}
                   </div>
 
-                  <div className="grid grid-cols-[52px_repeat(7,1fr)] overflow-x-auto overflow-y-auto max-h-[min(720px,70vh)] pb-1">
+                  <div
+                    ref={gridScrollRef}
+                    className="grid grid-cols-[52px_repeat(7,1fr)] overflow-x-auto overflow-y-auto max-h-[min(720px,70vh)] pb-1"
+                  >
                     <div className="border-r border-border relative" style={{ height: gridBodyHeight }}>
                       {HOURS.map((h) => {
                         const isFirst = h === HOUR_START;

@@ -20,7 +20,9 @@ export async function POST(request) {
   }
 
   try {
-    const input = validateCalendarEventInput(body);
+    const input = validateCalendarEventInput(body, {
+      requestTimeZone: request.headers.get('x-user-timezone'),
+    });
     const { event, googleSyncError } = await createUserCalendarEvent(userId, input);
     return NextResponse.json({ event, googleSyncError: googleSyncError ?? null }, { status: 201 });
   } catch (err) {

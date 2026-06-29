@@ -483,6 +483,8 @@ export function TimerProvider({ children }) {
   const runStartTimeRef = useRef(null);
   /** Seconds from the current play segment already written to focus_sessions. */
   const segmentLoggedRef = useRef(0);
+  /** Shared Web Audio context for alarm/ring/tick sounds. */
+  const audioContextRef = useRef(null);
   const wasRunningRef = useRef(false);
   const prevTimerModeRef = useRef(null);
   const prevPhaseRef = useRef(phase);
@@ -619,11 +621,27 @@ export function TimerProvider({ children }) {
     return getDurationSeconds();
   }, [timerMode, getDurationSeconds]);
 
+  const ensureAudioContext = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtor) return null;
+      const ctx = audioContextRef.current || new AudioCtor();
+      audioContextRef.current = ctx;
+      if (ctx.state === 'suspended') {
+        void ctx.resume();
+      }
+      return ctx;
+    } catch (_) {
+      return null;
+    }
+  }, []);
+
   const playAlarm = useCallback(() => {
     if (typeof window === 'undefined' || alarmVolume === 0) return;
     try {
-      const ctx = audioContextRef.current || new (window.AudioContext || window.webkitAudioContext)();
-      audioContextRef.current = ctx;
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
       const gain = (alarmVolume / 100) * 0.3;
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
@@ -637,14 +655,14 @@ export function TimerProvider({ children }) {
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.5);
     } catch (_) {}
-  }, [alarmVolume]);
+  }, [alarmVolume, ensureAudioContext]);
 
   /** Pleasant ring marking the start of the next phase (break or session). */
   const playPhaseStartRing = useCallback(() => {
     if (typeof window === 'undefined' || alarmVolume === 0) return;
     try {
-      const ctx = audioContextRef.current || new (window.AudioContext || window.webkitAudioContext)();
-      audioContextRef.current = ctx;
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
       const gain = (alarmVolume / 100) * 0.22;
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, ctx.currentTime);
@@ -662,13 +680,13 @@ export function TimerProvider({ children }) {
       playTone(523.25, 0, 0.18);
       playTone(659.25, 0.14, 0.2);
     } catch (_) {}
-  }, [alarmVolume]);
+  }, [alarmVolume, ensureAudioContext]);
 
   const playTick = useCallback(() => {
     if (typeof window === 'undefined' || !tickSound || alarmVolume === 0) return;
     try {
-      const ctx = audioContextRef.current || new (window.AudioContext || window.webkitAudioContext)();
-      audioContextRef.current = ctx;
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
       const gain = (alarmVolume / 100) * 0.03;
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
@@ -681,7 +699,7 @@ export function TimerProvider({ children }) {
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.02);
     } catch (_) {}
-  }, [tickSound, alarmVolume]);
+  }, [tickSound, alarmVolume, ensureAudioContext]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !userId || !isSignedIn) return;
@@ -796,6 +814,20 @@ export function TimerProvider({ children }) {
     };
     window.addEventListener('focus-settings-tick-sound-changed', handler);
     return () => window.removeEventListener('focus-settings-tick-sound-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (e) => {
+      const d = e?.detail;
+      if (!d) return;
+      if (typeof d.autoStartBreaks === 'boolean') setAutoStartBreaks(d.autoStartBreaks);
+      if (typeof d.alarmVolume === 'number' && !Number.isNaN(d.alarmVolume)) {
+        setAlarmVolume(Math.max(0, Math.min(100, d.alarmVolume)));
+      }
+    };
+    window.addEventListener('focus-settings-behavior-changed', handler);
+    return () => window.removeEventListener('focus-settings-behavior-changed', handler);
   }, []);
 
   useEffect(() => {
@@ -1232,6 +1264,8 @@ export function TimerProvider({ children }) {
       return;
     }
     const today = localDateKey();
+    // Unlock Web Audio during a direct user gesture so ticking can start reliably.
+    ensureAudioContext();
     if (focusRunDate !== today && hasCountableFocusProgress(timerMode, phase, time, sessionMinutes, countdownMinutes)) {
       const fresh = getFreshFocusTime(timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes);
       setTime(fresh);
@@ -1240,7 +1274,7 @@ export function TimerProvider({ children }) {
     }
     setFocusRunDate(today);
     setIsRunning(true);
-  }, [timerMode, isRunning, time, userId, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, focusRunDate, flushRunSegment, urgentFlushTimerPersist]);
+  }, [timerMode, isRunning, time, userId, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, countdownMinutes, focusRunDate, flushRunSegment, urgentFlushTimerPersist, ensureAudioContext]);
 
   const handleReset = useCallback(() => {
     void (async () => {

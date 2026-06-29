@@ -4,7 +4,7 @@ import { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { FocusContext } from '@/contexts/FocusContext';
 import { getUserStorageItem, getUserStorageJson, removeUserStorageItem, setUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
-import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
+import { DEFAULT_SPACES_VIDEO_ID, DEFAULT_SPACES_VOLUME, resolveSpacesVideoId } from '@/lib/spacesConstants';
 import { SPACES_CATEGORIES, SPACES_CATALOG, filterSpacesByCategory } from '@/lib/spacesCatalog';
 import {
   applySpacesBaseVolume,
@@ -30,9 +30,9 @@ export default function SpacesDrawer({ isOpen, onClose }) {
     }
     if (typeof window !== 'undefined') {
       const saved = getUserStorageItem(userId, 'focus-video-volume', 'focus-video-volume');
-      return saved ? parseInt(saved) : 50;
+      return saved ? parseInt(saved, 10) : DEFAULT_SPACES_VOLUME;
     }
-    return 50;
+    return DEFAULT_SPACES_VOLUME;
   };
   
   const [volumeState, setVolumeState] = useState(getVolume);

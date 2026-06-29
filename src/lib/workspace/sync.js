@@ -126,6 +126,30 @@ async function syncGoogleCalendar(userId, token) {
       };
     });
 
+  const fetchedIds = new Set(blocks.map((b) => b.external_id));
+
+  const { data: cachedInRange, error: cachedError } = await supabase
+    .from('workspace_calendar_blocks')
+    .select('external_id')
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+    .gt('ends_at', start.toISOString())
+    .lt('starts_at', end.toISOString());
+
+  if (!cachedError && cachedInRange?.length) {
+    const staleIds = cachedInRange
+      .map((row) => row.external_id)
+      .filter((id) => id && !fetchedIds.has(id));
+    if (staleIds.length) {
+      await supabase
+        .from('workspace_calendar_blocks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('provider', 'google')
+        .in('external_id', staleIds);
+    }
+  }
+
   if (blocks.length) {
     await supabase.from('workspace_calendar_blocks').upsert(blocks, {
       onConflict: 'user_id,provider,external_id',
@@ -137,7 +161,7 @@ async function syncGoogleCalendar(userId, token) {
 
 async function fetchGmailList(token) {
   const gmailRes = await fetch(
-    'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=15&q=is:unread newer_than:7d',
+    'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=15&q=is:unread+is:important+newer_than:7d',
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const gmailList = await gmailRes.json();
@@ -198,6 +222,8 @@ async function upsertGmailNotifications(userId, token, gmailList, supabase) {
       const internalDateMs = msg.internalDate ? parseInt(msg.internalDate, 10) : Date.now();
       const received = new Date(internalDateMs).toISOString();
       const isUnread = Array.isArray(msg.labelIds) ? msg.labelIds.includes('UNREAD') : true;
+      const isImportant = Array.isArray(msg.labelIds) ? msg.labelIds.includes('IMPORTANT') : false;
+      if (!isUnread || !isImportant) return null;
 
       return {
         user_id: userId,

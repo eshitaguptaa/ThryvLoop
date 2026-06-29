@@ -28,6 +28,8 @@ import { getClerkSupabaseToken } from '@/lib/clerkSupabaseToken';
 import { useTimer } from '@/contexts/TimerContext';
 import { openIntegrationsSettings } from '@/lib/openFocusSettings';
 import SpacesCrossfadeBackground from '@/components/landing_sections/SpacesCrossfadeBackground';
+import ThemeToggle from '@/components/ThemeToggle';
+import ProductivityTrendChart from '@/components/home/ProductivityTrendChart';
 import {
   appSurfaceClass,
   appSurfaceInsetClass,
@@ -63,6 +65,51 @@ function formatWorkspaceWhen(iso) {
   if (isToday) return `Today · ${time}`;
   if (isTomorrow) return `Tomorrow · ${time}`;
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function AlertsSectionEmpty({ onSync }) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+      <div className={`${dashboardIconChipSmClass} shrink-0`}>
+        <Calendar size={14} className="text-indigo-600 dark:text-indigo-400" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-foreground">All clear for now</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          No upcoming meetings or unread important mail this week.
+        </p>
+        <button
+          type="button"
+          onClick={onSync}
+          className="mt-2 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          Sync calendar & mail →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TasksSectionEmpty() {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+      <div className={`${dashboardIconChipSmClass} shrink-0`}>
+        <ListTodo size={14} className="text-indigo-600 dark:text-indigo-400" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-foreground">No tasks in focus</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          Add tasks to Today&apos;s Focus or In Progress to see them here.
+        </p>
+        <Link
+          href="/tasks"
+          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          Open Tasks <ArrowUpRight size={12} />
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -295,7 +342,6 @@ export default function Dashboard() {
       })),
     [weeklyFocusSeconds, unloggedFocusSeconds, todayKey]
   );
-  const weekMax = Math.max(1, ...weeklyFocusMinutes.map((d) => d.minutes));
   const productivityPeakDay =
     weeklyFocusMinutes.length > 0
       ? weeklyFocusMinutes.reduce((best, d) => (d.minutes > best.minutes ? d : best), weeklyFocusMinutes[0])
@@ -406,6 +452,7 @@ export default function Dashboard() {
 
     for (const n of workspaceNotifications) {
       if (n.is_read) continue;
+      if (n.source !== 'gmail') continue;
       items.push({
         key: `mail-${n.id}`,
         kind: 'gmail',
@@ -468,6 +515,7 @@ export default function Dashboard() {
                 </div>
               )
             ) : null}
+            <ThemeToggle variant="compact" className="shrink-0" />
             <button
               type="button"
               onClick={() => setNotificationsOpen((o) => !o)}
@@ -892,50 +940,12 @@ export default function Dashboard() {
               </div>
               
               {/* Enhanced SVG Chart - real weekly data */}
-              <div className="relative h-40 sm:h-44 md:h-52 w-full mb-3 sm:mb-4">
-                {homeLoading ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">Loading…</div>
-                ) : (
-                  <svg viewBox="0 0 400 150" className="w-full h-full">
-                    <defs>
-                      <linearGradient id="productivityGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#615FFF" stopOpacity="0.25"/>
-                        <stop offset="50%" stopColor="#818cf8" stopOpacity="0.15"/>
-                        <stop offset="100%" stopColor="#615FFF" stopOpacity="0"/>
-                      </linearGradient>
-                      <linearGradient id="productivityLine" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#615FFF"/>
-                        <stop offset="50%" stopColor="#818cf8"/>
-                        <stop offset="100%" stopColor="#615FFF"/>
-                      </linearGradient>
-                    </defs>
-                    {weeklyFocusMinutes.length > 0 ? (() => {
-                      const pts = weeklyFocusMinutes.map((d, i) => ({
-                        x: 50 + (i / Math.max(1, weeklyFocusMinutes.length - 1)) * 350,
-                        y: 120 - (d.minutes / weekMax) * 90,
-                      }));
-                      const pathD = pts.length >= 2
-                        ? `M${pts[0].x},${pts[0].y} ${pts.slice(1).map((p) => `L${p.x},${p.y}`).join(' ')} L${pts[pts.length - 1].x},120 L${pts[0].x},120 Z`
-                        : '';
-                      const lineD = pts.length >= 2 ? `M${pts.map((p) => `${p.x},${p.y}`).join(' L')}` : '';
-                      return (
-                        <>
-                          <path d={pathD} fill="url(#productivityGradient)" />
-                          <path d={lineD} fill="none" stroke="url(#productivityLine)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                          {pts.map((point, i) => (
-                            <g key={i}>
-                              <circle cx={point.x} cy={point.y} r="5" fill="var(--card)" stroke="#615FFF" strokeWidth="2.5"/>
-                              <circle cx={point.x} cy={point.y} r="2.5" fill="#615FFF"/>
-                            </g>
-                          ))}
-                        </>
-                      );
-                    })() : (
-                      <text x="200" y="75" textAnchor="middle" className="text-muted-foreground" fill="currentColor" style={{ fontSize: 14 }}>No focus data this week</text>
-                    )}
-                  </svg>
-                )}
-              </div>
+              <ProductivityTrendChart
+                data={weeklyFocusMinutes}
+                peakDay={productivityPeakDay}
+                todayKey={todayKey}
+                loading={homeLoading}
+              />
               
               <div className="flex justify-between mt-2 sm:mt-3 text-[9px] sm:text-[10px] text-muted-foreground font-semibold uppercase tracking-wider px-1 sm:px-2">
                 {weeklyFocusMinutes.length > 0
@@ -992,7 +1002,7 @@ export default function Dashboard() {
                     </div>
                     <h3 className="text-base sm:text-lg md:text-xl font-semibold text-foreground">Upcoming & Alerts</h3>
                   </div>
-                  <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1">Your day at a glance</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-2">Your day at a glance</p>
                </div>
                <button
                  type="button"
@@ -1019,7 +1029,7 @@ export default function Dashboard() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-indigo-950 dark:text-indigo-200">Sync Gmail & Calendar</p>
                       <p className="text-xs text-indigo-800/80 dark:text-indigo-300/80 mt-0.5 leading-relaxed">
-                        Connect Google to see meetings and unread mail here.
+                        Connect Google to see meetings and unread important mail here.
                       </p>
                     </div>
                     <span className="text-xs font-bold text-indigo-600 shrink-0 group-hover:translate-x-0.5 transition-transform">
@@ -1070,8 +1080,12 @@ export default function Dashboard() {
                   </button>
                 ) : null}
 
-                {workspaceLoading && !hasWorkspaceAlerts ? (
-                  <div className="py-6 text-center text-muted-foreground text-sm">Loading Gmail & Calendar…</div>
+                {workspaceLoading && !hasWorkspaceAlerts && hasConnection ? (
+                  <div className="py-5 text-center text-sm text-muted-foreground">Loading Gmail & Calendar…</div>
+                ) : null}
+
+                {!workspaceLoading && hasConnection && !hasWorkspaceAlerts ? (
+                  <AlertsSectionEmpty onSync={openIntegrationsSettings} />
                 ) : null}
 
                 {!workspaceLoading && hasWorkspaceAlerts ? (
@@ -1100,7 +1114,7 @@ export default function Dashboard() {
                             <p className="text-[10px] sm:text-[11px] text-muted-foreground font-medium mt-0.5 truncate">
                               {alert.when}
                               {isCal && alert.isOnline ? ' · Video call' : ''}
-                              {alert.kind === 'gmail' ? ' · Gmail' : isCal ? ' · Calendar' : ''}
+                              {alert.kind === 'gmail' ? ' · Important' : isCal ? ' · Calendar' : ''}
                             </p>
                             {alert.preview ? (
                               <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{alert.preview}</p>
@@ -1153,36 +1167,15 @@ export default function Dashboard() {
                   </div>
                 ) : null}
 
-                {!workspaceLoading && hasConnection && !hasWorkspaceAlerts && !showConnectPrompt ? (
-                  <div className="py-4 text-center text-muted-foreground text-sm rounded-2xl border border-dashed border-border bg-muted/40">
-                    <p>No upcoming meetings or unread mail.</p>
-                    <button
-                      type="button"
-                      onClick={openIntegrationsSettings}
-                      className="text-indigo-600 font-medium hover:underline text-xs mt-1 inline-block"
-                    >
-                      Sync now →
-                    </button>
-                  </div>
-                ) : null}
-
-                {upcomingTasks.length > 0 ? (
-                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-1">
-                    Tasks
-                  </p>
-                ) : null}
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2 sm:pt-3">
+                  Tasks
+                </p>
 
                 {homeLoading ? (
-                  <div className="py-4 text-center text-muted-foreground text-sm">Loading tasks…</div>
-                ) : upcomingTasks.length === 0 && !hasWorkspaceAlerts && !showConnectPrompt && !workspaceLoading ? (
-                  <div className="py-4 text-center text-muted-foreground text-sm">
-                    <p className="mb-2">No tasks in focus</p>
-                    <Link href="/tasks" className="text-indigo-600 font-medium hover:underline inline-flex items-center gap-1">
-                      <ListTodo size={14} /> Go to Tasks
-                    </Link>
-                  </div>
+                  <div className="py-5 text-center text-sm text-muted-foreground">Loading tasks…</div>
                 ) : upcomingTasks.length > 0 ? (
-                  upcomingTasks.map((task) => {
+                  <div className="space-y-2 sm:space-y-2.5">
+                  {upcomingTasks.map((task) => {
                     const due = task.due_date ? new Date(task.due_date) : null;
                     const isToday = due && due.toDateString() === new Date().toDateString();
                     const monthStr = due ? due.toLocaleDateString('en-US', { month: 'short' }) : '—';
@@ -1209,15 +1202,16 @@ export default function Dashboard() {
                         <div className="w-2.5 h-2.5 bg-gradient-to-br from-indigo-400 to-purple-400 rounded-full shrink-0 shadow-sm" />
                       </Link>
                     );
-                  })
-                ) : null}
-                {!homeLoading && upcomingTasks.length > 0 && (
+                  })}
                   <Link
                     href="/tasks"
-                    className="block text-center text-indigo-600 text-sm font-medium hover:underline py-2"
+                    className="block py-2 text-center text-sm font-medium text-indigo-600 hover:underline"
                   >
                     View all tasks →
                   </Link>
+                  </div>
+                ) : (
+                  <TasksSectionEmpty />
                 )}
              </div>
                </div>

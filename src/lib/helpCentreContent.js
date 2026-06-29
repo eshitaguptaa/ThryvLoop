@@ -70,7 +70,7 @@ export const HELP_CATEGORIES = [
         id: 'dark-mode',
         question: 'How do I switch between light and dark mode?',
         answer:
-          'Use the **theme toggle** in the sidebar (sun/moon icon) or on the landing page navbar. Your preference is saved and applies across the entire app.',
+          'Use the **theme toggle** on your Home dashboard (sun/moon icon, top right) or on the landing page navbar. Your preference is saved and applies across the entire app.',
         keywords: ['theme', 'dark', 'light', 'appearance'],
       },
       {

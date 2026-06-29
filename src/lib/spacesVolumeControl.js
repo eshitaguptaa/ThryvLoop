@@ -1,5 +1,6 @@
-import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
+import { DEFAULT_SPACES_VOLUME } from '@/lib/spacesConstants';
 import { isSpacesPausedByUser, isSpacesPlaybackIntent } from '@/lib/spacesPlayback';
+import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
 
 const PREVIOUS_VOLUME_KEY = 'focus-spaces-previous-volume';
 const VOLUME_KEY = 'focus-video-volume';
@@ -22,8 +23,8 @@ export function dispatchFocusSpacesPauseChanged(paused) {
 
 export function getSpacesPreviousVolume(userId) {
   const saved = getUserStorageItem(userId, PREVIOUS_VOLUME_KEY, PREVIOUS_VOLUME_KEY);
-  const parsed = saved ? parseInt(saved, 10) : 50;
-  return Number.isNaN(parsed) || parsed <= 0 ? 50 : parsed;
+  const parsed = saved ? parseInt(saved, 10) : DEFAULT_SPACES_VOLUME;
+  return Number.isNaN(parsed) || parsed <= 0 ? DEFAULT_SPACES_VOLUME : parsed;
 }
 
 export function saveSpacesPreviousVolume(userId, vol) {

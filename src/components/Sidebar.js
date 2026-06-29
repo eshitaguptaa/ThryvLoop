@@ -6,13 +6,15 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useClerk, useUser } from '@clerk/nextjs';
 import SpacesDrawer from '@/components/focus/SpacesDrawer';
+import SoundscapeEngineProvider from '@/components/soundscape/SoundscapeEngineProvider';
 import SoundscapeComposer from '@/components/focus/SoundscapeComposer';
 import { normalizeSettingsPanel } from '@/lib/openFocusSettings';
 import { getUserStorageJson, removeUserStorageItem, setUserStorageJson } from '@/utils/userStorage';
 import { suspendClerkAuthRequests } from '@/lib/clerkSupabaseToken';
 import { pauseAndFlushFocusTimerOnLogout } from '@/lib/focusTimerPersist';
-import ThemeToggle from '@/components/ThemeToggle';
+import { markAuthLogoutTransition } from '@/lib/authTransition';
 import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
+import { LogOut, Settings } from 'lucide-react';
 
 const navigationItems = [
   {
@@ -43,7 +45,7 @@ const navigationItems = [
         name: 'Spaces',
         href: '/focus/spaces',
         icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" fill="none" />
             <path d="M3 9h18M9 3v18" stroke="currentColor" />
           </svg>
@@ -53,7 +55,7 @@ const navigationItems = [
         name: 'Task',
         href: '/focus/task',
         icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <circle cx="12" cy="12" r="9" stroke="currentColor" fill="none" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" stroke="currentColor" fill="none" />
           </svg>
@@ -63,7 +65,7 @@ const navigationItems = [
         name: 'Timer',
         href: '/focus/timer',
         icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <circle cx="12" cy="12" r="10" stroke="currentColor" fill="none" />
             <path d="M12 6v6l4 2" stroke="currentColor" strokeLinecap="round" />
           </svg>
@@ -73,7 +75,7 @@ const navigationItems = [
         name: 'Music',
         href: '/focus/music',
         icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path d="M9 18V5l12-2v13" stroke="currentColor" fill="none" />
             <circle cx="6" cy="18" r="3" stroke="currentColor" fill="none" />
             <circle cx="18" cy="16" r="3" stroke="currentColor" fill="none" />
@@ -99,7 +101,7 @@ const navigationItems = [
     name: 'Tasks',
     href: '/tasks',
     icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
         <circle cx="12" cy="12" r="9" stroke="currentColor" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" stroke="currentColor" fill="none" />
       </svg>
@@ -350,6 +352,7 @@ export default function Sidebar({ className = '' }) {
 
   const handleLogout = async () => {
     setMobileMoreOpen(false);
+    markAuthLogoutTransition();
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('soundscape-stop-all'));
       removeUserStorageItem(userId, 'soundscape-active-sounds');
@@ -371,10 +374,14 @@ export default function Sidebar({ className = '' }) {
     ['Analysis', 'Workspaces'].includes(item.name)
   );
 
+  const sidebarIconBoxClass = '[&_svg]:w-6 [&_svg]:h-6 [&_svg]:shrink-0';
+  const sidebarFooterIconBoxClass = '[&_svg]:w-5 [&_svg]:h-5 [&_svg]:shrink-0';
+  const sidebarIconTrackClass = 'w-12 mx-auto shrink-0';
+
   const renderNavIcon = (item, isActive) => (
     <div
       className={`
-        flex items-center justify-center transition-all duration-200
+        flex items-center justify-center transition-all duration-200 ${sidebarIconBoxClass}
         md:w-12 md:h-12 md:rounded-full md:mb-1.5
         w-10 h-10 rounded-xl
         ${
@@ -389,6 +396,7 @@ export default function Sidebar({ className = '' }) {
   );
 
   return (
+    <SoundscapeEngineProvider>
     <>
     <div className={`hidden lg:flex fixed left-0 top-0 h-full w-24 bg-card flex-col items-center py-5 z-40 border-r border-border font-(--font-poppins) ${className}`}>
       {/* Logo/Brand Section */}
@@ -405,7 +413,7 @@ export default function Sidebar({ className = '' }) {
       </Link>
 
       {/* Navigation Items */}
-      <nav className="flex-1 flex flex-col items-center space-y-2 w-full overflow-y-auto px-2 pb-6 sidebar-scroll">
+      <nav className="flex-1 flex flex-col items-center space-y-2 w-full min-h-0 overflow-y-auto pb-6 sidebar-scroll sidebar-icon-track">
         {visibleNavigationItems.map((item) => {
           const isActive =
             pathname === item.href
@@ -433,7 +441,7 @@ export default function Sidebar({ className = '' }) {
                 >
                   <div
                     className={`
-                      w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 mb-1.5
+                      ${sidebarIconTrackClass} h-12 rounded-full flex items-center justify-center transition-all duration-200 mb-1.5 ${sidebarIconBoxClass}
                       ${
                         isParentActive
                           ? 'bg-[#5043F3]/10 text-[#5043F3]'
@@ -465,7 +473,7 @@ export default function Sidebar({ className = '' }) {
                 >
                   <div
                     className={`
-                      w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 mb-1.5
+                      ${sidebarIconTrackClass} h-12 rounded-full flex items-center justify-center transition-all duration-200 mb-1.5 ${sidebarIconBoxClass}
                       ${
                         isActive
                           ? 'bg-[#5043F3]/10 text-[#5043F3]'
@@ -546,7 +554,7 @@ export default function Sidebar({ className = '' }) {
                         ></div>
                         <div
                           className={`
-                            w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 mb-1
+                            w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 mb-1 ${sidebarIconBoxClass}
                             ${
                               isSubActive
                                 ? 'bg-[#5043F3]/10 text-[#5043F3]'
@@ -578,46 +586,40 @@ export default function Sidebar({ className = '' }) {
         })}
       </nav>
 
-      {/* Separator above logout */}
-      <div className="w-full px-4 mt-auto mb-3">
-        <div className="h-px bg-border"></div>
+      {/* Footer — icon track matches nav column above */}
+      <div className="w-full shrink-0 flex flex-col items-center gap-2 pb-2 overflow-y-scroll sidebar-icon-track">
+        <div className="w-full mb-1">
+          <div className="h-px bg-border" />
+        </div>
+
+        {/* Settings (Soundscape/Timer) Button */}
+        <button
+          type="button"
+          onClick={() => {
+            setComposerInitialPanel('composer');
+            setShowSoundscapeComposer(true);
+          }}
+          className="flex flex-col items-center justify-center w-full text-muted-foreground hover:text-foreground transition-all duration-200 group"
+          title="Settings"
+        >
+          <div className={`${sidebarIconTrackClass} h-12 rounded-full flex items-center justify-center group-hover:bg-muted transition-all duration-200 mb-1.5 ${sidebarFooterIconBoxClass}`}>
+            <Settings className="w-5 h-5" strokeWidth={2} aria-hidden />
+          </div>
+          <span className="text-xs font-medium">Settings</span>
+        </button>
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          className="flex flex-col items-center justify-center w-full text-muted-foreground hover:text-foreground transition-all duration-200 group"
+          title="Logout"
+        >
+          <div className={`${sidebarIconTrackClass} h-12 rounded-full flex items-center justify-center group-hover:bg-muted transition-all duration-200 mb-1.5 ${sidebarFooterIconBoxClass}`}>
+            <LogOut className="w-5 h-5" strokeWidth={2} aria-hidden />
+          </div>
+          <span className="text-xs font-medium">Logout</span>
+        </button>
       </div>
-
-      <ThemeToggle variant="sidebar" className="mb-2" userId={user?.id ?? null} />
-
-      {/* Settings (Soundscape/Timer) Button */}
-      <button
-        type="button"
-        onClick={() => {
-          setComposerInitialPanel('composer');
-          setShowSoundscapeComposer(true);
-        }}
-        className="flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 mb-2 group"
-        title="Settings"
-      >
-        <div className="w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-muted transition-all duration-200 mb-1.5">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </div>
-        <span className="text-xs font-medium">Settings</span>
-      </button>
-
-      {/* Logout Button */}
-      <button
-        onClick={handleLogout}
-        className="flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 mb-2 group"
-        title="Logout"
-      >
-        <div className="w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-muted transition-all duration-200 mb-1.5">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" fill="none" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M14 8l4 4-4 4" />
-          </svg>
-        </div>
-        <span className="text-xs font-medium">Logout</span>
-      </button>
     </div>
 
     {/* Mobile bottom navigation */}
@@ -679,7 +681,7 @@ export default function Sidebar({ className = '' }) {
           className="group flex flex-1 flex-col items-center justify-center min-w-0 py-1"
           aria-label="More navigation options"
         >
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl text-muted-foreground group-hover:bg-muted transition-all duration-200">
+          <div className={`flex items-center justify-center w-10 h-10 rounded-xl text-muted-foreground group-hover:bg-muted transition-all duration-200 ${sidebarIconBoxClass}`}>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
@@ -723,7 +725,7 @@ export default function Sidebar({ className = '' }) {
                   key={item.name}
                   href={item.href}
                   onClick={() => setMobileMoreOpen(false)}
-                  className={`flex items-center gap-3 rounded-xl border px-3 py-3 no-underline transition-colors ${
+                  className={`flex items-center gap-3 rounded-xl border px-3 py-3 no-underline transition-colors ${sidebarIconBoxClass} ${
                     isActive
                       ? 'border-[#5043F3]/30 bg-[#5043F3]/10 text-[#5043F3]'
                       : 'border-border text-foreground hover:bg-muted'
@@ -742,7 +744,7 @@ export default function Sidebar({ className = '' }) {
                 setComposerInitialPanel('composer');
                 setShowSoundscapeComposer(true);
               }}
-              className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-foreground hover:bg-muted transition-colors"
+              className={`flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-foreground hover:bg-muted transition-colors ${sidebarIconBoxClass}`}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -750,19 +752,14 @@ export default function Sidebar({ className = '' }) {
               </svg>
               <span className="text-sm font-medium">Settings</span>
             </button>
-
-            <div className="flex items-center gap-3 rounded-xl border border-border px-3 py-3">
-              <ThemeToggle variant="sidebar" userId={user?.id ?? null} />
-              <span className="text-sm font-medium text-foreground">Theme</span>
-            </div>
           </div>
 
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 text-foreground hover:bg-muted transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 text-foreground hover:bg-muted transition-colors [&_svg]:w-6 [&_svg]:h-6 [&_svg]:shrink-0"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" fill="none" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M14 8l4 4-4 4" />
             </svg>
@@ -786,6 +783,7 @@ export default function Sidebar({ className = '' }) {
       onIntegrationsOAuthConsumed={() => setIntegrationsOAuth(null)}
     />
     </>
+    </SoundscapeEngineProvider>
   );
 }
 

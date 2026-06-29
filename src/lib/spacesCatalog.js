@@ -166,6 +166,9 @@ export const SPACES_CATALOG = [
 
 export const DEFAULT_SPACES_VIDEO_ID = SPACES_CATALOG[0]?.videoId ?? 'iBeKujv18OI';
 
+/** Base Spaces channel level (0–100) before master volume scaling. */
+export const DEFAULT_SPACES_VOLUME = 60;
+
 const SPACES_VIDEO_IDS = new Set(SPACES_CATALOG.map((space) => space.videoId));
 
 /** Return a catalog video id, or the default when missing or no longer in the list. */
@@ -177,4 +180,16 @@ export function resolveSpacesVideoId(videoId) {
 export function filterSpacesByCategory(categoryId) {
   if (categoryId === 'all') return SPACES_CATALOG;
   return SPACES_CATALOG.filter((space) => space.category === categoryId);
+}
+
+export function getSpacesDisplayName(videoId) {
+  const match = SPACES_CATALOG.find((space) => space.videoId === videoId);
+  return match?.name ?? 'Spaces';
+}
+
+export function getSpacesPosterUrl(videoId) {
+  const match = SPACES_CATALOG.find((space) => space.videoId === videoId);
+  if (match?.image) return match.image;
+  if (videoId) return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  return null;
 }

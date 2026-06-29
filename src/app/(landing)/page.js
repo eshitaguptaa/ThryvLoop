@@ -4,6 +4,7 @@ import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import Landing from '@/components/landing/LandingPage';
+import AppLoadingScreen from '@/components/ui/AppLoadingScreen';
 
 function LandingWrapper() {
   const router = useRouter();
@@ -23,11 +24,7 @@ function LandingWrapper() {
 export default function Home() {
   return (
     <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center text-muted-foreground">
-          Loading...
-        </div>
-      }
+      fallback={<AppLoadingScreen message="Loading workspace" />}
     >
       <LandingWrapper />
     </Suspense>

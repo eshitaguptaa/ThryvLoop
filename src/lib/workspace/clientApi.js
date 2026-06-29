@@ -6,6 +6,14 @@
  */
 export async function workspaceApiFetch(path, options = {}, getToken) {
   const headers = new Headers(options.headers);
+  if (typeof window !== 'undefined') {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) headers.set('X-User-Timezone', tz);
+    } catch {
+      // ignore
+    }
+  }
   if (getToken) {
     try {
       const token = await getToken();

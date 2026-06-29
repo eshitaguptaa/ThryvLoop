@@ -52,8 +52,8 @@ function parseIso(value, fieldName) {
   return d;
 }
 
-/** @param {{ title?: string, startsAt?: string, endsAt?: string, description?: string | null, location?: string | null, showAs?: string }} body */
-export function validateCalendarEventInput(body) {
+/** @param {{ title?: string, startsAt?: string, endsAt?: string, description?: string | null, location?: string | null, showAs?: string, timeZone?: string | null, startsAtLocal?: string | null, endsAtLocal?: string | null }} body @param {{ requestTimeZone?: string | null }} [options] */
+export function validateCalendarEventInput(body, options = {}) {
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   if (!title) throw new Error('Title is required');
   if (title.length > 500) throw new Error('Title is too long');
@@ -89,7 +89,31 @@ export function validateCalendarEventInput(body) {
     remindBeforeMinutes = Math.round(body.remindBeforeMinutes);
   }
 
-  return { title, startsAt, endsAt, description, location, showAs, remindBeforeMinutes };
+  const timeZone =
+    (typeof body.timeZone === 'string' && body.timeZone.trim() ? body.timeZone.trim() : null) ||
+    (typeof options.requestTimeZone === 'string' && options.requestTimeZone.trim()
+      ? options.requestTimeZone.trim()
+      : null);
+
+  const startsAtLocal =
+    typeof body.startsAtLocal === 'string' && body.startsAtLocal.trim()
+      ? body.startsAtLocal.trim()
+      : null;
+  const endsAtLocal =
+    typeof body.endsAtLocal === 'string' && body.endsAtLocal.trim() ? body.endsAtLocal.trim() : null;
+
+  return {
+    title,
+    startsAt,
+    endsAt,
+    description,
+    location,
+    showAs,
+    remindBeforeMinutes,
+    timeZone,
+    startsAtLocal,
+    endsAtLocal,
+  };
 }
 
 /** @param {{ id: string, user_id: string, title: string, description?: string | null, location?: string | null, starts_at: string, ends_at: string, show_as: string, google_event_id?: string | null }} row */
@@ -399,6 +423,17 @@ export async function deleteUserCalendarEvent(userId, eventId) {
   if (googleEventId) {
     const removed = await deleteGoogleCalendarEvent(userId, googleEventId);
     if (!removed.ok) googleSyncError = removed.error;
+
+    // Drop cached Google block — otherwise it reappears as a separate event after the app row is gone.
+    const { error: blockDeleteError } = await supabase
+      .from('workspace_calendar_blocks')
+      .delete()
+      .eq('user_id', userId)
+      .eq('provider', 'google')
+      .eq('external_id', googleEventId);
+    if (blockDeleteError) {
+      console.error('[calendar] failed to clear synced Google block:', blockDeleteError);
+    }
   }
 
   return { googleSyncError };

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AUTH_MODAL_SIGN_IN, authModalUrl } from '@/lib/authRoutes';
 
+/** Redirect signed-out protected routes to the landing auth modal — no blocking overlay. */
 export default function RedirectToAuthModal({ mode = AUTH_MODAL_SIGN_IN }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -13,9 +14,5 @@ export default function RedirectToAuthModal({ mode = AUTH_MODAL_SIGN_IN }) {
     router.replace(authModalUrl(mode, redirectUrl));
   }, [router, pathname, mode]);
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-foreground text-xl">Redirecting…</div>
-    </div>
-  );
+  return null;
 }
