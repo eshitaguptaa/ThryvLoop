@@ -6,8 +6,9 @@ on:
   pull_request:
 
 env:
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
-  CLERK_SECRET_KEY: sk_test_ci_placeholder
+  # Clerk validates key format at build time when pages prerender (e.g. /spaces-pip).
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+  CLERK_SECRET_KEY: sk_test_Y2xlcmsuZXhhbXBsZS5jb20k
   NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
   NEXT_PUBLIC_SUPABASE_ANON_KEY: ci_anon_key_placeholder
   SUPABASE_SERVICE_ROLE_KEY: ci_service_role_placeholder
