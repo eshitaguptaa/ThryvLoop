@@ -18,6 +18,7 @@ export default function AuthContinuePage() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [password, setPassword] = useState('');
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -30,6 +31,8 @@ export default function AuthContinuePage() {
     || missing.includes('lastName');
   const needsLegal =
     missing.includes('legal_accepted') || missing.includes('legalAccepted');
+  const needsPassword = missing.includes('password');
+  const canSubmit = needsName || needsLegal || needsPassword;
 
   useEffect(() => {
     if (!isLoaded || !signUp) return;
@@ -71,6 +74,7 @@ export default function AuthContinuePage() {
         patch.lastName = lastName.trim();
       }
       if (needsLegal) patch.legalAccepted = legalAccepted;
+      if (needsPassword) patch.password = password;
 
       const result = await signUp.update(patch);
       if (await finishIfComplete(result)) return;
@@ -146,11 +150,32 @@ export default function AuthContinuePage() {
             </label>
           ) : null}
 
-          {!needsName && !needsLegal ? (
+          {needsPassword ? (
+            <div>
+              <label htmlFor="continue-password" className="block text-xs font-semibold mb-1">
+                Choose a password
+              </label>
+              <input
+                id="continue-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                autoComplete="new-password"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Google verified your email. This password is only for signing in with email later.
+              </p>
+            </div>
+          ) : null}
+
+          {!canSubmit ? (
             <p className="text-sm text-muted-foreground">
-              Clerk is asking for extra account fields (username, phone, or similar) that Google
-              does not provide. In Clerk Dashboard → User & authentication, turn those off or set
-              them to optional, then try Google again.
+              Clerk still needs a field this form does not collect (
+              {missing.join(', ') || 'unknown'}
+              ). Check Phone / Username tabs in Clerk if those are required.
             </p>
           ) : null}
 
@@ -165,7 +190,7 @@ export default function AuthContinuePage() {
 
           <button
             type="submit"
-            disabled={busy || (!needsName && !needsLegal)}
+            disabled={busy || !canSubmit}
             className="w-full rounded-lg bg-[#5D3FD3] text-white py-2.5 text-sm font-semibold disabled:opacity-50"
           >
             {busy ? 'Continuing…' : 'Continue'}

@@ -52,9 +52,11 @@ function appOrigin() {
 /** Absolute OAuth return URLs so Clerk cannot fall back to its hosted Account Portal. */
 export function getOauthRedirectUrls(afterAuthPath) {
   const origin = appOrigin();
-  const completePath = isSafeAppPath(afterAuthPath) ? afterAuthPath : AFTER_AUTH_PATH;
+  if (isSafeAppPath(afterAuthPath)) setPostAuthRedirect(afterAuthPath);
   return {
     redirectUrl: `${origin}${SSO_CALLBACK_PATH}`,
-    redirectUrlComplete: `${origin}${completePath}`,
+    // Must be the callback, not /home. /home is auth-gated; middleware would
+    // send an unfinished handshake to /?auth=signin and drop Clerk's ticket.
+    redirectUrlComplete: `${origin}${SSO_CALLBACK_PATH}`,
   };
 }
