@@ -909,6 +909,27 @@ html[data-auth-boot] body {
   background: #070712;
 }
 
+.invite-join-overlay--dialog {
+  z-index: 9999;
+  background: transparent;
+}
+
+.invite-join-overlay--dialog .invite-join-overlay__mesh,
+.invite-join-overlay--dialog .invite-join-overlay__orb {
+  display: none;
+}
+
+.invite-join-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
 .invite-join-overlay__mesh {
   position: absolute;
   inset: 0;
@@ -958,6 +979,168 @@ html[data-auth-boot] body {
     0 32px 80px rgba(0, 0, 0, 0.5),
     0 0 80px rgba(93, 63, 211, 0.12);
   backdrop-filter: blur(22px);
+}
+
+.invite-join-card--dialog {
+  width: min(24.5rem, 100%);
+  min-height: 0;
+  padding: 2.15rem 1.75rem 1.7rem;
+}
+
+.invite-welcome-card {
+  position: relative;
+  z-index: 2;
+  width: min(26.5rem, 100%);
+  overflow: hidden;
+  padding: 2.35rem 1.85rem 1.85rem;
+  text-align: center;
+  border-radius: 1.85rem;
+  background:
+    linear-gradient(180deg, rgba(24, 20, 52, 0.96) 0%, rgba(10, 8, 22, 0.94) 100%);
+  border: 1px solid rgba(165, 148, 249, 0.38);
+  box-shadow:
+    0 0 0 1px rgba(93, 63, 211, 0.2),
+    0 28px 80px rgba(0, 0, 0, 0.55),
+    0 0 90px rgba(80, 67, 243, 0.22);
+}
+
+.invite-welcome-card__glow {
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 12rem;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(80, 67, 243, 0.45), transparent 62%),
+    radial-gradient(ellipse at 80% 30%, rgba(52, 211, 153, 0.18), transparent 48%);
+  pointer-events: none;
+}
+
+.invite-welcome-card__sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.08) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: invite-welcome-sheen 1.6s ease-out 0.35s both;
+  pointer-events: none;
+}
+
+.invite-welcome-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 6.25rem;
+  height: 6.25rem;
+  margin: 0.15rem auto 0.35rem;
+}
+
+.invite-welcome-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid rgba(52, 211, 153, 0.35);
+  animation: invite-welcome-ring 1.6s ease-out infinite;
+}
+
+.invite-welcome-ring--b {
+  animation-delay: 0.45s;
+  border-color: rgba(165, 148, 249, 0.4);
+}
+
+.invite-welcome-check {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.6rem;
+  height: 4.6rem;
+  border-radius: 9999px;
+  color: #ecfdf5;
+  background: linear-gradient(160deg, #34d399 0%, #10b981 55%, #059669 100%);
+  box-shadow:
+    0 10px 28px rgba(16, 185, 129, 0.4),
+    0 0 0 6px rgba(16, 185, 129, 0.16);
+}
+
+.invite-welcome-kicker {
+  margin: 1.05rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #c4b5fd;
+}
+
+.invite-welcome-title {
+  margin: 0.55rem 0 0;
+  font-size: clamp(1.7rem, 4vw, 2.15rem);
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+
+.invite-welcome-copy {
+  margin: 0.7rem auto 0;
+  max-width: 22rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.invite-welcome-cta {
+  margin-top: 1.35rem;
+  width: 100%;
+  border: 0;
+  border-radius: 1rem;
+  padding: 0.9rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #5043F3, #4337D9);
+  box-shadow: 0 12px 28px rgba(80, 67, 243, 0.42);
+  cursor: pointer;
+}
+
+.invite-welcome-cta:hover {
+  filter: brightness(1.06);
+}
+
+.invite-welcome__confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.invite-welcome__confetti-bit {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+}
+
+@keyframes invite-welcome-ring {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+@keyframes invite-welcome-sheen {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite-welcome-card__sheen,
+  .invite-welcome-ring {
+    animation: none;
+  }
 }
 
 .invite-join-brand {

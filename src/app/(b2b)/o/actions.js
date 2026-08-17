@@ -675,7 +675,7 @@ export async function leaveWorkspace(orgSlug) {
 
   revalidatePath('/o');
   revalidatePath(`/o/${orgSlug}`);
-  return { success: true };
+  redirect('/o');
 }
 
 export async function deleteWorkspace(orgSlug) {
@@ -702,5 +702,5 @@ export async function deleteWorkspace(orgSlug) {
 
   revalidatePath('/o');
   revalidatePath(`/o/${orgSlug}`);
-  return { success: true };
+  redirect('/o');
 }

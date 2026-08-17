@@ -6,16 +6,18 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import InviteJoinModal from '@/components/b2b/InviteJoinModal';
 import { formatClerkActionError } from '@/lib/clerkErrors';
 import { getOauthRedirectUrls, setPostAuthRedirect } from '@/lib/authRoutes';
-import { markAuthDestinationReady } from '@/lib/authTransition';
+import { markAuthDestinationReady, setAuthLoginProgress } from '@/lib/authTransition';
 import { suspendClerkAuthRequests } from '@/lib/clerkSupabaseToken';
 import { acceptWorkspaceInvitation } from '@/app/(b2b)/o/actions';
 import {
+  buildWorkspaceWelcomePath,
   clearInviteJoin,
   clearInviteJustJoined,
   consumeInviteWrongEmail,
   markInviteJoinResume,
   markInviteJustJoined,
   markInviteWrongEmail,
+  peekInviteJoin,
   peekInviteJustJoined,
   rememberInviteJoin,
   userHasInviteEmail,
@@ -68,6 +70,7 @@ export default function AcceptOrgInvitation({
   const token = searchParams.get('__clerk_ticket');
   const accountStatus = searchParams.get('__clerk_status');
   const fromInvite = searchParams.get('from_invite') === '1';
+  const welcome = searchParams.get('welcome') === '1';
   const invitedEmail = (searchParams.get('invite_email') || '').trim().toLowerCase();
   const router = useRouter();
   const { organization } = useOrganization();
@@ -75,15 +78,18 @@ export default function AcceptOrgInvitation({
   const { user, isLoaded: userLoaded } = useUser();
   const { signOut, setActive: setActiveClerk } = useClerk();
   const { isLoaded: signInLoaded, signIn, setActive: setActiveFromSignIn } = useSignIn();
-  const [phase, setPhase] = useState('prompt');
+  const [phase, setPhase] = useState(() => (welcome ? 'congrats' : 'prompt'));
+  const [joinedName, setJoinedName] = useState(workspaceName);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [unavailableReason, setUnavailableReason] = useState('');
   const attempted = useRef(false);
+  const enteredRef = useRef(false);
 
   const cleanUrl = `/o/${encodeURIComponent(orgSlug)}`;
-  const displayName = workspaceName || 'this workspace';
+  const welcomeUrl = buildWorkspaceWelcomePath(orgSlug);
+  const displayName = workspaceName || joinedName || 'this workspace';
   const hasInviteIntent = Boolean(
     token
     || fromInvite
@@ -99,6 +105,7 @@ export default function AcceptOrgInvitation({
   const alreadyInWorkspace = organization?.slug === orgSlug;
 
   useEffect(() => {
+    if (mode === 'inline' && !hasInviteIntent && !welcome) return;
     rememberInviteJoin({
       slug: orgSlug,
       email: invitedEmail,
@@ -106,17 +113,27 @@ export default function AcceptOrgInvitation({
       resume: false,
     });
     if (consumeInviteWrongEmail()) setPhase('wrong-email');
-  }, [orgSlug, invitedEmail, displayName, shouldAutoJoin]);
+  }, [orgSlug, invitedEmail, displayName, shouldAutoJoin, mode, hasInviteIntent, welcome]);
 
   useEffect(() => {
+    const remembered = peekInviteJoin();
     const justJoined = peekInviteJustJoined();
-    if (justJoined?.slug === orgSlug) setPhase('congrats');
-  }, [orgSlug]);
+    const name = workspaceName || justJoined?.name || remembered?.name;
+    if (name) setJoinedName(name);
+    if (enteredRef.current || phase === 'done') return;
+    if (justJoined?.slug === orgSlug || welcome) setPhase('congrats');
+  }, [orgSlug, workspaceName, welcome, phase]);
 
   useEffect(() => {
-    if (!shouldAutoJoin) return;
-    markAuthDestinationReady();
-  }, [shouldAutoJoin]);
+    if (mode === 'inline') {
+      markAuthDestinationReady();
+      return;
+    }
+    if (!isSignedIn && phase === 'prompt') markAuthDestinationReady();
+    if (phase === 'unavailable' || phase === 'wrong-email' || phase === 'no-invite') {
+      markAuthDestinationReady();
+    }
+  }, [mode, phase, isSignedIn]);
 
   useEffect(() => {
     attempted.current = false;
@@ -137,14 +154,28 @@ export default function AcceptOrgInvitation({
     }
     markInviteJustJoined({ slug: orgSlug, name: displayName });
     clearInviteJoin();
-    setPhase('congrats');
+    setAuthLoginProgress({ percent: 96, message: 'Opening your workspace' });
+
+    if (mode === 'inline') {
+      setPhase('congrats');
+      router.replace(welcomeUrl);
+      return;
+    }
+
+    window.location.assign(welcomeUrl);
   };
 
   const enterWorkspace = useCallback(() => {
+    if (enteredRef.current) return;
+    enteredRef.current = true;
     clearInviteJustJoined();
+    setPhase('done');
+    if (mode === 'gate') {
+      window.location.assign(cleanUrl);
+      return;
+    }
     router.replace(cleanUrl);
-    router.refresh();
-  }, [router, cleanUrl]);
+  }, [mode, router, cleanUrl]);
 
   const leaveToWorkspaces = useCallback(() => {
     clearInviteJoin();
@@ -167,6 +198,7 @@ export default function AcceptOrgInvitation({
       || !isSignedIn
       || !user
       || phase === 'congrats'
+      || phase === 'done'
       || phase === 'wrong-email'
       || phase === 'unavailable'
       || attempted.current
@@ -180,8 +212,17 @@ export default function AcceptOrgInvitation({
     }
 
     if (alreadyInWorkspace) {
-      if (peekInviteJustJoined()?.slug === orgSlug) {
+      if (peekInviteJustJoined()?.slug === orgSlug || welcome) {
+        if (mode === 'gate') {
+          window.location.assign(welcomeUrl);
+          return;
+        }
         setPhase('congrats');
+        return;
+      }
+      if (mode === 'gate') {
+        if (phase === 'joining') return;
+        window.location.assign(cleanUrl);
         return;
       }
       clearInviteJoin();
@@ -196,6 +237,7 @@ export default function AcceptOrgInvitation({
 
     attempted.current = true;
     setPhase('joining');
+    setAuthLoginProgress({ percent: 88, message: 'Adding you to the team' });
 
     const run = async () => {
       try {
@@ -366,11 +408,13 @@ export default function AcceptOrgInvitation({
     }
   };
 
-  if (mode === 'inline' && phase !== 'congrats' && !hasInviteIntent) {
+  if (phase === 'done') return null;
+
+  if (mode === 'inline' && phase !== 'congrats' && !hasInviteIntent && !welcome) {
     return null;
   }
 
-  if (alreadyInWorkspace && phase !== 'congrats' && peekInviteJustJoined()?.slug !== orgSlug) {
+  if (alreadyInWorkspace && phase !== 'congrats' && phase !== 'joining' && peekInviteJustJoined()?.slug !== orgSlug) {
     return null;
   }
 
@@ -378,12 +422,15 @@ export default function AcceptOrgInvitation({
     return null;
   }
 
+  const overlaySurface = mode === 'inline' ? 'dialog' : 'page';
+
   if (!authLoaded) {
     return (
       <InviteJoinModal
         phase="joining"
         workspaceName={displayName}
         invitedEmail={invitedEmail}
+        surface={overlaySurface}
       />
     );
   }
@@ -429,6 +476,7 @@ export default function AcceptOrgInvitation({
         phase="joining"
         workspaceName={displayName}
         invitedEmail={invitedEmail}
+        surface={overlaySurface}
       />
     );
   }

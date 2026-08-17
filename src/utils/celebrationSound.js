@@ -177,3 +177,52 @@ export function playFocusPausedSound() {
 export function playFocusResumeSound() {
   playWithAudioContext(scheduleResumeTone);
 }
+
+/** Brighter fanfare for joining a team workspace. */
+function scheduleWorkspaceJoinChime(ctx) {
+  const t = ctx.currentTime;
+  const masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(0.5, t);
+  masterGain.gain.linearRampToValueAtTime(0.5, t + 0.9);
+  masterGain.gain.exponentialRampToValueAtTime(0.01, t + 1.45);
+  masterGain.connect(ctx.destination);
+
+  const notes = [
+    { freq: 392.0, start: 0, duration: 0.2, type: 'triangle' },
+    { freq: 523.25, start: 0.08, duration: 0.22, type: 'sine' },
+    { freq: 659.25, start: 0.18, duration: 0.24, type: 'sine' },
+    { freq: 783.99, start: 0.32, duration: 0.28, type: 'triangle' },
+    { freq: 1046.5, start: 0.48, duration: 0.55, type: 'sine' },
+    { freq: 1318.51, start: 0.62, duration: 0.55, type: 'triangle' },
+  ];
+
+  notes.forEach(({ freq, start, duration, type }) => {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.frequency.value = freq;
+    osc.type = type;
+    g.gain.setValueAtTime(0.9, t + start);
+    g.gain.exponentialRampToValueAtTime(0.01, t + start + duration);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(t + start);
+    osc.stop(t + start + duration);
+  });
+
+  const shimmer = ctx.createOscillator();
+  const shimmerGain = ctx.createGain();
+  shimmer.type = 'sine';
+  shimmer.frequency.setValueAtTime(2093, t + 0.5);
+  shimmer.frequency.exponentialRampToValueAtTime(2637, t + 1.1);
+  shimmerGain.gain.setValueAtTime(0.0001, t);
+  shimmerGain.gain.setValueAtTime(0.12, t + 0.5);
+  shimmerGain.gain.exponentialRampToValueAtTime(0.01, t + 1.2);
+  shimmer.connect(shimmerGain);
+  shimmerGain.connect(masterGain);
+  shimmer.start(t + 0.48);
+  shimmer.stop(t + 1.25);
+}
+
+export function playWorkspaceJoinChime() {
+  playWithAudioContext(scheduleWorkspaceJoinChime);
+}

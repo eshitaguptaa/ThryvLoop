@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronDown, Search } from 'lucide-react';
 import { removeMember, updateMemberRole } from '@/app/(b2b)/o/actions';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import MemberReportDownloadButton from '@/components/b2b/MemberReportDownloadButton';
 import {
   workspaceCardClass,
@@ -63,6 +64,7 @@ export default function MembersListClient({
   const [message, setMessage] = useState('');
   const [pending, startTransition] = useTransition();
   const [highlightOn, setHighlightOn] = useState(Boolean(highlightUserId));
+  const [removeTarget, setRemoveTarget] = useState(null);
 
   useEffect(() => {
     if (!highlightUserId) {
@@ -100,12 +102,17 @@ export default function MembersListClient({
   };
 
   const runRemove = (userId, label) => {
-    if (!confirm(`Remove ${label} from this workspace?`)) return;
+    setOpenMenuId(null);
+    setRemoveTarget({ userId, label });
+  };
+
+  const confirmRemove = () => {
+    if (!removeTarget) return;
     setMessage('');
     startTransition(async () => {
-      const res = await removeMember(orgSlug, userId);
+      const res = await removeMember(orgSlug, removeTarget.userId);
       setMessage(res?.error || 'Member removed.');
-      setOpenMenuId(null);
+      setRemoveTarget(null);
     });
   };
 
@@ -290,6 +297,31 @@ export default function MembersListClient({
           {members.length > 0 ? 'No people match your search.' : 'No members in this workspace yet.'}
         </div>
       ) : null}
+
+      <ConfirmModal
+        open={Boolean(removeTarget)}
+        title="Remove this member?"
+        description={
+          removeTarget ? (
+            <>
+              <span className="font-semibold text-foreground">{removeTarget.label}</span>
+              {' '}will lose access to this workspace. You can invite them again later if needed.
+            </>
+          ) : (
+            'They will lose access to this workspace.'
+          )
+        }
+        confirmLabel={pending ? 'Removing…' : 'Remove member'}
+        cancelLabel="Keep member"
+        tone="danger"
+        busy={pending}
+        busyLabel="Removing…"
+        onCancel={() => {
+          if (pending) return;
+          setRemoveTarget(null);
+        }}
+        onConfirm={confirmRemove}
+      />
     </>
   );
 }

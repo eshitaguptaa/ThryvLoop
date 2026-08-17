@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { createPortal } from 'react-dom';
-import { Check, MailWarning, Clock } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { MailWarning, Clock } from 'lucide-react';
+import InviteWelcomeModal from '@/components/b2b/InviteWelcomeModal';
 
 function GoogleMark() {
   return (
@@ -16,7 +18,7 @@ function GoogleMark() {
   );
 }
 
-function InviteShell({ children }) {
+function PageShell({ children }) {
   const node = (
     <div className="invite-join-overlay" role="dialog" aria-modal="true">
       <div className="invite-join-overlay__mesh" aria-hidden />
@@ -27,6 +29,52 @@ function InviteShell({ children }) {
   );
   if (typeof document === 'undefined') return node;
   return createPortal(node, document.body);
+}
+
+function DialogShell({ children, onDismiss }) {
+  const reduced = useReducedMotion();
+  const node = (
+    <AnimatePresence>
+      <motion.div
+        className="invite-join-overlay invite-join-overlay--dialog"
+        role="dialog"
+        aria-modal="true"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <motion.button
+          type="button"
+          aria-label="Close"
+          className="invite-join-overlay__backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onDismiss}
+        />
+        <motion.div
+          className="invite-join-card invite-join-card--dialog"
+          initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: 18 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: 8 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {children}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+  if (typeof document === 'undefined') return node;
+  return createPortal(node, document.body);
+}
+
+function InviteShell({ surface, children, onDismiss }) {
+  if (surface === 'dialog') {
+    return <DialogShell onDismiss={onDismiss}>{children}</DialogShell>;
+  }
+  return <PageShell>{children}</PageShell>;
 }
 
 function LogoMark() {
@@ -72,24 +120,33 @@ export default function InviteJoinModal({
   onRetry,
   onLeave,
   unavailableReason = '',
+  surface = 'page',
 }) {
   const name = workspaceName || 'this workspace';
   const [showEmail, setShowEmail] = useState(false);
-  const [password, setPassword] = useState('');
-  const enteredRef = useRef(false);
+  const overlaySurface = phase === 'congrats' ? 'dialog' : surface;
 
   useEffect(() => {
-    if (phase !== 'congrats' || !onEnter || enteredRef.current) return undefined;
-    const timer = window.setTimeout(() => {
-      enteredRef.current = true;
-      onEnter();
-    }, 2200);
-    return () => window.clearTimeout(timer);
+    if (overlaySurface !== 'dialog') return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [overlaySurface]);
+
+  useEffect(() => {
+    if (phase !== 'congrats' || !onEnter) return undefined;
+    const onKey = (event) => {
+      if (event.key === 'Escape') onEnter();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [phase, onEnter]);
 
   if (phase === 'joining') {
     return (
-      <InviteShell>
+      <InviteShell surface={overlaySurface}>
         <LogoMark />
         <p className="invite-join-kicker">Team workspace</p>
         <h1 className="invite-join-title">Joining {name}</h1>
@@ -103,7 +160,7 @@ export default function InviteJoinModal({
     const used = unavailableReason === 'used';
     const expired = unavailableReason === 'expired';
     return (
-      <InviteShell>
+      <InviteShell surface={overlaySurface}>
         <div className="invite-join-warn-icon" aria-hidden>
           <Clock className="h-7 w-7" strokeWidth={2.25} />
         </div>
@@ -128,7 +185,7 @@ export default function InviteJoinModal({
   if (phase === 'wrong-email' || phase === 'no-invite') {
     const wrongEmail = phase === 'wrong-email';
     return (
-      <InviteShell>
+      <InviteShell surface={overlaySurface}>
         <div className="invite-join-warn-icon" aria-hidden>
           <MailWarning className="h-7 w-7" strokeWidth={2.25} />
         </div>
@@ -161,27 +218,13 @@ export default function InviteJoinModal({
   }
 
   if (phase === 'congrats') {
-    return (
-      <InviteShell>
-        <div className="invite-join-check" aria-hidden>
-          <Check className="h-8 w-8" strokeWidth={2.5} />
-        </div>
-        <p className="invite-join-kicker">You&apos;re in</p>
-        <h1 className="invite-join-title">Welcome to {name}</h1>
-        <p className="invite-join-copy">
-          Congratulations — you joined the team. Your host has been notified. Opening the workspace…
-        </p>
-        <button type="button" className="invite-join-primary" onClick={onEnter}>
-          Enter workspace
-        </button>
-      </InviteShell>
-    );
+    return <InviteWelcomeModal workspaceName={name} onEnter={onEnter} />;
   }
 
   const busy = oauthLoading || emailLoading;
 
   return (
-    <InviteShell>
+    <InviteShell surface={overlaySurface}>
       <LogoMark />
       <p className="invite-join-kicker">You&apos;re invited</p>
       <h1 className="invite-join-title">Join {name}</h1>

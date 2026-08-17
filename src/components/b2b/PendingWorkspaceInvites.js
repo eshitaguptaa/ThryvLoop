@@ -2,10 +2,16 @@
 
 import { useOrganizationList, useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { declineWorkspaceInvitation } from '@/app/(b2b)/o/actions';
 import ConfirmModal from '@/components/ui/ConfirmModal';
-import { buildInviteJoinPath, clearInviteJoin, rememberInviteJoin } from '@/lib/inviteJoin';
+import {
+  buildInviteJoinPath,
+  clearInviteJoin,
+  peekInviteJoinPath,
+  peekInviteJustJoined,
+  rememberInviteJoin,
+} from '@/lib/inviteJoin';
 import {
   workspaceCardClass,
   workspacePrimaryButtonClass,
@@ -28,13 +34,26 @@ function invitationSlug(invitation) {
 export default function PendingWorkspaceInvites() {
   const router = useRouter();
   const { user } = useUser();
-  const { isLoaded, userInvitations } = useOrganizationList({
+  const { isLoaded, userInvitations, userMemberships } = useOrganizationList({
     userInvitations: true,
+    userMemberships: true,
   });
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
   const [declineTarget, setDeclineTarget] = useState(null);
-  const invites = userInvitations?.data || [];
+
+  const invites = useMemo(() => {
+    if (peekInviteJoinPath() || peekInviteJustJoined()) return [];
+    const memberSlugs = new Set(
+      (userMemberships?.data || [])
+        .map((membership) => membership?.organization?.slug)
+        .filter(Boolean),
+    );
+    return (userInvitations?.data || []).filter((invitation) => {
+      const slug = invitationSlug(invitation);
+      return Boolean(slug) && !memberSlugs.has(slug);
+    });
+  }, [userInvitations?.data, userMemberships?.data]);
 
   if (!isLoaded || invites.length === 0) return null;
 

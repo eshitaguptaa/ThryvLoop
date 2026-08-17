@@ -7,6 +7,10 @@ export function buildInviteJoinPath(slug, email) {
   return `/o/${encodeURIComponent(slug)}?${params.toString()}`;
 }
 
+export function buildWorkspaceWelcomePath(slug) {
+  return `/o/${encodeURIComponent(slug)}?welcome=1`;
+}
+
 export function rememberInviteJoin({ slug, email, name, resume = false }) {
   if (typeof window === 'undefined' || !slug) return;
   const normalizedEmail = String(email || '').trim().toLowerCase();

@@ -109,6 +109,14 @@ export default clerkMiddleware(async (auth, req) => {
     await auth.protect();
   }
 
+  if (isB2BWorkspaceRoute(req) && req.nextUrl.searchParams.get('welcome') === '1') {
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-thryv-welcome', '1');
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+  }
+
   if (isOrgInviteRequest) {
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set('x-thryv-invite', '1');

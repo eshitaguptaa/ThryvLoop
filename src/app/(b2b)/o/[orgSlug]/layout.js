@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { authModalUrl } from '@/lib/authRoutes';
 import WorkspaceRouteLoading from '@/components/b2b/WorkspaceRouteLoading';
 import AcceptOrgInvitation from '@/components/b2b/AcceptOrgInvitation';
+import WorkspaceJoinRetry from '@/components/b2b/WorkspaceJoinRetry';
 import OrgWorkspaceNav from '@/components/b2b/OrgWorkspaceNav';
 import OrgPresenceSync from '@/components/b2b/OrgPresenceSync';
 import OrgJoinNotice from '@/components/b2b/OrgJoinNotice';
@@ -18,7 +19,7 @@ import {
   workspaceInsetClass,
   workspaceSurfaceClass,
 } from '@/components/b2b/workspaceShellClasses';
-import { decodeOrgSlug, getWorkspaceContext, getWorkspacePublicPreview, isOrgAdmin } from '@/lib/org';
+import { decodeOrgSlug, getWorkspaceContext, getWorkspacePublicPreview, isOrgAdmin, workspaceDisplayName } from '@/lib/org';
 import { organizationLogoUrl } from '@/lib/workspaceLogo';
 import { headers } from 'next/headers';
 
@@ -43,7 +44,9 @@ export default async function OrgSlugLayout({ children, params }) {
   const { userId } = await auth();
   const { orgSlug } = await params;
   const decodedSlug = decodeOrgSlug(orgSlug);
-  const isInvite = (await headers()).get('x-thryv-invite') === '1';
+  const headerList = await headers();
+  const isInvite = headerList.get('x-thryv-invite') === '1';
+  const isWelcome = headerList.get('x-thryv-welcome') === '1';
 
   if (!userId) {
     if (isInvite) {
@@ -56,8 +59,20 @@ export default async function OrgSlugLayout({ children, params }) {
   const ctx = await getWorkspaceContext(userId, orgSlug);
 
   if (!ctx) {
-    const preview = await getWorkspacePublicPreview(decodedSlug);
-    return <InviteLanding orgSlug={decodedSlug} workspaceName={preview.name} />;
+    if (isInvite) {
+      const preview = await getWorkspacePublicPreview(decodedSlug);
+      return <InviteLanding orgSlug={decodedSlug} workspaceName={preview.name} />;
+    }
+    if (isWelcome) {
+      const preview = await getWorkspacePublicPreview(decodedSlug);
+      return (
+        <div className={workspaceSurfaceClass}>
+          <WorkspaceAtmosphere variant="org" />
+          <WorkspaceJoinRetry orgSlug={decodedSlug} workspaceName={preview.name} />
+        </div>
+      );
+    }
+    redirect('/o');
   }
 
   const org = ctx.membership.organization;
@@ -72,7 +87,11 @@ export default async function OrgSlugLayout({ children, params }) {
       <OrgPresenceSync organizationId={ctx.supabaseOrgId} userId={userId} />
       <OrgJoinNotice orgSlug={org.slug} />
       <Suspense fallback={null}>
-        <AcceptOrgInvitation orgSlug={decodedSlug} mode="inline" />
+        <AcceptOrgInvitation
+          orgSlug={decodedSlug}
+          mode="inline"
+          workspaceName={workspaceDisplayName(org.name, org.slug)}
+        />
       </Suspense>
 
       <div className={workspaceChromeBarClass}>

@@ -98,22 +98,20 @@ export default function OrgSettingsForm({
         setConfirmBusy(false);
         return;
       }
-      setConfirmVariant(null);
-      try {
-        if (typeof setActive === 'function') {
-          await setActive({ organization: null });
-        }
-      } catch {
-        /* session may already have cleared the org */
+      if (typeof setActive === 'function') {
+        void setActive({ organization: null });
       }
-      router.replace('/o');
-      router.refresh();
+      window.location.assign('/o');
     } catch (e) {
+      if (e && typeof e === 'object' && 'digest' in e && String(e.digest).startsWith('NEXT_REDIRECT')) {
+        window.location.assign('/o');
+        return;
+      }
       const message = e instanceof Error ? e.message : 'Something went wrong.';
       setConfirmError(message);
       setConfirmBusy(false);
     }
-  }, [confirmVariant, orgSlug, router, setActive]);
+  }, [confirmVariant, orgSlug, setActive]);
 
   const readyRef = useRef(false);
   const saveGenRef = useRef(0);
