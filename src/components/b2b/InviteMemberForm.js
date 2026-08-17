@@ -19,9 +19,9 @@ export default function InviteMemberForm({ orgSlug }) {
     <div className={`${workspaceCardClass} p-4 sm:p-5`}>
       <form action={formAction} className="space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Invite by email</h2>
+          <h2 className="text-sm font-semibold text-foreground">Invite a teammate</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            We email a join link (Gmail and other inboxes). They sign in or create an account, then land in this workspace.
+            They get a short email from you with one button to join.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch">
@@ -29,14 +29,15 @@ export default function InviteMemberForm({ orgSlug }) {
             name="email"
             type="email"
             required
-            placeholder="colleague@gmail.com"
+            placeholder="name@gmail.com"
             className={`flex-1 min-w-0 ${workspaceInputClass}`}
+            autoComplete="email"
           />
           <WorkspaceSelect
             name="role"
             defaultValue="org:member"
             size="md"
-            className="sm:w-40 shrink-0 w-full"
+            className="sm:w-36 shrink-0 w-full"
           >
             <option value="org:member">Member</option>
             <option value="org:admin">Admin</option>

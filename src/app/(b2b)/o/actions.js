@@ -4,6 +4,7 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
+  acceptPendingInviteForSignedInUser,
   getInviteRedirectOrigin,
   getMembershipForSlug,
   getOrgMembers,
@@ -20,6 +21,7 @@ import { assertB2BWorkspacesEnabled } from '@/lib/featureFlags';
 import { ensureWorkspaceInSupabase } from '@/lib/orgSync';
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { parseWorkspaceLogoFile } from '@/lib/workspaceLogo';
+import { createInvitationAndNotify, inviterProfile } from '@/lib/orgInvite';
 
 function revalidateOrg(slug) {
   if (!slug) return;
@@ -99,10 +101,12 @@ export async function inviteMember(orgSlug, _prevState, formData) {
   const slug = membership.organization.slug;
   const organizationId = membership.organization.id;
   const origin = await getInviteRedirectOrigin();
-  const redirectUrl = `${origin}/o/${encodeURIComponent(slug)}?from_invite=1`;
+  const workspaceName = membership.organization.name || slug;
 
   try {
     const client = await clerkClient();
+    const inviterUser = await client.users.getUser(userId);
+    const inviter = inviterProfile(inviterUser);
 
     const existingUsers = await client.users.getUserList({
       emailAddress: [email],
@@ -136,13 +140,18 @@ export async function inviteMember(orgSlug, _prevState, formData) {
       resent = true;
     }
 
-    await client.organizations.createOrganizationInvitation({
+    const issued = await createInvitationAndNotify({
+      client,
       organizationId,
       inviterUserId: userId,
-      emailAddress: email,
+      inviter,
+      email,
       role,
-      redirectUrl,
+      workspaceName,
+      slug,
+      origin,
     });
+    if (issued.error) return { error: issued.error };
 
     const ctx = await getWorkspaceContext(userId, slug);
     if (ctx?.supabaseOrgId) {
@@ -161,8 +170,8 @@ export async function inviteMember(orgSlug, _prevState, formData) {
     return {
       success: true,
       message: resent
-        ? `Invitation resent to ${email}.`
-        : `Invitation sent to ${email}.`,
+        ? `Invite resent to ${email}.`
+        : `Invite sent to ${email}.`,
     };
   } catch (e) {
     return { error: formatClerkActionError(e, 'Could not send invitation.') };
@@ -225,13 +234,19 @@ export async function resendInvitation(orgSlug, invitationId) {
     });
 
     const origin = await getInviteRedirectOrigin();
-    await client.organizations.createOrganizationInvitation({
+    const inviterUser = await client.users.getUser(userId);
+    const issued = await createInvitationAndNotify({
+      client,
       organizationId: membership.organization.id,
       inviterUserId: userId,
-      emailAddress: email,
+      inviter: inviterProfile(inviterUser),
+      email,
       role,
-      redirectUrl: `${origin}/o/${encodeURIComponent(membership.organization.slug)}?from_invite=1`,
+      workspaceName: membership.organization.name || membership.organization.slug,
+      slug: membership.organization.slug,
+      origin,
     });
+    if (issued.error) return { error: issued.error };
 
     const ctx = await getWorkspaceContext(userId, membership.organization.slug);
     if (ctx?.supabaseOrgId) {
@@ -249,6 +264,24 @@ export async function resendInvitation(orgSlug, invitationId) {
 
   revalidateOrg(membership.organization.slug);
   return { success: true };
+}
+
+export async function acceptWorkspaceInvitation(orgSlug) {
+  assertB2BWorkspacesEnabled();
+  const { userId } = await auth();
+  if (!userId) return { error: 'You must be signed in.' };
+  if (!orgSlug) return { error: 'Missing workspace.' };
+
+  try {
+    const result = await acceptPendingInviteForSignedInUser(userId, orgSlug);
+    if (result?.error) return result;
+    const slug = String(orgSlug);
+    revalidatePath('/o');
+    revalidateOrg(slug);
+    return result;
+  } catch (e) {
+    return { error: formatClerkActionError(e, 'Could not accept the invitation.') };
+  }
 }
 
 export async function updateMemberRole(orgSlug, targetUserId, nextRole) {

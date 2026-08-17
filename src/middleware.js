@@ -48,7 +48,8 @@ export default clerkMiddleware(async (auth, req) => {
 
   const { userId } = await auth();
   const isInviteTicket = req.nextUrl.searchParams.has('__clerk_ticket');
-  const isOrgInviteRequest = isB2BWorkspaceRoute(req) && isInviteTicket;
+  const isInviteReturn = req.nextUrl.searchParams.get('from_invite') === '1';
+  const isOrgInviteRequest = isB2BWorkspaceRoute(req) && (isInviteTicket || isInviteReturn);
 
   if (!B2B_WORKSPACES_ENABLED) {
     if (isB2BWorkspaceRoute(req)) {

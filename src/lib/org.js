@@ -278,6 +278,142 @@ export async function getPendingInvitations(organizationId) {
   }
 }
 
+function invitationEmail(invitation) {
+  return String(invitation?.emailAddress || invitation?.email_address || '').toLowerCase();
+}
+
+async function resolveClerkOrgBySlug(slug) {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { data } = await supabase
+      .from('organizations')
+      .select('clerk_organization_id, name, slug')
+      .eq('slug', slug)
+      .maybeSingle();
+    if (data?.clerk_organization_id) {
+      return {
+        id: data.clerk_organization_id,
+        name: data.name || slug,
+        slug: data.slug || slug,
+      };
+    }
+  } catch (e) {
+    console.warn('[org] slug lookup in Supabase failed:', e);
+  }
+
+  try {
+    const client = await clerkClient();
+    const org = await client.organizations.getOrganization({ slug });
+    if (org?.id) {
+      return { id: org.id, name: org.name || slug, slug: org.slug || slug };
+    }
+  } catch (e) {
+    console.warn('[org] Clerk getOrganization({ slug }) failed:', e);
+  }
+
+  return null;
+}
+
+/**
+ * Add the signed-in user to a workspace from a pending email invite.
+ * Used when the invite email is opened while already signed in — Clerk then
+ * sets __clerk_status=complete without calling invitation.accept().
+ */
+export async function acceptPendingInviteForSignedInUser(userId, orgSlug) {
+  const slug = decodeOrgSlug(orgSlug);
+  if (!userId || !slug) {
+    return { error: 'Missing workspace or user.' };
+  }
+
+  const client = await clerkClient();
+  const user = await client.users.getUser(userId);
+  const emails = new Set(
+    (user.emailAddresses || [])
+      .map((entry) => String(entry.emailAddress || '').toLowerCase())
+      .filter(Boolean),
+  );
+
+  const org = await resolveClerkOrgBySlug(slug);
+  if (!org?.id) {
+    return { error: 'Workspace not found.' };
+  }
+
+  const already = await membershipFromClerk(userId, slug);
+  const pending = await getPendingInvitations(org.id);
+  const match = pending.find((inv) => emails.has(invitationEmail(inv))) || null;
+
+  if (already) {
+    if (match?.id) {
+      try {
+        await client.organizations.revokeOrganizationInvitation({
+          organizationId: org.id,
+          invitationId: match.id,
+        });
+      } catch (e) {
+        console.warn('[org] revoke accepted invite failed:', e);
+      }
+    }
+    await ensureWorkspaceInSupabase(already, userId);
+    return { success: true, organizationId: org.id, alreadyMember: true };
+  }
+
+  if (!match) {
+    return {
+      error:
+        'No pending invitation for this account. Sign out and open the email link with the invited Gmail.',
+    };
+  }
+
+  const role = match.role === 'org:admin' ? 'org:admin' : 'org:member';
+  let membership = null;
+  try {
+    membership = await client.organizations.createOrganizationMembership({
+      organizationId: org.id,
+      userId,
+      role,
+    });
+  } catch (createError) {
+    const alreadyMember = await membershipFromClerk(userId, slug);
+    if (alreadyMember) {
+      membership = alreadyMember;
+    } else {
+      try {
+        await client.organizations.revokeOrganizationInvitation({
+          organizationId: org.id,
+          invitationId: match.id,
+        });
+        membership = await client.organizations.createOrganizationMembership({
+          organizationId: org.id,
+          userId,
+          role,
+        });
+      } catch (retryError) {
+        console.error('[org] create membership after invite failed:', createError, retryError);
+        return { error: 'Could not join this workspace. Ask an admin to resend the invite.' };
+      }
+    }
+  }
+
+  try {
+    await client.organizations.revokeOrganizationInvitation({
+      organizationId: org.id,
+      invitationId: match.id,
+    });
+  } catch (e) {
+    console.warn('[org] revoke invitation after join failed:', e);
+  }
+
+  const forSync = membership?.organization
+    ? membership
+    : {
+        id: membership?.id,
+        role,
+        organization: { id: org.id, name: org.name, slug: org.slug },
+      };
+  await ensureWorkspaceInSupabase(forSync, userId);
+  return { success: true, organizationId: org.id };
+}
+
 /** Clerk membership + Supabase tenant UUID (after webhook sync). */
 export const getWorkspaceContext = cache(async (userId, orgSlug) => {
   const membership = await getMembershipForSlug(userId, orgSlug);

@@ -55,9 +55,10 @@ See [WORKSPACE_INTEGRATIONS.md](./WORKSPACE_INTEGRATIONS.md) for Google Cloud Co
 
 | Variable | Notes |
 |----------|--------|
-| `RESEND_API_KEY` | Email provider |
+| `RESEND_API_KEY` | Sends branded workspace invite emails (and waitlist) |
+| `INVITE_EMAIL_FROM` | Verified sender, e.g. `ThryvLoop <invites@thryvloop.com>` |
 | `TEAMS_NOTIFY_TO` | Inbox for waitlist signups |
-| `TEAMS_NOTIFY_FROM` | Verified sender domain |
+| `TEAMS_NOTIFY_FROM` | Verified sender for waitlist (fallback invite from-address) |
 
 ## 3. Supabase migrations
 

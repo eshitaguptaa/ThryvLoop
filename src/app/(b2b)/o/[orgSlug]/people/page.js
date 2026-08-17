@@ -101,7 +101,7 @@ export default async function PeoplePage({ params }) {
       {admin && invitations.length > 0 ? (
         <section>
           <h2 className={`${workspaceSectionTitleClass} mb-2`}>
-            Pending ({invitations.length})
+            Waiting to join ({invitations.length})
           </h2>
           <div className={`${workspaceCardClass} divide-y divide-border overflow-hidden`}>
             {invitations.map((inv) => (

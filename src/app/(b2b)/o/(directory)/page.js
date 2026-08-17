@@ -6,6 +6,7 @@ import { authModalUrl } from '@/lib/authRoutes';
 import WorkspaceAtmosphere from '@/components/b2b/WorkspaceAtmosphere';
 import WorkspaceDirectory from '@/components/b2b/WorkspaceDirectory';
 import WorkspaceDirectoryTheme from '@/components/b2b/WorkspaceDirectoryTheme';
+import PendingWorkspaceInvites from '@/components/b2b/PendingWorkspaceInvites';
 import {
   workspaceDirectoryContentClass,
   workspaceEyebrowClass,
@@ -59,6 +60,8 @@ export default async function WorkspacesPage() {
             </div>
             <WorkspaceDirectoryTheme />
           </header>
+
+          <PendingWorkspaceInvites />
 
           {items.length === 0 ? (
             <div className="ws-rise ws-rise-delay-2 rounded-2xl border border-border bg-card px-6 py-12 sm:px-10 sm:py-14 text-center w-full shadow-sm dark:border-white/[0.08] dark:bg-card/60">
