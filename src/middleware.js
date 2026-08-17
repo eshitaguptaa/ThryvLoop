@@ -34,6 +34,13 @@ const isPublicWorkspaceApi = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
+  if (req.nextUrl.hostname === 'thryvloop.com') {
+    const url = req.nextUrl.clone();
+    url.hostname = 'www.thryvloop.com';
+    url.protocol = 'https:';
+    return NextResponse.redirect(url, 308);
+  }
+
   const { userId } = await auth();
   const isInviteTicket = req.nextUrl.searchParams.has('__clerk_ticket');
   const isOrgInviteRequest = isB2BWorkspaceRoute(req) && isInviteTicket;

@@ -34,9 +34,24 @@ export function consumePostAuthRedirect() {
   }
 }
 
+function appOrigin() {
+  const here = window.location.origin;
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '');
+  try {
+    const host = new URL(here).hostname;
+    if (host === 'thryvloop.com' || host === 'www.thryvloop.com') {
+      if (configured) return configured;
+      return 'https://www.thryvloop.com';
+    }
+  } catch {
+    /* keep current origin */
+  }
+  return here;
+}
+
 /** Absolute OAuth return URLs so Clerk cannot fall back to its hosted Account Portal. */
 export function getOauthRedirectUrls(afterAuthPath) {
-  const origin = window.location.origin;
+  const origin = appOrigin();
   const completePath = isSafeAppPath(afterAuthPath) ? afterAuthPath : AFTER_AUTH_PATH;
   return {
     redirectUrl: `${origin}${SSO_CALLBACK_PATH}`,

@@ -142,6 +142,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
         ? afterAuth
         : undefined;
       if (afterAuthPath) setPostAuthRedirect(afterAuthPath);
+      markAuthLoginTransition();
       const { redirectUrl, redirectUrlComplete } = getOauthRedirectUrls(afterAuthPath);
       await signIn.authenticateWithRedirect({
         strategy,

@@ -52,6 +52,10 @@ export default function RootLayout({ children }) {
             signInFallbackRedirectUrl="/home"
             signUpFallbackRedirectUrl="/home"
             afterSignOutUrl="/"
+            allowedRedirectOrigins={[
+              'https://www.thryvloop.com',
+              'https://thryvloop.com',
+            ]}
           >
             <AppSessionProviders>{children}</AppSessionProviders>
           </ClerkProvider>
