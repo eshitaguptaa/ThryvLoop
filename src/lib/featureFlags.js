@@ -1,12 +1,9 @@
 /**
  * B2B team workspace features (org routes, shared tasks, org analytics).
- *
- * Set NEXT_PUBLIC_ENABLE_B2B_WORKSPACES=true to enable in-app workspace routes
- * and sidebar navigation. Landing page B2B sections stay visible regardless.
- * Defaults to false for the B2C launch.
+ * Workspaces stay available in production even if an old Vercel env still
+ * has NEXT_PUBLIC_ENABLE_B2B_WORKSPACES=false from the B2C launch checklist.
  */
-export const B2B_WORKSPACES_ENABLED =
-  process.env.NEXT_PUBLIC_ENABLE_B2B_WORKSPACES === 'true';
+export const B2B_WORKSPACES_ENABLED = true;
 
 /** Guard server actions and API handlers that require B2B workspaces. */
 export function assertB2BWorkspacesEnabled() {

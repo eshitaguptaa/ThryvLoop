@@ -155,4 +155,4 @@ API rate limits use in-memory counters (per serverless instance). For strict pro
 
 - Never commit `.env.local` or live keys.
 - `SUPABASE_SERVICE_ROLE_KEY` and `CLERK_SECRET_KEY` are server-only.
-- B2C launch: keep `NEXT_PUBLIC_ENABLE_B2B_WORKSPACES=false` until Teams is ready.
+- Team workspaces are on unless `NEXT_PUBLIC_ENABLE_B2B_WORKSPACES=false` (rebuild after changing it).

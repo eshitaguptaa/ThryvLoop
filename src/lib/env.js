@@ -50,6 +50,6 @@ export function getEnvHealth() {
     missing,
     recommended,
     appOrigin: hasAppOrigin(),
-    b2bEnabled: process.env.NEXT_PUBLIC_ENABLE_B2B_WORKSPACES === 'true',
+    b2bEnabled: true,
   };
 }

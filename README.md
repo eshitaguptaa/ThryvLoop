@@ -77,7 +77,7 @@ After deploy, verify: `GET /api/health` should return `{ "status": "ok" }`.
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NEXT_PUBLIC_ENABLE_B2B_WORKSPACES` | `false` | Hides Teams/workspaces routes for B2C launch |
+| `NEXT_PUBLIC_ENABLE_B2B_WORKSPACES` | `true` | Set to `false` to hide Teams/workspaces routes |
 
 ## Docs
 
