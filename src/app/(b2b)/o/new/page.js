@@ -3,12 +3,14 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { authModalUrl } from '@/lib/authRoutes';
 import CreateWorkspaceForm from '@/components/b2b/CreateWorkspaceForm';
+import WorkspaceAtmosphere from '@/components/b2b/WorkspaceAtmosphere';
+import WorkspaceDirectoryTheme from '@/components/b2b/WorkspaceDirectoryTheme';
+import WorkspacePageHeader from '@/components/b2b/WorkspacePageHeader';
 import {
   workspaceCardClass,
   workspaceContentClass,
-  workspaceEyebrowClass,
   workspaceInsetClass,
-  workspacePageTitleClass,
+  workspaceMutedLinkClass,
   workspaceSurfaceClass,
 } from '@/components/b2b/workspaceShellClasses';
 
@@ -18,21 +20,28 @@ export default async function NewWorkspacePage() {
 
   return (
     <div className={workspaceSurfaceClass}>
+      <WorkspaceAtmosphere variant="directory" />
       <div className={workspaceInsetClass}>
         <div className={workspaceContentClass}>
-          <Link
-            href="/o"
-            className="text-sm font-medium text-gray-500 hover:text-[#5D3FD3] transition-colors inline-block"
-          >
-            ← Workspaces
-          </Link>
-          <p className={`${workspaceEyebrowClass} mt-8`}>New workspace</p>
-          <h1 className={workspacePageTitleClass}>Create workspace</h1>
-          <p className="text-gray-500 text-sm sm:text-base mt-2 mb-8 leading-relaxed max-w-md">
-            You become the workspace admin. Team data syncs to Supabase when members join via Clerk.
-          </p>
-          <div className={`${workspaceCardClass} max-w-md p-6 sm:p-8`}>
-            <CreateWorkspaceForm />
+          {/* Full-width chrome: back + theme track the main column edges */}
+          <div className="ws-rise flex items-center justify-between gap-3">
+            <Link href="/o" className={workspaceMutedLinkClass}>
+              ← Workspaces
+            </Link>
+            <WorkspaceDirectoryTheme />
+          </div>
+
+          {/* Narrow form centered in the main column (sidebar-aware) */}
+          <div className="mx-auto mt-8 w-full max-w-md sm:mt-10 sm:max-w-lg">
+            <WorkspacePageHeader
+              eyebrow="New"
+              title="Create workspace"
+              description="You become admin. Invite the team and run Pulse from one hub."
+              showTheme={false}
+            />
+            <div className={`ws-rise ws-rise-delay-2 ${workspaceCardClass} p-5 sm:p-6`}>
+              <CreateWorkspaceForm />
+            </div>
           </div>
         </div>
       </div>

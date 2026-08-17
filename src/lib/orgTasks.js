@@ -4,7 +4,8 @@
  *   label: string,
  *   email?: string | null,
  *   imageUrl?: string | null,
- *   roleLabel?: string
+ *   roleLabel?: string,
+ *   clerkRole?: string | null,
  * }} OrgMemberOption
  */
 
@@ -50,6 +51,7 @@ export function mapOrgMembersForTasks(memberships) {
         email,
         imageUrl: m.publicUserData?.imageUrl ?? null,
         roleLabel: formatMemberRole(m.role),
+        clerkRole: m.role || 'org:member',
       };
     })
     .filter(Boolean);
@@ -154,9 +156,8 @@ export function computeOrgTaskAnalytics(tasks, members, viewerUserId, isAdmin, o
   }
 
   const statusBreakdown = [
-    { status: 'To Do', count: scope.filter((t) => t.column_key === 'todo').length },
-    { status: 'Doing', count: scope.filter((t) => t.column_key === 'in_progress').length },
-    { status: 'Review', count: 0 },
+    { status: 'To do', count: scope.filter((t) => t.column_key === 'todo').length },
+    { status: 'In progress', count: scope.filter((t) => t.column_key === 'in_progress').length },
     { status: 'Done', count: scope.filter((t) => t.column_key === 'done').length },
   ];
 

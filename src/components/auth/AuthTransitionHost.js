@@ -6,15 +6,19 @@ import { useAuth } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
 import AppLoadingScreen from '@/components/ui/AppLoadingScreen';
 import {
+  AUTH_DESTINATION_READY_EVENT,
   AUTH_TRANSITION_EVENT,
   clearAuthTransition,
   getAuthTransitionMode,
+  isAuthDestinationReady,
   isProtectedAppRoute,
 } from '@/lib/authTransition';
 import { authTransitionMessage } from '@/lib/authTransitionMessages';
 
-const LOGIN_FINISH_DELAY_MS = 380;
-const LOGIN_SAFETY_TIMEOUT_MS = 4000;
+const LOGIN_FINISH_DELAY_MS = 320;
+const LOGOUT_FINISH_DELAY_MS = 380;
+/** Keep the loader up until the destination reports ready; fail open eventually. */
+const LOGIN_SAFETY_TIMEOUT_MS = 25000;
 
 /** Full-screen loader during explicit login / logout transitions. */
 export default function AuthTransitionHost() {
@@ -22,11 +26,18 @@ export default function AuthTransitionHost() {
   const pathname = usePathname();
   const [mode, setMode] = useState(null);
   const [finishing, setFinishing] = useState(false);
+  const [destinationReady, setDestinationReady] = useState(false);
   const finishTimerRef = useRef(null);
   const safetyTimerRef = useRef(null);
 
   const syncMode = useCallback(() => {
-    setMode(getAuthTransitionMode());
+    const next = getAuthTransitionMode();
+    setMode(next);
+    if (next === 'login') {
+      setDestinationReady(isAuthDestinationReady());
+    } else {
+      setDestinationReady(false);
+    }
   }, []);
 
   const beginFinish = useCallback(() => {
@@ -44,6 +55,7 @@ export default function AuthTransitionHost() {
     }
     setMode(null);
     setFinishing(false);
+    setDestinationReady(false);
     clearAuthTransition();
   }, []);
 
@@ -53,11 +65,21 @@ export default function AuthTransitionHost() {
     return () => window.removeEventListener(AUTH_TRANSITION_EVENT, syncMode);
   }, [syncMode]);
 
+  useEffect(() => {
+    if (mode !== 'login') return undefined;
+    if (isAuthDestinationReady()) setDestinationReady(true);
+    const onReady = () => setDestinationReady(true);
+    window.addEventListener(AUTH_DESTINATION_READY_EVENT, onReady);
+    return () => window.removeEventListener(AUTH_DESTINATION_READY_EVENT, onReady);
+  }, [mode]);
+
+  // Login dismisses only after the destination page signals ready (never on route alone).
   const isLoginReady =
     mode === 'login' &&
     isLoaded &&
     isSignedIn &&
-    (isProtectedAppRoute(pathname) || pathname === '/');
+    isProtectedAppRoute(pathname) &&
+    destinationReady;
 
   useEffect(() => {
     if (!mode || finishing) return;
@@ -75,7 +97,7 @@ export default function AuthTransitionHost() {
 
     if (mode === 'logout') {
       if (!isLoaded || isSignedIn) return;
-      finishTimerRef.current = window.setTimeout(beginFinish, LOGIN_FINISH_DELAY_MS);
+      finishTimerRef.current = window.setTimeout(beginFinish, LOGOUT_FINISH_DELAY_MS);
       return () => {
         if (finishTimerRef.current) {
           window.clearTimeout(finishTimerRef.current);
@@ -88,6 +110,8 @@ export default function AuthTransitionHost() {
   useEffect(() => {
     if (mode !== 'login' || finishing) return;
     if (!isLoaded || !isSignedIn) return;
+    // Only start the safety clock once we have reached a protected destination.
+    if (!isProtectedAppRoute(pathname)) return;
 
     safetyTimerRef.current = window.setTimeout(beginFinish, LOGIN_SAFETY_TIMEOUT_MS);
     return () => {
@@ -96,7 +120,7 @@ export default function AuthTransitionHost() {
         safetyTimerRef.current = null;
       }
     };
-  }, [beginFinish, finishing, isLoaded, isSignedIn, mode]);
+  }, [beginFinish, finishing, isLoaded, isSignedIn, mode, pathname]);
 
   if (!mode) return null;
 

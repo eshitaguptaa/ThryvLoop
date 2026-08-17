@@ -1,12 +1,17 @@
 import { checkRateLimit } from '@/lib/security/rateLimit';
 
 export class GeminiRateLimitError extends Error {
-  /** @param {string} message */
-  constructor(message, retryAfterSec = 60) {
+  /**
+   * @param {string} message
+   * @param {number} [retryAfterSec]
+   * @param {'minute' | 'day' | 'api'} [limit]
+   */
+  constructor(message, retryAfterSec = 60, limit = 'minute') {
     super(message);
     this.name = 'GeminiRateLimitError';
     this.status = 429;
     this.retryAfterSec = retryAfterSec;
+    this.limit = limit;
   }
 }
 
@@ -41,8 +46,9 @@ export function assertGeminiRequestAllowed(userId) {
 
   if (!perMinute.allowed) {
     throw new GeminiRateLimitError(
-      'Too many AI requests. Please wait a moment and try again.',
-      perMinute.retryAfterSec
+      'AI request limit reached. Upgrade to Pro for higher limits, or wait a moment and try again.',
+      perMinute.retryAfterSec,
+      'minute'
     );
   }
 
@@ -53,8 +59,9 @@ export function assertGeminiRequestAllowed(userId) {
 
   if (!perDay.allowed) {
     throw new GeminiRateLimitError(
-      'Daily AI limit reached. Try again tomorrow.',
-      perDay.retryAfterSec
+      'Daily AI limit reached. Upgrade to Pro for higher limits.',
+      perDay.retryAfterSec,
+      'day'
     );
   }
 }
@@ -73,8 +80,9 @@ export function assertGeminiApiAllowed(userId) {
 
   if (!perMinute.allowed) {
     throw new GeminiRateLimitError(
-      'AI is busy right now. Please wait a moment and try again.',
-      perMinute.retryAfterSec
+      'AI is busy right now. Upgrade to Pro for higher limits, or wait a moment and try again.',
+      perMinute.retryAfterSec,
+      'api'
     );
   }
 }
@@ -90,7 +98,12 @@ export function geminiRateLimitResponse(userId) {
   } catch (err) {
     if (err instanceof GeminiRateLimitError) {
       return Response.json(
-        { error: err.message },
+        {
+          error: err.message,
+          code: 'rate_limit',
+          limit: err.limit,
+          upgrade: true,
+        },
         {
           status: 429,
           headers: { 'Retry-After': String(err.retryAfterSec) },

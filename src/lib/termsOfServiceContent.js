@@ -28,7 +28,7 @@ export const TERMS_HIGHLIGHTS = [
     icon: 'apps',
     title: 'Every product feature',
     description:
-      'Covers Focus, Tasks, Calendar, Meet, Analysis, ThryvBot, Google sync, team workspaces, and more — as implemented in ThryvLoop.',
+      'Covers Focus, Tasks, Calendar, Meet, Analytics, ThryvBot, Google sync, team workspaces, and more — as implemented in ThryvLoop.',
   },
   {
     icon: 'gavel',
@@ -120,7 +120,7 @@ export const TERMS_SECTIONS = [
           '**Tasks** — Kanban-style boards (Today\'s Focus, In Progress, Backlog) with priorities, categories, due dates, and optional assignees;',
           '**Calendar** — native events plus optional **Google Calendar** sync; meeting reminders;',
           '**Meet** — embedded **Google Meet** for online calendar events;',
-          '**Analysis** — productivity charts, streaks, AI-generated insights, and **PDF export**;',
+          '**Analytics** — productivity charts, streaks, AI-generated insights, and **PDF export**;',
           '**ThryvBot** — AI assistant (Google Gemini) with workspace-aware chat and automated actions;',
           '**Settings** — timer, soundscape composer, theme, and **Google integrations**;',
           '**Team workspaces (B2B)** — shared org tasks and member management when enabled;',
@@ -164,7 +164,7 @@ export const TERMS_SECTIONS = [
       },
       {
         type: 'h3',
-        text: '4.4 Analysis & PDF export',
+        text: '4.4 Analytics & PDF export',
       },
       {
         type: 'p',

@@ -3,15 +3,15 @@ import { NextResponse } from 'next/server';
 import {
   buildGoogleAuthUrl,
   createOAuthState,
+  getOAuthAppOrigin,
   WORKSPACE_OAUTH_COOKIE,
 } from '@/lib/workspace/oauth';
 import { authModalUrl } from '@/lib/authRoutes';
-import { getAppOrigin } from '@/lib/org';
 import { rateLimitResponse } from '@/lib/security/rateLimit';
 
-export async function GET() {
+export async function GET(request) {
   const { userId } = await auth();
-  const base = getAppOrigin();
+  const base = getOAuthAppOrigin(request);
   if (!userId) {
     return NextResponse.redirect(new URL(authModalUrl('signin'), base));
   }
@@ -21,7 +21,7 @@ export async function GET() {
 
   try {
     const state = createOAuthState(userId, 'google');
-    const url = buildGoogleAuthUrl(state);
+    const url = buildGoogleAuthUrl(state, request);
     const res = NextResponse.redirect(url);
     res.cookies.set(WORKSPACE_OAUTH_COOKIE, state, {
       httpOnly: true,

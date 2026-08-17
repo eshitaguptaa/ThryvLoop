@@ -17,7 +17,6 @@ import { useUser } from '@clerk/nextjs';
 import {
   DEFAULT_CALENDAR_REMIND_MINUTES,
   calendarEventReminderKey,
-  ensureCalendarNotificationPermission,
   getCalendarReminderPref,
   setCalendarReminderPref,
 } from '@/lib/calendarReminderPrefs';
@@ -168,15 +167,6 @@ export default function CalendarEventModal({
 
   const handleRemindToggle = async (next) => {
     clearErrors();
-    if (next) {
-      const perm = await ensureCalendarNotificationPermission();
-      if (perm === 'denied') {
-        setLocalError(
-          'Notifications are blocked in your browser. Allow notifications for ThryvLoop to get meeting reminders.'
-        );
-        return;
-      }
-    }
     setRemindEnabled(next);
     if (event?.source === 'google' && event?.id) {
       setCalendarReminderPref(
@@ -246,10 +236,7 @@ export default function CalendarEventModal({
         <div>
           <p className="text-sm font-semibold text-foreground">Remind me</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {DEFAULT_CALENDAR_REMIND_MINUTES} minutes before · in-app alert
-            {typeof Notification !== 'undefined' && Notification.permission === 'granted'
-              ? ' + notification'
-              : ''}
+            {DEFAULT_CALENDAR_REMIND_MINUTES} minutes before · ThryvLoop in-app alert
           </p>
         </div>
       </div>

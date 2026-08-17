@@ -108,8 +108,8 @@ const navigationItems = [
     ),
   },
   {
-    name: 'Analysis',
-    href: '/analysis',
+    name: 'Analytics',
+    href: '/analytics',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
         {/* Line graph with wavy line */}
@@ -371,7 +371,7 @@ export default function Sidebar({ className = '' }) {
   );
 
   const mobileMoreItems = visibleNavigationItems.filter((item) =>
-    ['Analysis', 'Workspaces'].includes(item.name)
+    ['Analytics', 'Workspaces'].includes(item.name)
   );
 
   const sidebarIconBoxClass = '[&_svg]:w-6 [&_svg]:h-6 [&_svg]:shrink-0';
@@ -587,7 +587,7 @@ export default function Sidebar({ className = '' }) {
       </nav>
 
       {/* Footer — icon track matches nav column above */}
-      <div className="w-full shrink-0 flex flex-col items-center gap-2 pb-2 overflow-y-scroll sidebar-icon-track">
+      <div className="w-full shrink-0 flex flex-col items-center gap-2 pb-2 overflow-visible sidebar-icon-track">
         <div className="w-full mb-1">
           <div className="h-px bg-border" />
         </div>
@@ -639,7 +639,9 @@ export default function Sidebar({ className = '' }) {
                 key={item.name}
                 type="button"
                 onClick={() => {
-                  if (pathname !== '/focus') router.push('/focus');
+                  if (pathname !== '/focus') {
+                    router.push('/focus');
+                  }
                 }}
                 className="group flex flex-1 flex-col items-center justify-center min-w-0 py-1"
               >

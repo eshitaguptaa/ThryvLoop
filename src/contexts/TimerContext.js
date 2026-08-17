@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useUser, useAuth } from '@clerk/nextjs';
 import {
   getUserStorageItem,
@@ -10,10 +10,8 @@ import {
   setSupabaseAuthToken,
   getFocusTimerStateFromSupabase,
   setFocusTimerStateToSupabase,
-  logFocusSessionToSupabase,
 } from '@/utils/userStorage';
 import { localDateKey } from '@/lib/dateRanges';
-import { fetchTodayAndYesterdayFocusSeconds } from '@/lib/focusSessions';
 import { getClerkSupabaseToken } from '@/lib/clerkSupabaseToken';
 import { getFocusContentCenter } from '@/lib/focusWidgetLayout';
 import {
@@ -23,7 +21,7 @@ import {
   registerFocusTimerUrgentFlush,
   sendFocusTimerStateKeepalive,
 } from '@/lib/focusTimerPersist';
-
+import { useFocusSession } from '@/contexts/FocusSessionContext';
 export const TimerContext = createContext(null);
 
 const DEFAULT_SESSION = 25;
@@ -439,6 +437,7 @@ export function TimerProvider({ children }) {
   const { user } = useUser();
   const { getToken, isSignedIn } = useAuth();
   const userId = user?.id || null;
+  const focusSession = useFocusSession();
   const initialLoadDoneRef = useRef(false);
 
   const getSupabaseToken = useCallback(
@@ -466,11 +465,6 @@ export function TimerProvider({ children }) {
   const [focusRunDate, setFocusRunDate] = useState(null);
   const settingsAppliedRef = useRef(false);
   const [supabaseHydrated, setSupabaseHydrated] = useState(false);
-  /** Bumped after focus time is persisted so live unlogged seconds recalculate. */
-  const [persistedFocusTick, setPersistedFocusTick] = useState(0);
-  const [todayLoggedFocusSeconds, setTodayLoggedFocusSeconds] = useState(0);
-  const [yesterdayLoggedFocusSeconds, setYesterdayLoggedFocusSeconds] = useState(0);
-  const loggedDayRef = useRef(localDateKey());
 
   const [position, setPosition] = useState(null);
   const [size, setSize] = useState({ width: 450, height: 450 });
@@ -493,106 +487,35 @@ export function TimerProvider({ children }) {
   const pomodorosInCycleRef = useRef(pomodorosInCycle);
   const phaseRef = useRef(phase);
   const focusRunDateRef = useRef(focusRunDate);
+  const isRunningRef = useRef(isRunning);
   timeRef.current = time;
   timerModeRef.current = timerMode;
   phaseRef.current = phase;
   pomodorosInCycleRef.current = pomodorosInCycle;
   focusRunDateRef.current = focusRunDate;
+  isRunningRef.current = isRunning;
 
   const refreshLoggedFocusTotals = useCallback(async () => {
-    if (!userId || !isSignedIn) {
-      setTodayLoggedFocusSeconds(0);
-      setYesterdayLoggedFocusSeconds(0);
-      return;
-    }
-    const totals = await fetchTodayAndYesterdayFocusSeconds(userId, getSupabaseToken);
-    setTodayLoggedFocusSeconds(totals.today);
-    setYesterdayLoggedFocusSeconds(totals.yesterday);
-    loggedDayRef.current = localDateKey();
-  }, [userId, isSignedIn, getSupabaseToken]);
+    await focusSession.refreshLoggedFocusTotals();
+  }, [focusSession]);
 
-  const logSession = useCallback(
-    async (options) => {
-      if (!userId || !isSignedIn) return;
-      const token = await getSupabaseToken();
-      if (token) setSupabaseAuthToken(token);
-      const err = await logFocusSessionToSupabase(userId, options, token);
-      if (!err) {
-        setPersistedFocusTick((t) => t + 1);
-        void refreshLoggedFocusTotals();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('focus-session-logged'));
-        }
-      }
-    },
-    [userId, isSignedIn, getSupabaseToken, refreshLoggedFocusTotals]
-  );
+  const hydrateLoggedFocusTotals = focusSession.hydrateLoggedFocusTotals;
 
   /**
-   * Persist elapsed focus time for the current run segment.
-   * Captures elapsed synchronously so callers can clear refs immediately after invoking.
+   * Timer no longer writes focus_sessions — soft FocusSession owns productivity logging.
+   * Kept as a no-op so play/pause/reset/phase callers stay stable.
    */
-  const flushRunSegment = useCallback(
-    async (modeOverride, { mode: modeSnap, phase: phaseSnap, focusDate: focusDateSnap } = {}) => {
-      if (!userIdRef.current) return 0;
+  const flushRunSegment = useCallback(async () => 0, []);
 
-      const mode = modeSnap ?? timerModeRef.current;
-      const phaseVal = phaseSnap ?? phaseRef.current;
-      const runDate = focusDateSnap ?? focusRunDateRef.current;
-      if (!isFocusSegmentMode(mode, phaseVal)) return 0;
-      if (runDate !== localDateKey()) return 0;
+  const unloggedFocusSeconds = focusSession.unloggedFocusSeconds;
+  const todayFocusSeconds = focusSession.todayFocusSeconds;
+  const isFocusTimerRunningToday = focusSession.isFocusSessionActiveToday;
+  const todayLoggedFocusSecondsFromSession = focusSession.todayLoggedFocusSeconds;
+  const yesterdayLoggedFocusSecondsFromSession = focusSession.yesterdayFocusSeconds;
+  const loggedFocusTotalsReady = focusSession.loggedFocusTotalsReady;
 
-      const runStart = runStartTimeRef.current;
-      const currentTime = timeRef.current;
-      const alreadyLogged = segmentLoggedRef.current;
-      const segmentElapsed = getRunSegmentElapsed(mode, phaseVal, currentTime, runStart);
-      const toLog = segmentElapsed - alreadyLogged;
-      if (toLog < 1) return 0;
-
-      segmentLoggedRef.current = alreadyLogged + toLog;
-      if (userIdRef.current) {
-        writeSegmentTracking(userIdRef.current, runStart, segmentLoggedRef.current);
-      }
-      setTodayLoggedFocusSeconds((prev) => prev + toLog);
-      const logMode =
-        modeOverride ||
-        (mode === 'stopwatch' ? 'stopwatch' : mode === 'countdown' ? 'countdown' : 'pomodoro');
-      await logSession({ durationSeconds: toLog, phase: 'session', mode: logMode });
-      return toLog;
-    },
-    [logSession]
-  );
-
-  /** Focus seconds not yet in focus_sessions — only while the timer is actively running today. */
-  const unloggedFocusSeconds = useMemo(() => {
-    void persistedFocusTick;
-    if (!isRunning || focusRunDate !== localDateKey()) return 0;
-    if (!isFocusSegmentMode(timerMode, phase)) return 0;
-    const segmentElapsed = getRunSegmentElapsed(timerMode, phase, time, runStartTimeRef.current);
-    return Math.max(0, segmentElapsed - segmentLoggedRef.current);
-  }, [isRunning, focusRunDate, timerMode, phase, time, persistedFocusTick]);
-
-  const isFocusTimerRunningToday = isRunning && focusRunDate === localDateKey();
-
-  const todayFocusSeconds = useMemo(
-    () => todayLoggedFocusSeconds + unloggedFocusSeconds,
-    [todayLoggedFocusSeconds, unloggedFocusSeconds]
-  );
-
-  useEffect(() => {
-    void refreshLoggedFocusTotals();
-  }, [userId, refreshLoggedFocusTotals]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const id = setInterval(() => {
-      const today = localDateKey();
-      if (loggedDayRef.current !== today) {
-        void refreshLoggedFocusTotals();
-      }
-    }, 60_000);
-    return () => clearInterval(id);
-  }, [userId, refreshLoggedFocusTotals]);
+  const todayLoggedFocusSeconds = todayLoggedFocusSecondsFromSession;
+  const yesterdayLoggedFocusSeconds = yesterdayLoggedFocusSecondsFromSession;
 
   const getDurationSeconds = useCallback(() => {
     if (timerMode === 'countdown') return countdownMinutes * 60;
@@ -1074,30 +997,22 @@ export function TimerProvider({ children }) {
   }, [pauseTimerForLogout]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
+    if (typeof window === 'undefined') return undefined;
     const flushOnHide = () => {
-      if (document.visibilityState !== 'hidden') return;
-      void (async () => {
-        await flushRunSegment();
-        await urgentFlushTimerPersist();
-      })();
+      if (document.visibilityState === 'hidden') {
+        void urgentFlushTimerPersist();
+      }
     };
-
     const flushOnPageHide = () => {
-      void (async () => {
-        await flushRunSegment();
-        await urgentFlushTimerPersist();
-      })();
+      void urgentFlushTimerPersist();
     };
-
     document.addEventListener('visibilitychange', flushOnHide);
     window.addEventListener('pagehide', flushOnPageHide);
     return () => {
       document.removeEventListener('visibilitychange', flushOnHide);
       window.removeEventListener('pagehide', flushOnPageHide);
     };
-  }, [urgentFlushTimerPersist, flushRunSegment]);
+  }, [urgentFlushTimerPersist]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -1213,25 +1128,6 @@ export function TimerProvider({ children }) {
     return () => clearInterval(interval);
   }, [isRunning, timerMode, phase, sessionMinutes, shortBreakMinutes, longBreakMinutes, autoStartBreaks, playAlarm, playPhaseStartRing, playTick, tickSound, longBreakMinutes, countdownMinutes, userId, flushRunSegment]);
 
-  /** Persist focus time in chunks while the timer runs (all modes). */
-  useEffect(() => {
-    if (!isRunning || !userId || focusRunDate !== localDateKey()) return;
-    const checkpoint = () => {
-      if (!isFocusSegmentMode(timerModeRef.current, phaseRef.current)) return;
-      const segmentElapsed = getRunSegmentElapsed(
-        timerModeRef.current,
-        phaseRef.current,
-        timeRef.current,
-        runStartTimeRef.current
-      );
-      if (segmentElapsed - segmentLoggedRef.current >= 1) {
-        void flushRunSegment();
-      }
-    };
-    checkpoint();
-    const id = setInterval(checkpoint, 10_000);
-    return () => clearInterval(id);
-  }, [isRunning, userId, timerMode, phase, flushRunSegment, focusRunDate]);
 
   useEffect(() => {
     if (!initialLoadDoneRef.current) return;
@@ -1369,7 +1265,9 @@ export function TimerProvider({ children }) {
     yesterdayLoggedFocusSeconds,
     todayFocusSeconds,
     isFocusTimerRunningToday,
+    loggedFocusTotalsReady,
     refreshLoggedFocusTotals,
+    hydrateLoggedFocusTotals,
   };
 
   return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>;

@@ -185,34 +185,52 @@ export async function setFocusTimerRecipesToSupabase(userId, recipes) {
 }
 
 /**
- * Log a completed focus session to Supabase for analytics (trends, peak hours).
- * Call when a Pomodoro focus phase or Countdown completes, or when Stopwatch is paused/reset.
- * Pass either sessionMinutes (countdown/pomodoro) or durationSeconds (stopwatch).
- */
-/**
+ * Log completed Focus session time to Supabase for analytics.
+ * Pass durationSeconds (preferred) or sessionMinutes.
+ *
  * @returns {Promise<string|null>} Error message, or null on success.
  */
 export async function logFocusSessionToSupabase(userId, options, accessToken) {
   if (typeof window === 'undefined' || !userId) return 'Not signed in';
-  const { sessionMinutes, durationSeconds: durationSecondsOpt, phase = 'session', mode = 'pomodoro' } = options || {};
+  const {
+    sessionMinutes,
+    durationSeconds: durationSecondsOpt,
+    phase = 'session',
+    mode = 'session',
+  } = options || {};
   const durationSeconds = durationSecondsOpt != null && durationSecondsOpt > 0
     ? Math.floor(durationSecondsOpt)
     : Math.max(1, (sessionMinutes || 25) * 60);
   if (durationSeconds < 1) return null;
   const completedAt = new Date();
   const startedAt = new Date(completedAt.getTime() - durationSeconds * 1000);
+
+  const integrity = {
+    active_seconds: durationSeconds,
+    is_credited: true,
+    integrity_flags: {},
+  };
+
+  const baseRow = {
+    user_id: userId,
+    started_at: startedAt.toISOString(),
+    completed_at: completedAt.toISOString(),
+    duration_seconds: durationSeconds,
+    phase: phase === 'longBreak' ? 'long_break' : phase === 'shortBreak' ? 'short_break' : 'session',
+    mode: mode || 'session',
+  };
+  const fullRow = { ...baseRow, ...integrity };
+
   try {
     if (accessToken) setSupabaseAuthToken(accessToken);
     const supabase = getSupabaseClient();
     if (!supabase) return 'Database not configured';
-    const { error } = await supabase.from('focus_sessions').insert({
-      user_id: userId,
-      started_at: startedAt.toISOString(),
-      completed_at: completedAt.toISOString(),
-      duration_seconds: durationSeconds,
-      phase: phase === 'longBreak' ? 'long_break' : phase === 'shortBreak' ? 'short_break' : 'session',
-      mode: mode || 'pomodoro',
-    });
+
+    let { error } = await supabase.from('focus_sessions').insert(fullRow);
+    if (error && /column|schema cache|does not exist/i.test(error.message || '')) {
+      const fallback = await supabase.from('focus_sessions').insert(baseRow);
+      error = fallback.error;
+    }
     if (error) {
       console.error('focus_sessions insert failed:', error.message);
       return error.message;

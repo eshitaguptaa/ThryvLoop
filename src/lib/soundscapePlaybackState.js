@@ -1,11 +1,15 @@
-import { getSoundscapeSoundName } from '@/lib/soundscapeConstants';
+import { DEFAULT_SOUNDSCAPE_TRACK_VOLUME, getSoundscapeSoundName } from '@/lib/soundscapeConstants';
 import { resumeSoundscapeFromUserGesture } from '@/lib/soundscapeGesturePlay';
 import {
   activateSpacesAudio,
   duckSpacesAudio,
   shouldBootstrapSpacesOnPlay,
 } from '@/lib/soundscape/spacesPlaybackPolicy';
-import { ensureSpacesStorageDefaults, hasSpacesMediaConfigured } from '@/lib/spacesPlayback';
+import {
+  ensureSpacesStorageDefaults,
+  getStoredSpacesVolume,
+  hasSpacesMediaConfigured,
+} from '@/lib/spacesPlayback';
 import { DEFAULT_SPACES_VOLUME } from '@/lib/spacesConstants';
 import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
 
@@ -14,7 +18,7 @@ export function isSpacesConfigured(userId) {
 }
 
 export function hasAudibleComposerSounds(sounds) {
-  return sounds.some((s) => s.id !== 'spaces' && (s.volume ?? 50) > 0);
+  return sounds.some((s) => s.id !== 'spaces' && (s.volume ?? DEFAULT_SOUNDSCAPE_TRACK_VOLUME) > 0);
 }
 
 export function readGlobalVolume(userId) {
@@ -69,8 +73,8 @@ export function readSoundscapeSnapshot(userId) {
     getUserStorageItem(userId, 'soundscape-is-playing', 'soundscape-is-playing') === 'true';
   const sessionActive =
     getUserStorageItem(userId, 'soundscape-session-active', 'soundscape-session-active') === 'true';
-  const spacesPaused =
-    getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
+  const spacesPausedRaw = getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused');
+  const spacesPaused = spacesPausedRaw == null || spacesPausedRaw === '' || spacesPausedRaw === 'true';
   const spacesInMix = !spacesPaused && isSpacesConfigured(userId) && savedPlaying;
 
   if (spacesInMix && !activeSounds.some((s) => s.id === 'spaces')) {
@@ -135,20 +139,39 @@ export function toggleSoundscapePlayPause(userId, current) {
     return { playing: false };
   }
 
-  const bootstrapSpaces = shouldBootstrapSpacesOnPlay(userId);
+  // Play must be audible — unmute master if it was left at 0.
+  if (readGlobalVolume(userId) <= 0) {
+    setUserStorageItem(userId, 'soundscape-global-volume', '75');
+  }
 
+  const hasComposer = hasAudibleComposerSounds(snapshot.activeSounds);
+
+  // No composer sounds → Spaces alone (never auto-add soundscape layers).
   ensureSpacesStorageDefaults(userId);
+  let bootstrapSpaces = false;
+  if (!hasComposer) {
+    if (getStoredSpacesVolume(userId) <= 0) {
+      setUserStorageItem(userId, 'focus-video-volume', String(DEFAULT_SPACES_VOLUME));
+    }
+    setUserStorageItem(userId, 'focus-spaces-paused', 'false');
+    bootstrapSpaces = true;
+  } else {
+    bootstrapSpaces = shouldBootstrapSpacesOnPlay(userId);
+    if (bootstrapSpaces) {
+      setUserStorageItem(userId, 'focus-spaces-paused', 'false');
+    }
+  }
+
   setUserStorageItem(userId, 'soundscape-is-playing', 'true');
   setUserStorageItem(userId, 'soundscape-session-active', 'true');
 
-  if (bootstrapSpaces) {
-    setUserStorageItem(userId, 'focus-spaces-paused', 'false');
-  }
-
+  // Only starts layers the user already added — empty mix stays empty.
   resumeSoundscapeFromUserGesture(userId);
 
   if (bootstrapSpaces) {
-    activateSpacesAudio(userId, readGlobalVolume(userId));
+    activateSpacesAudio(userId, readGlobalVolume(userId), {
+      force: !hasComposer,
+    });
   }
 
   window.dispatchEvent(
@@ -159,6 +182,7 @@ export function toggleSoundscapePlayPause(userId, current) {
   if (bootstrapSpaces) {
     window.dispatchEvent(new CustomEvent('focus-spaces-resume'));
   }
+  window.dispatchEvent(new CustomEvent('soundscape-state-changed'));
   return { playing: true };
 }
 

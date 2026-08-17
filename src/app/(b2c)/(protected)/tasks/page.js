@@ -3,10 +3,22 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth, useUser } from '@clerk/nextjs';
-import { X, Plus, Calendar, Clock, User, Edit2, Trash2, ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { X, Plus, Clock, User, Edit2, Trash2, ArrowRight, ArrowLeft, Check, Archive } from 'lucide-react';
 import { getSupabaseClient, getUserStorageItem, setSupabaseAuthToken, setUserStorageItem } from '@/utils/userStorage';
 import { useCelebration } from '@/contexts/CelebrationContext';
 import TaskSelect from '@/components/tasks/TaskSelect';
+import ThemeToolbarButton from '@/components/ThemeToolbarButton';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import DatePickerField from '@/components/ui/DatePickerField';
+import TaskArchiveDrawer from '@/components/tasks/TaskArchiveDrawer';
+import {
+  archiveTimestampPatch,
+  archivedTaskPurgeCutoff,
+  DONE_BOARD_RETENTION_DAYS,
+  ARCHIVED_TASK_RETENTION_DAYS,
+  doneBoardCutoff,
+  restoreFromArchivePatch,
+} from '@/lib/taskArchive';
 import {
   appSurfaceClass,
   appSurfaceInsetClass,
@@ -135,6 +147,16 @@ export default function TasksPage() {
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [taskError, setTaskError] = useState('');
   const [clearConfirmColumn, setClearConfirmColumn] = useState(null);
+  const [taskToDelete, setTaskToDelete] = useState(null);
+  const [deletingTask, setDeletingTask] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveItems, setArchiveItems] = useState([]);
+  const [archiveCount, setArchiveCount] = useState(0);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [restoringId, setRestoringId] = useState(null);
+  const [archiveDoneOpen, setArchiveDoneOpen] = useState(false);
+  const [archivingDone, setArchivingDone] = useState(false);
   
   const addTaskInProgressRef = useRef(false);
   const moveInProgressRef = useRef(new Set());
@@ -207,6 +229,7 @@ export default function TasksPage() {
       updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
       column: row.column_key || 'backlog',
       completedAt: row.completed_at || null,
+      archivedAt: row.archived_at || null,
     };
   };
 
@@ -225,6 +248,7 @@ export default function TasksPage() {
       }
     });
     byId.forEach((task) => {
+      if (task.archivedAt) return;
       const column = grouped[task.column] != null ? task.column : 'backlog';
       grouped[column].push(task);
     });
@@ -256,13 +280,40 @@ export default function TasksPage() {
     setIsLoadingTasks(true);
     setTaskError('');
     try {
-      const { data, error } = await supabase
+      const cutoffIso = doneBoardCutoff().toISOString();
+      await supabase
         .from('tasks')
-        .select('*')
+        .update(archiveTimestampPatch())
         .eq('user_id', userId)
-        .order('created_at', { ascending: true });
+        .eq('column_key', 'done')
+        .is('archived_at', null)
+        .lt('completed_at', cutoffIso);
+
+      await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('column_key', 'done')
+        .not('archived_at', 'is', null)
+        .lt('archived_at', archivedTaskPurgeCutoff().toISOString());
+
+      const [{ data, error }, countRes] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('*')
+          .eq('user_id', userId)
+          .is('archived_at', null)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .not('archived_at', 'is', null),
+      ]);
       if (error) throw error;
       if (fetchIdRef.current !== thisFetchId || fetchCancelledRef.current) return;
+
+      if (!countRes.error) setArchiveCount(countRes.count || 0);
 
       const next = !data || data.length === 0
         ? { todaysFocus: [], inProgress: [], backlog: [], done: [] }
@@ -381,6 +432,7 @@ export default function TasksPage() {
     if (updates.column !== undefined) {
       payload.column_key = updates.column;
       payload.completed_at = updates.column === 'done' ? new Date().toISOString() : null;
+      if (updates.column !== 'done') payload.archived_at = null;
     }
     if (updates.assignedUsers !== undefined) payload.assigned_users = updates.assignedUsers;
     if (updates.dueDate !== undefined) payload.due_date = updates.dueDate ?? null;
@@ -423,7 +475,7 @@ export default function TasksPage() {
   const deleteTask = async (taskId) => {
     await ensureFreshToken();
     const supabase = getSupabase();
-    if (!ensureSupabase()) return;
+    if (!ensureSupabase()) return false;
     setTaskError('');
     const idForDb = typeof taskId === 'string' ? taskId : String(taskId);
     try {
@@ -436,10 +488,132 @@ export default function TasksPage() {
         });
         return next;
       });
+      return true;
     } catch (error) {
       console.error('Error deleting task:', error);
       setTaskError('Unable to delete task.');
+      return false;
     }
+  };
+
+  const requestDeleteTask = (task) => {
+    if (!task) return;
+    setTaskToDelete(task);
+  };
+
+  const confirmDeleteTask = async () => {
+    if (!taskToDelete || deletingTask) return;
+    setDeletingTask(true);
+    const ok = await deleteTask(taskToDelete.id);
+    setDeletingTask(false);
+    if (ok) setTaskToDelete(null);
+  };
+
+  const loadArchive = async () => {
+    await ensureFreshToken();
+    const supabase = getSupabase();
+    if (!ensureSupabase()) return;
+    setArchiveLoading(true);
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('id, title, completed_at, archived_at, category')
+      .eq('user_id', userId)
+      .not('archived_at', 'is', null)
+      .order('archived_at', { ascending: false })
+      .limit(200);
+    setArchiveLoading(false);
+    if (error) {
+      setTaskError(error.message);
+      return;
+    }
+    const rows = data || [];
+    setArchiveItems(
+      rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        completedAt: row.completed_at || row.archived_at,
+        subtitle: row.category || '',
+      }))
+    );
+    setArchiveCount(rows.length >= 200 ? archiveCount : rows.length);
+  };
+
+  const openArchive = () => {
+    setArchiveSearch('');
+    setArchiveOpen(true);
+    void loadArchive();
+  };
+
+  const archiveTask = async (task) => {
+    if (!task) return;
+    await ensureFreshToken();
+    const supabase = getSupabase();
+    if (!ensureSupabase()) return;
+    const patch = archiveTimestampPatch();
+    const { error } = await supabase.from('tasks').update(patch).eq('id', task.id).eq('user_id', userId);
+    if (error) {
+      setTaskError(error.message);
+      return;
+    }
+    setTasks((prev) => ({
+      ...prev,
+      done: (prev.done || []).filter((t) => !taskIdMatches(t.id, task.id)),
+    }));
+    setArchiveCount((n) => n + 1);
+    if (archiveOpen) void loadArchive();
+  };
+
+  const confirmArchiveDone = async () => {
+    const list = tasks.done || [];
+    const ids = list.map((t) => t.id).filter(Boolean);
+    if (ids.length === 0) {
+      setArchiveDoneOpen(false);
+      return;
+    }
+    setArchivingDone(true);
+    await ensureFreshToken();
+    const supabase = getSupabase();
+    if (!ensureSupabase()) {
+      setArchivingDone(false);
+      return;
+    }
+    const { error } = await supabase
+      .from('tasks')
+      .update(archiveTimestampPatch())
+      .in('id', ids)
+      .eq('user_id', userId);
+    setArchivingDone(false);
+    if (error) {
+      setTaskError(error.message);
+      return;
+    }
+    setTasks((prev) => ({ ...prev, done: [] }));
+    setArchiveCount((n) => n + ids.length);
+    setArchiveDoneOpen(false);
+    if (archiveOpen) void loadArchive();
+  };
+
+  const restoreArchivedTask = async (taskId) => {
+    setRestoringId(taskId);
+    await ensureFreshToken();
+    const supabase = getSupabase();
+    if (!ensureSupabase()) {
+      setRestoringId(null);
+      return;
+    }
+    const { error } = await supabase
+      .from('tasks')
+      .update(restoreFromArchivePatch())
+      .eq('id', taskId)
+      .eq('user_id', userId);
+    setRestoringId(null);
+    if (error) {
+      setTaskError(error.message);
+      return;
+    }
+    setArchiveItems((prev) => prev.filter((item) => item.id !== taskId));
+    setArchiveCount((n) => Math.max(0, n - 1));
+    await fetchTasks();
   };
 
   const clearAllTasks = async () => {
@@ -469,6 +643,10 @@ export default function TasksPage() {
   const openClearColumnConfirm = (columnKey) => {
     const list = tasks[columnKey] || [];
     if (list.length === 0) return;
+    if (columnKey === 'done') {
+      setArchiveDoneOpen(true);
+      return;
+    }
     setClearConfirmColumn(columnKey);
   };
 
@@ -697,7 +875,8 @@ export default function TasksPage() {
             </div>
             
             <div className="flex flex-col gap-4 w-full lg:w-auto">
-              <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+              <div className="flex items-center gap-3 sm:gap-4 flex-wrap sm:justify-end">
+                <ThemeToolbarButton />
                 <div className="flex items-center gap-2">
                   <span className="text-xs sm:text-sm text-muted-foreground font-medium hidden sm:inline">View</span>
                   <button
@@ -871,7 +1050,10 @@ export default function TasksPage() {
                 setEditingTask({ ...task, column: 'todaysFocus' });
                 setIsModalOpen(true);
               }}
-              onDeleteTask={deleteTask}
+              onDeleteTask={requestDeleteTask}
+              onArchiveTask={archiveTask}
+              onOpenArchive={openArchive}
+              archiveCount={archiveCount}
               onClearColumn={openClearColumnConfirm}
               draggedTask={draggedTask}
               draggedFromColumn={draggedFromColumn}
@@ -908,7 +1090,10 @@ export default function TasksPage() {
                 setEditingTask({ ...task, column: 'inProgress' });
                 setIsModalOpen(true);
               }}
-              onDeleteTask={deleteTask}
+              onDeleteTask={requestDeleteTask}
+              onArchiveTask={archiveTask}
+              onOpenArchive={openArchive}
+              archiveCount={archiveCount}
               onClearColumn={openClearColumnConfirm}
               draggedTask={draggedTask}
               draggedFromColumn={draggedFromColumn}
@@ -945,7 +1130,10 @@ export default function TasksPage() {
                 setEditingTask({ ...task, column: 'backlog' });
                 setIsModalOpen(true);
               }}
-              onDeleteTask={deleteTask}
+              onDeleteTask={requestDeleteTask}
+              onArchiveTask={archiveTask}
+              onOpenArchive={openArchive}
+              archiveCount={archiveCount}
               onClearColumn={openClearColumnConfirm}
               draggedTask={draggedTask}
               draggedFromColumn={draggedFromColumn}
@@ -982,7 +1170,10 @@ export default function TasksPage() {
                 setEditingTask({ ...task, column: 'done' });
                 setIsModalOpen(true);
               }}
-              onDeleteTask={deleteTask}
+              onDeleteTask={requestDeleteTask}
+              onArchiveTask={archiveTask}
+              onOpenArchive={openArchive}
+              archiveCount={archiveCount}
               onClearColumn={openClearColumnConfirm}
               draggedTask={draggedTask}
               draggedFromColumn={draggedFromColumn}
@@ -1074,7 +1265,9 @@ export default function TasksPage() {
                                 setEditingTask({ ...task, column: 'todaysFocus' });
                                 setIsModalOpen(true);
                               }}
-                              onDeleteTask={deleteTask}
+                              onDeleteTask={requestDeleteTask}
+              onArchiveTask={archiveTask}
+              onOpenArchive={openArchive}
                               onDragStart={(task, fromColumn) => {
                                 setDraggedTask(task);
                                 setDraggedFromColumn(fromColumn);
@@ -1161,7 +1354,9 @@ export default function TasksPage() {
                                 setEditingTask({ ...task, column: 'inProgress' });
                                 setIsModalOpen(true);
                               }}
-                              onDeleteTask={deleteTask}
+                              onDeleteTask={requestDeleteTask}
+              onArchiveTask={archiveTask}
+              onOpenArchive={openArchive}
                               onDragStart={(task, fromColumn) => {
                                 setDraggedTask(task);
                                 setDraggedFromColumn(fromColumn);
@@ -1248,7 +1443,9 @@ export default function TasksPage() {
                                 setEditingTask({ ...task, column: 'backlog' });
                                 setIsModalOpen(true);
                               }}
-                              onDeleteTask={deleteTask}
+                              onDeleteTask={requestDeleteTask}
+              onArchiveTask={archiveTask}
+              onOpenArchive={openArchive}
                               onDragStart={(task, fromColumn) => {
                                 setDraggedTask(task);
                                 setDraggedFromColumn(fromColumn);
@@ -1310,17 +1507,26 @@ export default function TasksPage() {
                           <h3 className="text-base font-bold text-foreground">Done</h3>
                           <span className="text-xs text-muted-foreground font-medium">({dedupeTasks(filterTasks(normalizedTasks.done)).length})</span>
                         </div>
-                        {dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={openArchive}
+                            className="shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#5D3FD3] dark:text-indigo-300 hover:bg-[#5D3FD3]/10 transition-colors"
+                          >
+                            History{archiveCount > 0 ? ` (${archiveCount})` : ''}
+                          </button>
+                          {dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 ? (
                           <button
                             type="button"
                             onClick={() => openClearColumnConfirm('done')}
-                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
-                            title="Clear all tasks from Done"
+                            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-[#5D3FD3] hover:bg-[#5D3FD3]/10 border border-transparent hover:border-[#5D3FD3]/20 transition-colors"
+                            title="Archive done tasks (keeps Insights)"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Clear all
+                            <Archive className="w-3.5 h-3.5" />
+                            Archive all
                           </button>
-                        )}
+                          ) : null}
+                        </div>
                       </div>
                       {dedupeTasks(filterTasks(normalizedTasks.done)).length > 0 ? (
                         <div className="space-y-3">
@@ -1335,7 +1541,9 @@ export default function TasksPage() {
                                 setEditingTask({ ...task, column: 'done' });
                                 setIsModalOpen(true);
                               }}
-                              onDeleteTask={deleteTask}
+                              onDeleteTask={requestDeleteTask}
+              onArchiveTask={archiveTask}
+              onOpenArchive={openArchive}
                               onDragStart={(task, fromColumn) => {
                                 setDraggedTask(task);
                                 setDraggedFromColumn(fromColumn);
@@ -1395,6 +1603,61 @@ export default function TasksPage() {
           }}
         />
       )}
+
+      <ConfirmModal
+        open={Boolean(taskToDelete)}
+        title="Delete this task?"
+        description={
+          taskToDelete?.column === 'done' || taskToDelete?.completedAt ? (
+            <>
+              Deleting{' '}
+              <span className="font-semibold text-foreground">
+                “{taskToDelete.title || 'this task'}”
+              </span>{' '}
+              removes that completion from Analytics. Archive it instead if you only want it off the
+              board.
+            </>
+          ) : taskToDelete?.title ? (
+            <>
+              <span className="font-semibold text-foreground">“{taskToDelete.title}”</span> will be
+              permanently removed. This cannot be undone.
+            </>
+          ) : (
+            'This task will be permanently removed. This cannot be undone.'
+          )
+        }
+        confirmLabel="Delete task"
+        busy={deletingTask}
+        onCancel={() => {
+          if (!deletingTask) setTaskToDelete(null);
+        }}
+        onConfirm={confirmDeleteTask}
+      />
+
+      <ConfirmModal
+        open={archiveDoneOpen}
+        tone="archive"
+        title="Archive done tasks?"
+        description={`They leave the board but stay in Analytics. History keeps them for about ${ARCHIVED_TASK_RETENTION_DAYS} days, then they are removed.`}
+        confirmLabel="Archive all"
+        busy={archivingDone}
+        onCancel={() => {
+          if (!archivingDone) setArchiveDoneOpen(false);
+        }}
+        onConfirm={confirmArchiveDone}
+      />
+
+      <TaskArchiveDrawer
+        open={archiveOpen}
+        items={archiveItems}
+        loading={archiveLoading}
+        search={archiveSearch}
+        onSearch={setArchiveSearch}
+        onClose={() => setArchiveOpen(false)}
+        onRestore={restoreArchivedTask}
+        restoringId={restoringId}
+        description={`Completions stay in Analytics for current reports. Done stays on the board for ${DONE_BOARD_RETENTION_DAYS} days, then History for about ${ARCHIVED_TASK_RETENTION_DAYS} days. Older archive rows are removed so storage stays bounded.`}
+      />
 
       {clearConfirmColumn != null && (() => {
         const list = tasks[clearConfirmColumn] || [];
@@ -1458,6 +1721,9 @@ function TaskColumn({
   onCompleteTask, 
   onEditTask, 
   onDeleteTask,
+  onArchiveTask,
+  onOpenArchive,
+  archiveCount = 0,
   onClearColumn,
   draggedTask,
   draggedFromColumn,
@@ -1512,7 +1778,30 @@ function TaskColumn({
           <h2 className="text-base font-bold text-foreground truncate">{title}</h2>
           <span className="text-xs text-muted-foreground font-medium shrink-0">({tasks.length})</span>
         </div>
-        {onClearColumn && tasks.length > 0 && (
+        {columnKey === 'done' ? (
+          <div className="flex items-center gap-1 shrink-0">
+            {onOpenArchive ? (
+              <button
+                type="button"
+                onClick={onOpenArchive}
+                className="shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#5D3FD3] dark:text-indigo-300 hover:bg-[#5D3FD3]/10 transition-colors"
+              >
+                History{archiveCount > 0 ? ` (${archiveCount})` : ''}
+              </button>
+            ) : null}
+            {onClearColumn && tasks.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => onClearColumn(columnKey)}
+                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-[#5D3FD3] hover:bg-[#5D3FD3]/10 border border-transparent hover:border-[#5D3FD3]/20 transition-colors"
+                title="Archive done tasks — keeps Insights"
+              >
+                <Archive className="w-3.5 h-3.5" />
+                Archive all
+              </button>
+            ) : null}
+          </div>
+        ) : onClearColumn && tasks.length > 0 ? (
           <button
             type="button"
             onClick={() => onClearColumn(columnKey)}
@@ -1522,7 +1811,7 @@ function TaskColumn({
             <Trash2 className="w-3.5 h-3.5" />
             Clear all
           </button>
-        )}
+        ) : null}
       </div>
       
       <div 
@@ -1546,6 +1835,7 @@ function TaskColumn({
               onCompleteTask={onCompleteTask}
               onEditTask={onEditTask}
               onDeleteTask={onDeleteTask}
+              onArchiveTask={onArchiveTask}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               isDragging={draggedTask?.id === task.id}
@@ -1564,6 +1854,7 @@ function TaskCard({
   onCompleteTask, 
   onEditTask, 
   onDeleteTask,
+  onArchiveTask,
   onDragStart,
   onDragEnd,
   isDragging,
@@ -1710,12 +2001,28 @@ function TaskCard({
                 </button>
               </>
             )}
+            {currentColumn === 'done' && onArchiveTask ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onArchiveTask(task);
+                  setShowMenu(false);
+                }}
+                draggable={false}
+                className="w-full px-4 py-2.5 text-left text-sm text-foreground hover:bg-muted flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-none"
+              >
+                <Archive className="w-4 h-4" />
+                Archive
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                onDeleteTask(task.id);
+                onDeleteTask(task);
                 setShowMenu(false);
               }}
               draggable={false}
@@ -1880,11 +2187,13 @@ function TaskModal({ task, onClose, onSave }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-foreground mb-2">Due Date</label>
-              <input
-                type="date"
+              <DatePickerField
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className={taskModalFieldClass}
+                onChange={setDueDate}
+                tone="orange"
+                placeholder="No due date"
+                aria-label="Due date"
+                triggerClassName={taskModalFieldClass}
               />
             </div>
 

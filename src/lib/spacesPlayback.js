@@ -46,13 +46,17 @@ export function ensureSpacesStorageDefaults(userId) {
 
   const rawPaused = getUserStorageItem(userId, PAUSED_KEY, PAUSED_KEY);
   if (rawPaused == null || rawPaused === '') {
-    setUserStorageItem(userId, PAUSED_KEY, 'false');
+    // Spaces stays muted until the user unmutes it or plays Spaces alone.
+    setUserStorageItem(userId, PAUSED_KEY, 'true');
   }
 }
 
 export function isSpacesPausedByUser(userId) {
-  if (typeof window === 'undefined') return false;
-  return getUserStorageItem(userId, PAUSED_KEY, PAUSED_KEY) === 'true';
+  if (typeof window === 'undefined') return true;
+  const raw = getUserStorageItem(userId, PAUSED_KEY, PAUSED_KEY);
+  // Unset = muted (Spaces does not auto-join soundscape playback).
+  if (raw == null || raw === '') return true;
+  return raw === 'true';
 }
 
 /** Whether Spaces ambient audio should be playing (respects master play/pause). */

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { useUser } from '@clerk/nextjs';
 import { Monitor, Moon, Sun } from 'lucide-react';
@@ -21,19 +22,81 @@ export default function ThemeToggle({ variant = 'compact', className = '', userI
   const resolvedUserId = userId ?? user?.id ?? null;
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const menuRef = useRef(null);
+  const [menuPos, setMenuPos] = useState(/** @type {{ top: number, left: number } | null} */ (null));
+  const rootRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const menuRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const triggerRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
 
   useEffect(() => setMounted(true), []);
+
+  const placeMenu = () => {
+    const btn = triggerRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const menuW = 148;
+    const gap = 8;
+
+    if (variant === 'sidebar') {
+      // Open to the right of the narrow rail so labels aren't clipped by overflow
+      let left = r.right + gap;
+      let top = r.bottom - 8; // align near bottom of icon
+      if (left + menuW > window.innerWidth - 8) {
+        left = Math.max(8, r.left - menuW - gap);
+      }
+      // Keep fully on-screen vertically
+      const estimatedH = 140;
+      if (top + estimatedH > window.innerHeight - 8) {
+        top = Math.max(8, window.innerHeight - estimatedH - 8);
+      }
+      if (top < 8) top = 8;
+      setMenuPos({ top, left });
+      return;
+    }
+
+    // compact / landing: below the control, right-aligned
+    let left = r.right - menuW;
+    let top = r.bottom + gap;
+    if (left < 8) left = 8;
+    if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+    if (top + 140 > window.innerHeight - 8) {
+      top = Math.max(8, r.top - 140 - gap);
+    }
+    setMenuPos({ top, left });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPos(null);
+      return undefined;
+    }
+    placeMenu();
+    const onReposition = () => placeMenu();
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
+    return () => {
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- placeMenu closes over variant
+  }, [open, variant]);
 
   useEffect(() => {
     if (!open) return;
     const handleClick = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setOpen(false);
-      }
+      const t = e.target;
+      if (rootRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const handleKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
     };
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
   }, [open]);
 
   if (!mounted) {
@@ -66,26 +129,14 @@ export default function ThemeToggle({ variant = 'compact', className = '', userI
       ? OPTIONS.filter((o) => o.value !== theme)
       : OPTIONS;
 
-  return (
-    <div ref={menuRef} className={`relative ${className}`}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={triggerClass}
-        aria-label="Theme"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-      >
-        <ActiveIcon className="w-4 h-4" aria-hidden />
-      </button>
-
-      {open ? (
+  const menu = open && menuPos && typeof document !== 'undefined'
+    ? createPortal(
         <div
+          ref={menuRef}
           role="listbox"
           aria-label="Theme options"
-          className={`absolute z-50 min-w-[140px] rounded-xl border border-border bg-card py-1 shadow-lg ${
-            variant === 'sidebar' ? 'left-full ml-2 bottom-0' : 'right-0 top-full mt-2'
-          }`}
+          className="fixed z-[200] min-w-[140px] rounded-xl border border-border bg-card py-1 shadow-lg"
+          style={{ top: menuPos.top, left: menuPos.left }}
         >
           {menuOptions.map(({ value, label, Icon }) => (
             <button
@@ -104,8 +155,25 @@ export default function ThemeToggle({ variant = 'compact', className = '', userI
               {label}
             </button>
           ))}
-        </div>
-      ) : null}
+        </div>,
+        document.body
+      )
+    : null;
+
+  return (
+    <div ref={rootRef} className={`relative ${className}`}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={triggerClass}
+        aria-label="Theme"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <ActiveIcon className="w-4 h-4" aria-hidden />
+      </button>
+      {menu}
     </div>
   );
 }

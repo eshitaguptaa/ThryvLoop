@@ -2,7 +2,6 @@
 
 import { useAuth } from '@clerk/nextjs';
 import RedirectToAuthModal from '@/components/auth/RedirectToAuthModal';
-import ClerkGoogleWorkspaceBridge from '@/components/workspace/ClerkGoogleWorkspaceBridge';
 
 export default function ProtectedShell({ children }) {
   const { isLoaded, isSignedIn } = useAuth();
@@ -13,10 +12,5 @@ export default function ProtectedShell({ children }) {
     return <RedirectToAuthModal />;
   }
 
-  return (
-    <>
-      <ClerkGoogleWorkspaceBridge />
-      {children}
-    </>
-  );
+  return children;
 }

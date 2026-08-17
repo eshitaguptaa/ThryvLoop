@@ -5,7 +5,7 @@ import AppSessionProviders from '@/components/AppSessionProviders';
 import ThemeProvider from '@/components/ThemeProvider';
 import { NEXT_THEMES_STORAGE_KEY } from '@/lib/themePreferences';
 
-const themeInitScript = `(function(){try{var k=${JSON.stringify(NEXT_THEMES_STORAGE_KEY)};var t=localStorage.getItem(k);var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;if(d)r.classList.add('dark');else r.classList.remove('dark');}catch(e){}})();`;
+const themeInitScript = `(function(){try{var k=${JSON.stringify(NEXT_THEMES_STORAGE_KEY)};var t=localStorage.getItem(k);var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;if(d){r.classList.add('dark');r.style.colorScheme='dark';}else{r.classList.remove('dark');r.style.colorScheme='light';}}catch(e){}})();`;
 
 const poppins = Poppins({
   weight: ['400', '500', '600', '700', '800', '900'],
@@ -46,7 +46,13 @@ export default function RootLayout({ children }) {
       </head>
       <body className={`${poppins.className} ${poppins.variable} bg-background text-foreground`}>
         <ThemeProvider>
-          <ClerkProvider signInUrl="/?auth=signin" signUpUrl="/?auth=signup">
+          <ClerkProvider
+            signInUrl="/?auth=signin"
+            signUpUrl="/?auth=signup"
+            signInFallbackRedirectUrl="/home"
+            signUpFallbackRedirectUrl="/home"
+            afterSignOutUrl="/"
+          >
             <AppSessionProviders>{children}</AppSessionProviders>
           </ClerkProvider>
         </ThemeProvider>

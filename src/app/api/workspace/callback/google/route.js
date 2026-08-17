@@ -4,16 +4,14 @@ import {
   exchangeGoogleCode,
   verifyState,
   getStateErrorReason,
+  getOAuthAppOrigin,
   WORKSPACE_OAUTH_COOKIE,
 } from '@/lib/workspace/oauth';
 import { upsertConnection } from '@/lib/workspace/connections';
 import { syncUserWorkspaces } from '@/lib/workspace/sync';
 
 function getRedirectBase(request) {
-  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-  const url = new URL(request.url);
-  return url.origin;
+  return getOAuthAppOrigin(request);
 }
 
 function redirectWithError(base, reason) {
@@ -55,7 +53,7 @@ export async function GET(request) {
   }
 
   try {
-    const tokens = await exchangeGoogleCode(code);
+    const tokens = await exchangeGoogleCode(code, request);
     let accountEmail = null;
     const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },

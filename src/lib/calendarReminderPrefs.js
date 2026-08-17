@@ -91,16 +91,6 @@ export function reminderFiredKey(eventKey, startsAt) {
   return `${eventKey}@${startsAt}`;
 }
 
-/** @returns {Promise<'granted' | 'denied' | 'default' | 'unsupported'>} */
-export async function ensureCalendarNotificationPermission() {
-  if (typeof window === 'undefined' || typeof Notification === 'undefined') {
-    return 'unsupported';
-  }
-  if (Notification.permission === 'granted') return 'granted';
-  if (Notification.permission === 'denied') return 'denied';
-  return Notification.requestPermission();
-}
-
 /**
  * @param {Array<{ id: string, source?: string, title?: string, startsAt: string, remindBeforeMinutes?: number | null }>} events
  * @param {string | null | undefined} userId

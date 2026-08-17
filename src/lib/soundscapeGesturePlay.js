@@ -3,10 +3,6 @@ import {
   normalizeActiveSound,
 } from '@/lib/soundscapeConstants';
 import { playSoundscapeAudioImmediate } from '@/lib/soundscapeAudioEngine';
-import {
-  activateSpacesAudio,
-  shouldBootstrapSpacesOnPlay,
-} from '@/lib/soundscape/spacesPlaybackPolicy';
 import { getUserStorageItem, getUserStorageJson } from '@/utils/userStorage';
 
 function readActiveSounds(userId) {
@@ -22,8 +18,9 @@ function readGlobalVolume(userId) {
 }
 
 /**
- * Start soundscape audio synchronously inside a click handler so the browser
- * does not defer play() after idle. Spaces joins only when policy allows.
+ * Start soundscape layer audio synchronously inside a click handler so the browser
+ * does not defer play() after idle. Does not start Spaces — callers activate Spaces
+ * only when bootstrap/unmute is intended.
  */
 export function resumeSoundscapeFromUserGesture(userId) {
   if (!userId || typeof window === 'undefined') return;
@@ -37,8 +34,4 @@ export function resumeSoundscapeFromUserGesture(userId) {
     const layerVol = (sound.volume / 100) * (master / 100);
     playSoundscapeAudioImmediate(sound.id, src, layerVol);
   });
-
-  if (shouldBootstrapSpacesOnPlay(userId)) {
-    activateSpacesAudio(userId, master);
-  }
 }

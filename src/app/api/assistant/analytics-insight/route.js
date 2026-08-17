@@ -44,8 +44,15 @@ export async function POST(request) {
 
     return NextResponse.json(insight);
   } catch (err) {
-    const { message, status, retryAfterSec } = formatGeminiError(err);
+    const { message, status, retryAfterSec, limit } = formatGeminiError(err);
     const headers = retryAfterSec ? { 'Retry-After': String(retryAfterSec) } : undefined;
-    return NextResponse.json({ error: message }, { status, headers });
+    const body = { error: message };
+    if (status === 429) {
+      body.code = 'rate_limit';
+      body.upgrade = true;
+      if (limit) body.limit = limit;
+      else if (err?.limit) body.limit = err.limit;
+    }
+    return NextResponse.json(body, { status, headers });
   }
 }

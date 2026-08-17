@@ -10,14 +10,19 @@ import { MusicProvider } from '@/contexts/MusicContext';
 import ThryvBotWidget from '@/components/assistant/ThryvBotWidget';
 import { isSpacesPlaybackIntent } from '@/lib/spacesPlayback';
 import { loadYouTubeIframeApi } from '@/lib/youtubeIframeApi';
+import { useReportAuthDestinationReady } from '@/hooks/useReportAuthDestinationReady';
 
 export default function AuthenticatedAppShell({ children }) {
   const pathname = usePathname();
   const { user } = useUser();
   const userId = user?.id ?? null;
   const isMeetRoom = pathname?.startsWith('/meet');
+  const isHome = Boolean(pathname?.startsWith('/home'));
   const [isFullscreen, setIsFullscreen] = useState(false);
   const hideSidebar = isFullscreen || isMeetRoom;
+
+  // Home reports its own ready after data loads; other destinations unlock the login overlay on mount.
+  useReportAuthDestinationReady(!isHome && Boolean(userId));
 
   useEffect(() => {
     if (!userId) return;

@@ -7,6 +7,7 @@ import { useSignIn, useSignUp } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
 import { markAuthLoginTransition } from '@/lib/authTransition';
+import { getOauthRedirectUrls, setPostAuthRedirect } from '@/lib/authRoutes';
 
 const inputClass =
   'w-full px-3 py-1.25 rounded-lg sm:py-1.5 bg-muted border border-border focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-sm sm:text-base text-foreground placeholder:text-muted-foreground';
@@ -104,7 +105,9 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
 
   const navigateAfterAuth = useCallback(() => {
     const redirectUrl = searchParams.get('redirect_url');
-    const destination = redirectUrl?.startsWith('/') ? redirectUrl : '/home';
+    const destination = redirectUrl?.startsWith('/') && !redirectUrl.startsWith('//')
+      ? redirectUrl
+      : '/home';
     navigatingAfterAuthRef.current = true;
     unlockBodyScroll();
     markAuthLoginTransition();
@@ -125,29 +128,26 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const handleOauth = async (strategy) => {
     setErrorMessage('');
     setOauthLoading(strategy);
-    const ssoCallbackUrl = '/auth/sso-callback';
     try {
-      if (mode === 'signin') {
-        if (!isSignInLoaded) {
-          setOauthLoading(null);
-          return;
-        }
-        await signIn.authenticateWithRedirect({
-          strategy,
-          redirectUrl: ssoCallbackUrl,
-          redirectUrlComplete: '/home',
-        });
-      } else {
-        if (!isSignUpLoaded) {
-          setOauthLoading(null);
-          return;
-        }
-        await signUp.authenticateWithRedirect({
-          strategy,
-          redirectUrl: ssoCallbackUrl,
-          redirectUrlComplete: '/home',
-        });
+      // Always use sign-in OAuth: Clerk signs in existing users and creates new
+      // ones from Google/Microsoft. Sign-up OAuth + an existing account dumps
+      // users on Clerk's hosted Account Portal instead of this app.
+      // Do not pass additionalScopes. Calendar/Gmail consent is in-app only.
+      if (!isSignInLoaded || !signIn) {
+        setOauthLoading(null);
+        return;
       }
+      const afterAuth = searchParams.get('redirect_url');
+      const afterAuthPath = afterAuth?.startsWith('/') && !afterAuth.startsWith('//')
+        ? afterAuth
+        : undefined;
+      if (afterAuthPath) setPostAuthRedirect(afterAuthPath);
+      const { redirectUrl, redirectUrlComplete } = getOauthRedirectUrls(afterAuthPath);
+      await signIn.authenticateWithRedirect({
+        strategy,
+        redirectUrl,
+        redirectUrlComplete,
+      });
     } catch (error) {
       setOauthLoading(null);
       const message =

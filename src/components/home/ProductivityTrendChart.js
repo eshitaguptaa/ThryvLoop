@@ -1,26 +1,57 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 const CHART_WIDTH = 400;
-const CHART_HEIGHT = 150;
-const CHART_BASE_Y = 120;
-const CHART_LEFT = 50;
-const CHART_SPAN = 350;
-const TOOLTIP_WIDTH = 108;
-const TOOLTIP_HEIGHT = 30;
-const TOOLTIP_GAP = 12;
-const CONTAINER_PAD = 6;
+const CHART_HEIGHT = 168;
+const CHART_BASE_Y = 122;
+const CHART_LEFT = 28;
+const CHART_SPAN = 344;
+const PLOT_HEIGHT = 92;
+const TOOLTIP_WIDTH = 132;
+const TOOLTIP_HEIGHT = 44;
+const TOOLTIP_GAP = 14;
+const CONTAINER_PAD = 8;
 
-function formatFocusDuration(minutes) {
-  if (minutes <= 0) return '0m';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
+export function formatFocusDuration(minutes) {
+  const m = Math.max(0, Math.round(Number(minutes) || 0));
+  if (m <= 0) return '0m';
+  if (m < 60) return `${m}m`;
+  const hours = Math.floor(m / 60);
+  const mins = m % 60;
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
-/** Map SVG viewBox coordinates to pixels inside the chart container. */
+export function formatFocusSeconds(seconds) {
+  return formatFocusDuration(Math.round((Number(seconds) || 0) / 60));
+}
+
+function finiteNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function smoothLinePath(points) {
+  if (points.length < 2) return '';
+  if (points.length === 2) {
+    return `M${points[0].x},${points[0].y} L${points[1].x},${points[1].y}`;
+  }
+  let d = `M${points[0].x},${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
 function svgToContainerPixels(svg, container, svgX, svgY) {
   const pt = svg.createSVGPoint();
   pt.x = svgX;
@@ -32,22 +63,14 @@ function svgToContainerPixels(svg, container, svgX, svgY) {
   return { x: screen.x - rect.left, y: screen.y - rect.top };
 }
 
-/** Place tooltip above the point by default; flip below or clamp at edges when needed. */
 function computeTooltipPosition(pointPx, containerW, containerH) {
-  const dotPad = 8;
   let x = pointPx.x - TOOLTIP_WIDTH / 2;
-  let y = pointPx.y - TOOLTIP_HEIGHT - TOOLTIP_GAP - dotPad;
-
-  if (y < CONTAINER_PAD) {
-    y = pointPx.y + TOOLTIP_GAP + dotPad;
-  }
-
+  let y = pointPx.y - TOOLTIP_HEIGHT - TOOLTIP_GAP - 10;
+  if (y < CONTAINER_PAD) y = pointPx.y + TOOLTIP_GAP + 10;
   if (y + TOOLTIP_HEIGHT > containerH - CONTAINER_PAD) {
-    y = Math.max(CONTAINER_PAD, pointPx.y - TOOLTIP_HEIGHT - TOOLTIP_GAP - dotPad);
+    y = Math.max(CONTAINER_PAD, pointPx.y - TOOLTIP_HEIGHT - TOOLTIP_GAP);
   }
-
   x = Math.max(CONTAINER_PAD, Math.min(x, containerW - TOOLTIP_WIDTH - CONTAINER_PAD));
-
   return { x, y };
 }
 
@@ -56,44 +79,61 @@ function computeTooltipPosition(pointPx, containerW, containerH) {
  *   data: Array<{ key: string, label: string, minutes: number, seconds?: number }>,
  *   peakDay: { key: string, label: string, minutes: number } | null,
  *   todayKey: string,
+ *   weekAvg?: number,
  *   loading?: boolean,
+ *   error?: string,
+ *   hoveredIndex: number | null,
+ *   onHoverIndex: (index: number | null) => void,
  * }} props
  */
 export default function ProductivityTrendChart({
   data,
   peakDay,
   todayKey,
+  weekAvg = 0,
   loading = false,
+  error = '',
+  hoveredIndex,
+  onHoverIndex,
 }) {
-  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const reduceMotion = useReducedMotion();
+  const rawId = useId();
+  const uid = rawId.replace(/:/g, '');
   const [tooltipPos, setTooltipPos] = useState(null);
   const chartRef = useRef(null);
   const svgRef = useRef(null);
 
-  const weekMax = Math.max(1, ...data.map((d) => d.minutes));
+  const points = useMemo(() => {
+    const rows = (data || []).map((day) => {
+      const minutes = Number.isFinite(Number(day?.minutes))
+        ? Math.max(0, Number(day.minutes))
+        : Math.max(0, Math.round((Number(day?.seconds) || 0) / 60));
+      return { ...day, minutes };
+    });
+    const weekMax = Math.max(1, ...rows.map((d) => d.minutes), 0);
+    const span = Math.max(1, rows.length - 1);
+    return rows.map((day, i) => ({
+      day,
+      x: CHART_LEFT + (i / span) * CHART_SPAN,
+      y: CHART_BASE_Y - (day.minutes / weekMax) * PLOT_HEIGHT,
+    }));
+  }, [data]);
 
-  const points = useMemo(
-    () =>
-      data.map((day, i) => ({
-        day,
-        x: CHART_LEFT + (i / Math.max(1, data.length - 1)) * CHART_SPAN,
-        y: CHART_BASE_Y - (day.minutes / weekMax) * 90,
-      })),
-    [data, weekMax]
-  );
-
-  const pathD =
-    points.length >= 2
-      ? `M${points[0].x},${points[0].y} ${points
-          .slice(1)
-          .map((p) => `L${p.x},${p.y}`)
-          .join(' ')} L${points[points.length - 1].x},${CHART_BASE_Y} L${points[0].x},${CHART_BASE_Y} Z`
-      : '';
-
-  const lineD =
-    points.length >= 2 ? `M${points.map((p) => `${p.x},${p.y}`).join(' L')}` : '';
+  const hasFocus = points.some((p) => p.day.minutes > 0);
+  const lineD = useMemo(() => smoothLinePath(points), [points]);
+  const areaD = useMemo(() => {
+    if (points.length < 2 || !lineD) return '';
+    const last = points[points.length - 1];
+    const first = points[0];
+    return `${lineD} L${last.x},${CHART_BASE_Y} L${first.x},${CHART_BASE_Y} Z`;
+  }, [lineD, points]);
 
   const hovered = hoveredIndex != null ? points[hoveredIndex] : null;
+  const weekMax = Math.max(1, ...points.map((p) => p.day.minutes), 0);
+  const avgY =
+    weekAvg > 0 && hasFocus
+      ? CHART_BASE_Y - (Math.min(weekAvg, weekMax) / weekMax) * PLOT_HEIGHT
+      : null;
 
   const positionTooltipForPoint = useCallback((point) => {
     const container = chartRef.current;
@@ -111,37 +151,63 @@ export default function ProductivityTrendChart({
   useEffect(() => {
     if (hoveredIndex == null) {
       setTooltipPos(null);
-      return;
+      return undefined;
     }
     positionTooltipForPoint(points[hoveredIndex]);
-
     const container = chartRef.current;
     if (!container) return undefined;
-
-    const ro = new ResizeObserver(() => {
-      positionTooltipForPoint(points[hoveredIndex]);
-    });
+    const ro = new ResizeObserver(() => positionTooltipForPoint(points[hoveredIndex]));
     ro.observe(container);
     return () => ro.disconnect();
   }, [hoveredIndex, points, positionTooltipForPoint]);
 
-  const clearHover = useCallback(() => {
-    setHoveredIndex(null);
-    setTooltipPos(null);
-  }, []);
+  const setHover = useCallback(
+    (index) => {
+      onHoverIndex?.(index);
+    },
+    [onHoverIndex]
+  );
 
   if (loading) {
     return (
-      <div className="relative mb-3 flex h-40 w-full items-center justify-center text-sm text-muted-foreground sm:mb-4 sm:h-44 md:h-52">
-        Loading…
+      <div
+        className="relative mb-1 flex h-44 w-full flex-col justify-end overflow-hidden rounded-2xl px-3 pb-3 pt-4 sm:h-48 sm:px-4 md:h-56"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading focus chart"
+      >
+        <div className="productivity-trend-skeleton absolute inset-0 rounded-2xl opacity-70" />
+        <div className="relative z-10 flex h-full items-end justify-between gap-1.5 sm:gap-2">
+          {[42, 68, 35, 82, 55, 74, 48].map((h, i) => (
+            <div
+              key={i}
+              className="dash-chart-bar flex-1 rounded-t-md"
+              style={{
+                height: `${h}%`,
+                animationDelay: `${i * 0.09}s`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error && data.length === 0) {
+    return (
+      <div className="relative mb-1 flex h-44 w-full items-center justify-center px-4 text-center text-sm text-muted-foreground sm:h-48 md:h-56">
+        {error}
       </div>
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className="relative mb-3 flex h-40 w-full items-center justify-center text-sm text-muted-foreground sm:mb-4 sm:h-44 md:h-52">
-        No focus data this week
+      <div className="relative mb-1 flex h-44 w-full flex-col items-center justify-center gap-1 text-sm text-muted-foreground sm:h-48 md:h-56">
+        <span>No focus data this week</span>
+        <a href="/focus" className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
+          Start Focusing →
+        </a>
       </div>
     );
   }
@@ -149,27 +215,45 @@ export default function ProductivityTrendChart({
   return (
     <div
       ref={chartRef}
-      className="relative mb-3 h-40 w-full sm:mb-4 sm:h-44 md:h-52"
-      onMouseLeave={clearHover}
+      className="relative mb-1 h-44 w-full sm:h-48 md:h-56"
+      onMouseLeave={() => setHover(null)}
     >
-      {hovered && tooltipPos ? (
-        <div
-          role="tooltip"
-          className="pointer-events-none absolute z-20 flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-indigo-100/70 bg-card px-2.5 py-1.5 shadow-sm transition-[left,top] duration-150 ease-out dark:border-indigo-500/20"
-          style={{
-            left: tooltipPos.x,
-            top: tooltipPos.y,
-            width: TOOLTIP_WIDTH,
-            height: TOOLTIP_HEIGHT,
-          }}
-        >
-          <span className="text-[11px] font-medium leading-none text-muted-foreground">
-            {hovered.day.label}
-          </span>
-          <span className="h-3 w-px shrink-0 bg-border" aria-hidden />
-          <span className="text-[11px] font-semibold leading-none text-[#615FFF] dark:text-indigo-400">
-            {formatFocusDuration(hovered.day.minutes)}
-          </span>
+      <AnimatePresence>
+        {hovered && tooltipPos ? (
+          <motion.div
+            key={hovered.day.key}
+            role="tooltip"
+            initial={reduceMotion ? false : { opacity: 0, y: 6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.96 }}
+            transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}
+            className="pointer-events-none absolute z-20 overflow-hidden rounded-xl border border-indigo-200/70 bg-card/95 px-3 py-2 shadow-[0_12px_40px_-12px_rgba(97,95,255,0.45)] backdrop-blur-md dark:border-indigo-500/30 dark:bg-slate-900/90"
+            style={{
+              left: tooltipPos.x,
+              top: tooltipPos.y,
+              width: TOOLTIP_WIDTH,
+            }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {hovered.day.label}
+              {hovered.day.key === todayKey ? ' · today' : ''}
+            </p>
+            <p className="mt-0.5 text-sm font-bold tracking-tight text-[#615FFF] dark:text-indigo-300">
+              {formatFocusDuration(hovered.day.minutes)}
+            </p>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {!hasFocus ? (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 text-center">
+          <p className="text-sm font-medium text-muted-foreground">No focus time this week yet</p>
+          <a
+            href="/focus"
+            className="pointer-events-auto text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            Start Focusing →
+          </a>
         </div>
       ) : null}
 
@@ -181,79 +265,155 @@ export default function ProductivityTrendChart({
         aria-label="Weekly productivity trend"
       >
         <defs>
-          <linearGradient id="productivityGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#615FFF" stopOpacity="0.25" />
-            <stop offset="50%" stopColor="#818cf8" stopOpacity="0.15" />
+          <linearGradient id={`trendFill-${uid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#615FFF" stopOpacity="0.42" />
+            <stop offset="55%" stopColor="#8b5cf6" stopOpacity="0.16" />
             <stop offset="100%" stopColor="#615FFF" stopOpacity="0" />
           </linearGradient>
-          <linearGradient id="productivityLine" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#615FFF" />
-            <stop offset="50%" stopColor="#818cf8" />
-            <stop offset="100%" stopColor="#615FFF" />
+          <linearGradient id={`trendLine-${uid}`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#818cf8" />
+            <stop offset="45%" stopColor="#615FFF" />
+            <stop offset="100%" stopColor="#22d3ee" />
           </linearGradient>
+          <filter id={`trendGlow-${uid}`} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="3.2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <clipPath id={`trendClip-${uid}`}>
+            <rect x="0" y="0" width={CHART_WIDTH} height={CHART_BASE_Y + 2} />
+          </clipPath>
         </defs>
 
-        {hovered ? (
+        {[0.25, 0.5, 0.75, 1].map((t) => (
           <line
-            x1={hovered.x}
-            y1={hovered.y}
-            x2={hovered.x}
-            y2={CHART_BASE_Y}
-            stroke="#615FFF"
-            strokeOpacity="0.18"
+            key={t}
+            x1={CHART_LEFT}
+            x2={CHART_LEFT + CHART_SPAN}
+            y1={CHART_BASE_Y - PLOT_HEIGHT * t}
+            y2={CHART_BASE_Y - PLOT_HEIGHT * t}
+            stroke="currentColor"
+            className="text-border"
+            strokeOpacity="0.7"
             strokeWidth="1"
-            strokeDasharray="3 3"
+            strokeDasharray="3 5"
+          />
+        ))}
+
+        {avgY != null && hasFocus ? (
+          <line
+            x1={CHART_LEFT}
+            x2={CHART_LEFT + CHART_SPAN}
+            y1={avgY}
+            y2={avgY}
+            stroke="#615FFF"
+            strokeOpacity="0.28"
+            strokeWidth="1.25"
+            strokeDasharray="5 6"
           />
         ) : null}
 
-        {pathD ? <path d={pathD} fill="url(#productivityGradient)" /> : null}
-        {lineD ? (
-          <path
-            d={lineD}
-            fill="none"
-            stroke="url(#productivityLine)"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {hovered ? (
+          <g>
+            <rect
+              x={hovered.x - 14}
+              y={CHART_BASE_Y - PLOT_HEIGHT - 8}
+              width="28"
+              height={PLOT_HEIGHT + 16}
+              rx="14"
+              fill="#615FFF"
+              fillOpacity="0.07"
+            />
+            <line
+              x1={hovered.x}
+              y1={hovered.y}
+              x2={hovered.x}
+              y2={CHART_BASE_Y}
+              stroke="#615FFF"
+              strokeOpacity="0.35"
+              strokeWidth="1.5"
+              strokeDasharray="3 4"
+            />
+          </g>
+        ) : null}
+
+        {areaD ? (
+          <motion.path
+            d={areaD}
+            fill={`url(#trendFill-${uid})`}
+            clipPath={`url(#trendClip-${uid})`}
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: hasFocus ? 1 : 0.18 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           />
+        ) : null}
+
+        {lineD ? (
+          <g filter={`url(#trendGlow-${uid})`}>
+            <motion.path
+              d={lineD}
+              fill="none"
+              stroke={`url(#trendLine-${uid})`}
+              strokeWidth="3.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              initial={reduceMotion ? false : { pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: hasFocus ? 1 : 0.25 }}
+              transition={{ duration: 1.05, ease: [0.22, 1, 0.36, 1] }}
+            />
+          </g>
         ) : null}
 
         {points.map((point, i) => {
           const active = hoveredIndex === i;
           const isToday = point.day.key === todayKey;
           const isPeak = peakDay?.key === point.day.key && point.day.minutes > 0;
+          const cx = finiteNumber(point.x);
+          const cy = finiteNumber(point.y, CHART_BASE_Y);
 
           return (
             <g key={point.day.key}>
               <circle
-                cx={point.x}
-                cy={point.y}
+                cx={cx}
+                cy={cy}
                 r="18"
                 fill="transparent"
                 className="cursor-pointer"
-                onMouseEnter={() => setHoveredIndex(i)}
-                onFocus={() => setHoveredIndex(i)}
-                onBlur={clearHover}
+                onMouseEnter={() => setHover(i)}
+                onFocus={() => setHover(i)}
+                onBlur={() => setHover(null)}
                 tabIndex={0}
                 role="button"
                 aria-label={`${point.day.label}, ${formatFocusDuration(point.day.minutes)} focus`}
               />
+              {isToday && hasFocus ? (
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r="8"
+                  fill="none"
+                  stroke="#615FFF"
+                  strokeWidth="1.5"
+                  className="productivity-trend-today-ring"
+                />
+              ) : null}
               <circle
-                cx={point.x}
-                cy={point.y}
-                r={active ? 7 : isPeak ? 6 : 5}
+                cx={cx}
+                cy={cy}
+                r={active ? 7.5 : isPeak ? 6.5 : 5.5}
                 fill="var(--card)"
-                stroke={active || isToday ? '#615FFF' : isPeak ? '#10b981' : '#615FFF'}
-                strokeWidth={active ? 2.5 : 2}
-                strokeOpacity={active || isToday || isPeak ? 1 : 0.8}
-                className="pointer-events-none transition-all duration-150"
+                stroke={isPeak ? '#10b981' : '#615FFF'}
+                strokeWidth={active || isToday ? 2.6 : 2}
+                className="pointer-events-none"
               />
               <circle
-                cx={point.x}
-                cy={point.y}
-                r={active ? 3 : 2.5}
-                fill={isPeak && !active ? '#10b981' : '#615FFF'}
-                className="pointer-events-none transition-all duration-150"
+                cx={cx}
+                cy={cy}
+                r={active ? 3.2 : 2.6}
+                fill={isPeak ? '#10b981' : '#615FFF'}
+                className="pointer-events-none"
               />
             </g>
           );

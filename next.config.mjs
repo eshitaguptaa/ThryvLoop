@@ -23,6 +23,25 @@ const nextConfig = {
   ...(process.env.NODE_ENV === 'development' && {
     allowedDevOrigins: ['*.ngrok-free.dev', '*.ngrok.io'],
   }),
+  async redirects() {
+    return [
+      {
+        source: '/analysis',
+        destination: '/analytics',
+        permanent: true,
+      },
+      {
+        source: '/analysis/:path*',
+        destination: '/analytics/:path*',
+        permanent: true,
+      },
+      {
+        source: '/api/analysis/:path*',
+        destination: '/api/analytics/:path*',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

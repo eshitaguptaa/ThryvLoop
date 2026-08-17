@@ -91,7 +91,7 @@ export default function AnalysisTrackerShowcase() {
     <div className="group relative overflow-hidden rounded-3xl bg-card border border-border shadow-xl shadow-gray-200/50 dark:shadow-black/30 hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
       <div className="p-6 lg:p-7 pb-2 relative z-10 shrink-0">
         <FeatureCardIcon icon="monitoring" tone="purple" className="mb-4" fill={1} />
-        <h3 className="landing-card-title mb-1">Analysis Tracker</h3>
+        <h3 className="landing-card-title mb-1">Analytics Tracker</h3>
         <p className="landing-card-desc">Visualize trends & optimize.</p>
       </div>
 

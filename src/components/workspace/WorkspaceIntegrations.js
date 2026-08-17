@@ -169,7 +169,7 @@ export default function WorkspaceIntegrations({
               Google Workspace
             </h3>
             <p className={`text-sm mt-1 leading-relaxed ${embedded ? 'text-white/50' : 'text-muted-foreground'}`}>
-              Calendar meetings and unread Gmail on your dashboard.
+              Optional. Connect when you want meetings and unread Gmail on your dashboard — Google will ask for those permissions then, not at sign-in.
             </p>
           </div>
         </div>

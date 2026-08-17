@@ -34,14 +34,14 @@ export const HELP_CATEGORIES = [
         id: 'app-navigation',
         question: 'How do I navigate the app?',
         answer:
-          'Once signed in, use the **sidebar** on the left (or the menu icon on mobile) to reach Home, Focus, Calendar, Tasks, and Analysis. The gear icon opens **Settings** (timer, soundscape, and integrations). ThryvBot appears as a floating assistant on most pages.',
+          'Once signed in, use the **sidebar** on the left (or the menu icon on mobile) to reach Home, Focus, Calendar, Tasks, and Analytics. The gear icon opens **Settings** (timer, soundscape, and integrations). ThryvBot appears as a floating assistant on most pages.',
         keywords: ['sidebar', 'navigation', 'menu', 'layout'],
       },
       {
         id: 'first-day-checklist',
         question: 'What should I do on my first day?',
         answer:
-          '1) Connect Google in **Settings → Integrations** to sync calendar and email.\n2) Add a few tasks on the **Tasks** page.\n3) Start a **Focus** session with a timer and ambient space.\n4) Check **Analysis** after a day or two to see your productivity trends.\n5) Ask **ThryvBot** for a daily briefing or help planning your day.',
+          '1) Connect Google in **Settings → Integrations** to sync calendar and email.\n2) Add a few tasks on the **Tasks** page.\n3) Open **Focus** and turn on **Focusing**. A short ThryvLoop screen explains what you are enabling — choose **Allow activity & start Focusing** (Chrome/Edge) so other apps keep your session live. Time pauses after ~10 minutes of real computer idle; notices stay in-app.\n4) Check **Analytics** after a day or two to see your productivity trends.\n5) Ask **ThryvBot** for a daily briefing or help planning your day.',
         keywords: ['onboarding', 'checklist', 'first steps'],
       },
     ],
@@ -70,7 +70,7 @@ export const HELP_CATEGORIES = [
         id: 'dark-mode',
         question: 'How do I switch between light and dark mode?',
         answer:
-          'Use the **theme toggle** on your Home dashboard (sun/moon icon, top right) or on the landing page navbar. Your preference is saved and applies across the entire app.',
+          'Use the **theme toggle** in each page’s header toolbar, or on the landing page navbar. Your preference is saved and applies across the entire app.',
         keywords: ['theme', 'dark', 'light', 'appearance'],
       },
       {
@@ -106,7 +106,7 @@ export const HELP_CATEGORIES = [
         id: 'notifications',
         question: 'How do notifications work?',
         answer:
-          'Tap the **bell icon** on Home to see in-app notifications (task reminders, calendar alerts, sync updates, and more). Notifications are stored in your account and marked read when you open them. Browser notifications for calendar reminders may appear if you allow them when prompted.',
+          'Tap the **bell icon** on Home to see in-app notifications (task reminders, calendar alerts, sync updates, and more). Notifications are stored in your account and marked read when you open them. Meeting reminders also appear as ThryvLoop toasts — we do not ask for browser notification permission.',
         keywords: ['notifications', 'bell', 'alerts', 'reminders'],
       },
       {
@@ -149,7 +149,7 @@ export const HELP_CATEGORIES = [
         id: 'focus-timer',
         question: 'How does the Focus timer work?',
         answer:
-          'The timer supports **Pomodoro-style** focus and break intervals. Configure work duration, short break, long break, and auto-start preferences in **Settings → Focus Flow**. The timer runs in Focus mode and can be opened from the sidebar under **Focus → Timer**. Your progress is saved if you navigate away or sign out.',
+          'The **Focusing / Away** toggle (top-right on Focus, beside Theme) controls whether time is logged. Focus opens as Away — the first time you turn Focusing on, a ThryvLoop modal explains logging, other-app work, and idle pause. Prefer **Allow activity & start Focusing** where your browser supports it so the session only pauses after ~10 minutes of computer idle. In other browsers, Focusing can continue while you work elsewhere, with occasional **Still focusing?** check-ins (sound + toast, 2 minutes to confirm). Manual Away always sticks until you turn Focusing back on. The timer widget is optional structure (Pomodoro), not required to measure productivity.',
         keywords: ['timer', 'pomodoro', 'break', 'intervals'],
       },
       {
@@ -213,14 +213,14 @@ export const HELP_CATEGORIES = [
         id: 'complete-task',
         question: 'What happens when I complete a task?',
         answer:
-          'Marking a task done triggers a **celebration** — a toast and optional modal with your streak progress. Completed tasks move to a done state and contribute to your **Analysis** metrics.',
-        keywords: ['complete', 'done', 'celebration', 'streak'],
+          'Marking a task done triggers a **celebration** — a toast and optional modal with your streak progress. Completed tasks move to **Done** and contribute to **Analytics** via their completion time. After 14 days they **archive** off the board (History). History is kept for about 13 months, then those rows are removed so the database stays bounded. Current Analytics windows still see every completion they need. Deleting a done task removes it from Analytics immediately.',
+        keywords: ['complete', 'done', 'celebration', 'streak', 'archive', 'history'],
       },
       {
         id: 'edit-delete-task',
         question: 'How do I edit or delete a task?',
         answer:
-          'Click a task card to open its detail panel. Update fields and save, or use the delete option to remove it permanently. Changes sync to your account immediately.',
+          'Click a task card to open its detail panel. Update fields and save. **Archive** (from Done) hides the card but keeps Analytics / Insights. **Delete** removes the task permanently, including that completion from reports.',
         keywords: ['edit', 'delete', 'update', 'modify'],
       },
       {
@@ -242,7 +242,7 @@ export const HELP_CATEGORIES = [
         id: 'connect-google-calendar',
         question: 'How do I connect Google Calendar?',
         answer:
-          'Open **Settings** (gear icon) → **Integrations** → **Connect Google**. Authorize calendar (and optionally Gmail) access. After connecting, events sync from your primary Google Calendar into ThryvLoop.',
+          'After you have an account, open **Settings** (gear icon) → **Integrations** → **Connect with Google**. Google then asks for calendar (and Gmail) access — this does not happen at sign-up. After connecting, events sync from your primary Google Calendar into ThryvLoop.',
         keywords: ['google', 'connect', 'oauth', 'integration'],
       },
       {
@@ -263,7 +263,7 @@ export const HELP_CATEGORIES = [
         id: 'calendar-reminders',
         question: 'How do calendar reminders work?',
         answer:
-          'ThryvLoop can surface **browser reminders** before events start. Allow notifications when your browser prompts you. Reminders also appear as in-app notifications on Home.',
+          'ThryvLoop shows **in-app reminders** before events start (toast + Home bell). No browser notification permission is required.',
         keywords: ['reminder', 'notification', 'alert', 'before event'],
       },
       {
@@ -283,28 +283,28 @@ export const HELP_CATEGORIES = [
     ],
   },
   {
-    id: 'analysis',
-    title: 'Analysis & Insights',
+    id: 'analytics',
+    title: 'Analytics & Insights',
     icon: 'analytics',
     description: 'Productivity charts, streaks, AI insights, and PDF export.',
     articles: [
       {
-        id: 'analysis-overview',
-        question: 'What does the Analysis page show?',
+        id: 'analytics-overview',
+        question: 'What does the Analytics page show?',
         answer:
-          'Analysis visualizes your productivity over time: focus minutes, tasks completed, streaks, weekly trends, and category breakdowns. AI-generated **insights** highlight patterns and suggest improvements.',
-        keywords: ['analytics', 'charts', 'stats', 'metrics'],
+          'Analytics shows **Active Focus time** (not calendar meetings or session counts), tasks you shipped, your streak, when you typically focus, and week-over-week change. Thryv AI adds a short read of the same numbers.',
+        keywords: ['analytics', 'charts', 'stats', 'metrics', 'focus time'],
       },
       {
         id: 'focus-streak',
         question: 'How are focus streaks calculated?',
         answer:
-          'A streak counts consecutive days where you logged meaningful focus time. Completing focus sessions and tasks both contribute to your overall productivity score shown on Analysis.',
-        keywords: ['streak', 'days', 'consistency'],
+          'A **daily streak** counts consecutive days with Active Focus time. If you focused yesterday, today is still open — focus before midnight or the flame resets. Ranks grow with the chain (Spark, Ember, Week flame, and up). Opening Focus and turning on **Focusing** is what counts — the first session of a new day lights today’s flame and celebrates the +1.',
+        keywords: ['streak', 'days', 'consistency', 'flame', 'habit'],
       },
       {
         id: 'ai-insights',
-        question: 'What are AI insights on Analysis?',
+        question: 'What are AI insights on Analytics?',
         answer:
           'ThryvLoop analyzes your recent activity and generates short, actionable insights (e.g. best focus hours, task completion trends). Insights refresh as you accumulate more data — typically after a few days of use.',
         keywords: ['ai', 'insights', 'recommendations'],
@@ -313,14 +313,14 @@ export const HELP_CATEGORIES = [
         id: 'export-pdf',
         question: 'Can I export my analytics as a PDF?',
         answer:
-          'Yes. Use the **Export PDF** button on the Analysis page to download a snapshot of your charts and key metrics — useful for weekly reviews or sharing progress.',
+          'Yes. Use the **Export PDF** button on the Analytics page to download a snapshot of your charts and key metrics — useful for weekly reviews or sharing progress.',
         keywords: ['pdf', 'export', 'download', 'report'],
       },
       {
-        id: 'analysis-empty',
-        question: 'Why is my Analysis page empty?',
+        id: 'analytics-empty',
+        question: 'Why is my Analytics page empty?',
         answer:
-          'Analysis needs activity data. Complete focus sessions and tasks for at least one day, then revisit the page. New accounts may show placeholder states until enough data is collected.',
+          'Analytics needs Active Focus time and completed tasks. Open **Focus**, turn on **Focusing**, and finish work on **Tasks**. New accounts look sparse until you have a day or two of activity.',
         keywords: ['empty', 'no data', 'new user'],
       },
     ],
@@ -421,7 +421,7 @@ export const HELP_CATEGORIES = [
         id: 'b2b-overview',
         question: 'What are Team Workspaces?',
         answer:
-          'Team Workspaces let organizations collaborate on shared tasks, view team analytics, and manage members under `/o/[workspace]`. This feature is available when your deployment has B2B workspaces enabled.',
+          'Team Workspaces are your company deep-work hub: **Pulse** (what\'s happening now), **Work** (shared delivery), **Rhythm** (team focus hours + presence), **People**, **Insights**, and **Settings**. Available when B2B workspaces are enabled under `/o/[workspace]`.',
         keywords: ['team', 'org', 'workspace', 'b2b'],
       },
       {
@@ -435,15 +435,15 @@ export const HELP_CATEGORIES = [
         id: 'invite-members',
         question: 'How do I invite team members?',
         answer:
-          'Open your workspace → **Members**. Send email invites and assign roles (admin, member). Invitees receive a link to join the organization via Clerk.',
+          'Open your workspace → **People**. Send an email invite (Gmail or any inbox) and pick a role. The invitee gets a join link: existing accounts are signed in and added; new accounts can continue with Google or create a password, then land in the workspace. Admins can resend or revoke pending invites, change roles, and remove members.',
         keywords: ['invite', 'members', 'team', 'roles'],
       },
       {
         id: 'org-tasks',
         question: 'How do shared team tasks work?',
         answer:
-          'Each workspace has its own **Tasks** board at `/o/[slug]/tasks`. Assign tasks to members, track status on the shared Kanban, and review completion in **Analytics**.',
-        keywords: ['shared tasks', 'assign', 'collaboration'],
+          'Each workspace has a **Work** board at `/o/[slug]/work`. Assign tasks, group by projects, comment on cards, and update status on the live Kanban. **Done** keeps recent completions on the board (14 days); older ones move to **History** so Insights still count them. History is kept for about 13 months, then purged — Insights windows (7/14/30 days) stay complete. Deleting a done task removes that completion from Insights immediately. Track delivery in **Insights** and team energy on **Pulse** / **Rhythm**.',
+        keywords: ['shared tasks', 'assign', 'collaboration', 'archive', 'history', 'done'],
       },
       {
         id: 'b2b-not-visible',
@@ -564,14 +564,14 @@ export const HELP_CATEGORIES = [
         id: 'google-data-access',
         question: 'What Google data does ThryvLoop access?',
         answer:
-          'With your consent, ThryvLoop reads (and optionally writes) **Google Calendar** events and may sync **Gmail** metadata for your workspace hub. We only access what you authorize during OAuth — review permissions on the Google consent screen.',
+          'Signing in with Google only shares your name and email. Calendar and Gmail stay disconnected until you choose **Connect with Google** in **Settings → Integrations**. That in-app step is when Google asks for calendar and mail access. We only use what you authorize on that screen.',
         keywords: ['google', 'permissions', 'scopes', 'privacy'],
       },
       {
         id: 'export-data',
         question: 'Can I export my data?',
         answer:
-          'Use **Analysis → Export PDF** for productivity reports. For a full data export request, contact support with your registered email.',
+          'Use **Analytics → Export PDF** for productivity reports. For a full data export request, contact support with your registered email.',
         keywords: ['export', 'gdpr', 'download data'],
       },
       {

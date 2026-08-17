@@ -91,14 +91,18 @@ export async function urgentFlushFocusTimerState() {
   await urgentFlushHandler();
 }
 
-/** Pause at the current time and persist before sign-out. */
+/** Pause timer + flush soft Focus session before sign-out. */
 export async function pauseAndFlushFocusTimerOnLogout() {
   if (logoutPauseFlushHandler) {
     await logoutPauseFlushHandler();
-    return;
-  }
-  if (urgentFlushHandler) {
+  } else if (urgentFlushHandler) {
     await urgentFlushHandler({ isRunning: false });
+  }
+  try {
+    const { flushFocusSessionOnLogout } = await import('@/lib/focusSession');
+    await flushFocusSessionOnLogout();
+  } catch {
+    /* ignore */
   }
 }
 

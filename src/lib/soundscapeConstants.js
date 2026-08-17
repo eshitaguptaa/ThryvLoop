@@ -78,10 +78,31 @@ export const LEGACY_SOUND_ID_MAP = {
   binaural: 'gamma-40hz',
 };
 
+/** Default layer level (0–100) when a soundscape track is first added. */
+export const DEFAULT_SOUNDSCAPE_TRACK_VOLUME = 18;
+
+/**
+ * Quieter source beds that need a higher starting level to feel present in the mix.
+ * @type {Record<string, number>}
+ */
+export const SOUNDSCAPE_ELEVATED_TRACK_VOLUMES = {
+  'cafe-ambience': 42,
+  'office-ambience': 45,
+  fire: 38,
+  breeze: 44,
+  thunderstorm: 40,
+};
+
+/** @param {string} soundId */
+export function getDefaultSoundscapeTrackVolume(soundId) {
+  const id = normalizeSoundscapeSoundId(soundId);
+  return SOUNDSCAPE_ELEVATED_TRACK_VOLUMES[id] ?? DEFAULT_SOUNDSCAPE_TRACK_VOLUME;
+}
+
 export const DEFAULT_BOOTSTRAP_SOUNDS = [
-  { id: 'heavy-rain', name: 'Heavy Rain', volume: 60, category: 'Atmosphere' },
-  { id: 'gamma-40hz', name: 'Gamma 40Hz', volume: 50, category: 'Neural' },
-  { id: 'forest', name: 'Forest', volume: 30, category: 'Atmosphere' },
+  { id: 'heavy-rain', name: 'Heavy Rain', volume: 22, category: 'Atmosphere' },
+  { id: 'gamma-40hz', name: 'Gamma 40Hz', volume: 18, category: 'Neural' },
+  { id: 'forest', name: 'Forest', volume: 12, category: 'Atmosphere' },
 ];
 
 export const DEFAULT_SOUNDSCAPE_RECIPES = [
@@ -90,9 +111,9 @@ export const DEFAULT_SOUNDSCAPE_RECIPES = [
     name: 'Deep Dive',
     icon: 'bolt',
     sounds: [
-      { id: 'heavy-rain', volume: 60, category: 'Atmosphere' },
-      { id: 'gamma-40hz', volume: 50, category: 'Neural' },
-      { id: 'forest', volume: 30, category: 'Atmosphere' },
+      { id: 'heavy-rain', volume: 22, category: 'Atmosphere' },
+      { id: 'gamma-40hz', volume: 18, category: 'Neural' },
+      { id: 'forest', volume: 12, category: 'Atmosphere' },
     ],
   },
   {
@@ -100,9 +121,9 @@ export const DEFAULT_SOUNDSCAPE_RECIPES = [
     name: 'Code Flow',
     icon: 'code',
     sounds: [
-      { id: 'lofi', volume: 55, category: 'Rhythm' },
-      { id: 'beta-18hz-study', volume: 45, category: 'Neural' },
-      { id: 'cafe-ambience', volume: 35, category: 'Atmosphere' },
+      { id: 'lofi', volume: 20, category: 'Rhythm' },
+      { id: 'beta-18hz-study', volume: 16, category: 'Neural' },
+      { id: 'cafe-ambience', volume: 42, category: 'Atmosphere' },
     ],
   },
   {
@@ -110,9 +131,9 @@ export const DEFAULT_SOUNDSCAPE_RECIPES = [
     name: 'Creative Spark',
     icon: 'pen',
     sounds: [
-      { id: 'synthwave', volume: 50, category: 'Rhythm' },
-      { id: 'alpha-10hz-creative', volume: 40, category: 'Neural' },
-      { id: 'fire', volume: 30, category: 'Atmosphere' },
+      { id: 'synthwave', volume: 18, category: 'Rhythm' },
+      { id: 'alpha-10hz-creative', volume: 15, category: 'Neural' },
+      { id: 'fire', volume: 38, category: 'Atmosphere' },
     ],
   },
   {
@@ -120,9 +141,9 @@ export const DEFAULT_SOUNDSCAPE_RECIPES = [
     name: 'Zen Zone',
     icon: 'lotus',
     sounds: [
-      { id: 'waterfall', volume: 50, category: 'Atmosphere' },
-      { id: 'forest', volume: 40, category: 'Atmosphere' },
-      { id: 'alpha-8hz-calm', volume: 35, category: 'Neural' },
+      { id: 'waterfall', volume: 18, category: 'Atmosphere' },
+      { id: 'forest', volume: 15, category: 'Atmosphere' },
+      { id: 'alpha-8hz-calm', volume: 14, category: 'Neural' },
     ],
   },
   {
@@ -131,8 +152,8 @@ export const DEFAULT_SOUNDSCAPE_RECIPES = [
     icon: 'briefcase',
     sounds: [
       { id: 'office-ambience', volume: 45, category: 'Atmosphere' },
-      { id: 'light-rain', volume: 40, category: 'Atmosphere' },
-      { id: 'smr-14hz-flow', volume: 30, category: 'Neural' },
+      { id: 'light-rain', volume: 15, category: 'Atmosphere' },
+      { id: 'smr-14hz-flow', volume: 12, category: 'Neural' },
     ],
   },
 ];
@@ -206,7 +227,7 @@ export function normalizeActiveSound(sound) {
   return {
     id,
     name: getSoundscapeSoundName(id),
-    volume: sound.volume ?? 50,
+    volume: sound.volume ?? getDefaultSoundscapeTrackVolume(id),
     category,
   };
 }

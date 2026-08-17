@@ -167,7 +167,7 @@ export const SPACES_CATALOG = [
 export const DEFAULT_SPACES_VIDEO_ID = SPACES_CATALOG[0]?.videoId ?? 'iBeKujv18OI';
 
 /** Base Spaces channel level (0–100) before master volume scaling. */
-export const DEFAULT_SPACES_VOLUME = 60;
+export const DEFAULT_SPACES_VOLUME = 40;
 
 const SPACES_VIDEO_IDS = new Set(SPACES_CATALOG.map((space) => space.videoId));
 

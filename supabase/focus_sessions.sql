@@ -7,7 +7,12 @@ create table if not exists public.focus_sessions (
   duration_seconds integer not null,
   phase text not null default 'session',
   mode text not null default 'pomodoro',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Productivity integrity (also in migrations/20260406120000_focus_session_integrity.sql)
+  task_id uuid null,
+  active_seconds integer null,
+  is_credited boolean not null default false,
+  integrity_flags jsonb not null default '{}'::jsonb
 );
 
 create index if not exists focus_sessions_user_completed on public.focus_sessions (user_id, completed_at desc);

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { workspaceApiFetch } from '@/lib/workspace/clientApi';
 import CalendarEventModal from '@/components/workspace/CalendarEventModal';
+import ThemeToolbarButton from '@/components/ThemeToolbarButton';
 import {
   eventOverlapsLocalDay,
   isSameLocalDay,
@@ -462,6 +463,7 @@ export default function WorkspaceCalendarView() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <ThemeToolbarButton />
             <button
               type="button"
               onClick={() => openCreateModal()}

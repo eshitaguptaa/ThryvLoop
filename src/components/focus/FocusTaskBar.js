@@ -410,7 +410,9 @@ export default function FocusTaskBar() {
               className="text-left text-white font-medium truncate hover:bg-white/10 rounded px-1 -mx-1 transition-colors flex-1 min-w-0 cursor-pointer flex items-center gap-1"
               style={{ fontSize: `${fontSize}px` }}
             >
-              <span className="truncate">Focusing on: {displayTitle}</span>
+              <span className="truncate">
+                Focusing on: {displayTitle}
+              </span>
               <svg className="w-4 h-4 text-white/60 shrink-0 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>

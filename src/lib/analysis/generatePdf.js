@@ -57,18 +57,19 @@ async function launchBrowser() {
 }
 
 /**
- * Render analytics report HTML to a PDF buffer via Puppeteer.
- * @param {Record<string, unknown>} payload
+ * Render HTML to a PDF buffer via Puppeteer.
+ * @param {string} html
  * @returns {Promise<Buffer>}
  */
-export async function generateAnalyticsPdf(payload) {
-  const html = renderAnalyticsReportHtml(payload);
+export async function generatePdfFromHtml(html) {
   let browser;
 
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 45_000 });
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+    // Give fonts / layout a beat without waiting on empty network idle.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     await page.emulateMediaType('print');
 
     const pdf = await page.pdf(PDF_OPTS);
@@ -78,4 +79,14 @@ export async function generateAnalyticsPdf(payload) {
       await browser.close();
     }
   }
+}
+
+/**
+ * Render analytics report HTML to a PDF buffer via Puppeteer.
+ * @param {Record<string, unknown>} payload
+ * @returns {Promise<Buffer>}
+ */
+export async function generateAnalyticsPdf(payload) {
+  const html = renderAnalyticsReportHtml(payload);
+  return generatePdfFromHtml(html);
 }

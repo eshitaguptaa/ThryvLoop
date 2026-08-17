@@ -5,6 +5,7 @@ export const GOOGLE_CALENDAR_EVENTS_WRITE_SCOPE =
   'https://www.googleapis.com/auth/calendar.events';
 export const GOOGLE_GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
+/** Requested only during in-app Google sync — never at Clerk sign-in/sign-up. */
 export const GOOGLE_SCOPES = [
   GOOGLE_CALENDAR_WRITE_SCOPE,
   GOOGLE_GMAIL_READONLY_SCOPE,
@@ -52,15 +53,75 @@ export function getOAuthSecret() {
   return raw.trim();
 }
 
-function getAppOrigin() {
+function stripTrailingSlash(url) {
+  return url.replace(/\/$/, '');
+}
+
+function getConfiguredAppOrigin() {
   const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  if (fromEnv) return stripTrailingSlash(fromEnv);
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return 'http://localhost:3000';
 }
 
-export function getGoogleRedirectUri() {
-  return process.env.GOOGLE_REDIRECT_URI || `${getAppOrigin()}/api/workspace/callback/google`;
+function isLoopbackHost(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+}
+
+function isDevOAuthHost(hostname) {
+  return (
+    isLoopbackHost(hostname) ||
+    hostname.endsWith('.ngrok-free.dev') ||
+    hostname.endsWith('.ngrok.io') ||
+    hostname.endsWith('.ngrok.app')
+  );
+}
+
+/**
+ * Origin used for Google OAuth redirects.
+ * Local / ngrok requests keep their own host so a production NEXT_PUBLIC_APP_URL
+ * cannot send Google `https://your-domain/...` while you are on localhost
+ * (Error 400: redirect_uri_mismatch).
+ *
+ * @param {Request | undefined} request
+ */
+export function getOAuthAppOrigin(request) {
+  if (request) {
+    const url = new URL(request.url);
+    const host = (request.headers.get('x-forwarded-host') || request.headers.get('host') || url.host)
+      .split(',')[0]
+      .trim();
+    const hostname = host.replace(/:\d+$/, '').toLowerCase();
+    if (host && isDevOAuthHost(hostname)) {
+      const proto = (
+        request.headers.get('x-forwarded-proto') ||
+        url.protocol.replace(':', '') ||
+        'http'
+      )
+        .split(',')[0]
+        .trim();
+      // Google treats 127.0.0.1 and localhost as different URIs.
+      const portMatch = host.match(/:(\d+)$/);
+      const port = portMatch?.[1] || url.port || (proto === 'https' ? '443' : '3000');
+      if (isLoopbackHost(hostname)) {
+        const origin =
+          (proto === 'https' && port === '443') || (proto === 'http' && port === '80')
+            ? `${proto}://localhost`
+            : `${proto}://localhost:${port}`;
+        return stripTrailingSlash(origin);
+      }
+      return stripTrailingSlash(`${proto}://${host}`);
+    }
+  }
+  return getConfiguredAppOrigin();
+}
+
+/** @param {Request | undefined} request */
+export function getGoogleRedirectUri(request) {
+  const override = process.env.GOOGLE_REDIRECT_URI?.trim();
+  if (override) return stripTrailingSlash(override);
+  return `${getOAuthAppOrigin(request)}/api/workspace/callback/google`;
 }
 
 function signState(payload) {
@@ -117,12 +178,13 @@ export function createOAuthState(userId, provider = 'google') {
   });
 }
 
-export function buildGoogleAuthUrl(state) {
+/** In-app Calendar + Gmail consent. Clerk Google login must not use these scopes. */
+export function buildGoogleAuthUrl(state, request) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) throw new Error('GOOGLE_CLIENT_ID is not configured');
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: getGoogleRedirectUri(),
+    redirect_uri: getGoogleRedirectUri(request),
     response_type: 'code',
     scope: GOOGLE_SCOPES,
     access_type: 'offline',
@@ -133,7 +195,7 @@ export function buildGoogleAuthUrl(state) {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
-export async function exchangeGoogleCode(code) {
+export async function exchangeGoogleCode(code, request) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw new Error('Google OAuth credentials missing');
@@ -144,7 +206,7 @@ export async function exchangeGoogleCode(code) {
       code,
       client_id: clientId,
       client_secret: clientSecret,
-      redirect_uri: getGoogleRedirectUri(),
+      redirect_uri: getGoogleRedirectUri(request),
       grant_type: 'authorization_code',
     }),
   });

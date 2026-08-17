@@ -8,10 +8,7 @@ import {
   persistSessionPlaying,
 } from '@/lib/soundscape/persistence';
 import { resumeSoundscapeFromUserGesture } from '@/lib/soundscapeGesturePlay';
-import {
-  activateSpacesAudio,
-  shouldBootstrapSpacesOnPlay,
-} from '@/lib/soundscape/spacesPlaybackPolicy';
+import { activateSpacesAudio, shouldBootstrapSpacesOnPlay } from '@/lib/soundscape/spacesPlaybackPolicy';
 import { readGlobalVolume } from '@/lib/soundscapePlaybackState';
 import { useSoundscapeStore } from '@/stores/soundscapeStore';
 
@@ -148,8 +145,8 @@ export function useSoundscapeEngine(userId) {
       const playing = detail?.isPlaying;
       if (playing === true) {
         const persisted = loadPersistedTracks(userId);
-        const bootstrapSpaces =
-          detail?.bootstrapSpaces === true || shouldBootstrapSpacesOnPlay(userId);
+        const bootstrapSpaces = detail?.bootstrapSpaces === true;
+        const master = readGlobalVolume(userId);
 
         if (persisted.length > 0) {
           useSoundscapeStore.setState({
@@ -167,13 +164,14 @@ export function useSoundscapeEngine(userId) {
         useSoundscapeStore.setState({
           sessionPlaying: true,
           autoplayBlocked: false,
+          masterVolume: master > 0 ? master : 75,
           spacesPaused: bootstrapSpaces ? false : loadSpacesPaused(userId),
         });
 
         if (detail?.immediate) {
           resumeSoundscapeFromUserGesture(userId);
           if (bootstrapSpaces) {
-            activateSpacesAudio(userId, readGlobalVolume(userId));
+            activateSpacesAudio(userId, master > 0 ? master : 75);
           }
         }
       } else if (playing === false) {

@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import {
   SOUNDSCAPE_LIBRARY,
   enforceSingleInstanceCategories,
+  getDefaultSoundscapeTrackVolume,
   getSoundscapeSoundName,
   normalizeActiveSound,
 } from '@/lib/soundscapeConstants';
@@ -52,7 +53,7 @@ const defaultState = {
   soloTrackId: null,
   autoplayBlocked: false,
   spacesVolume: DEFAULT_SPACES_VOLUME,
-  spacesPaused: false,
+  spacesPaused: true,
   /** @type {Record<string, number>} */
   previousTrackVolumes: {},
 };
@@ -63,7 +64,7 @@ function toTrack(sound, loadState = 'idle') {
   return {
     id: sound.id,
     name: sound.name || getSoundscapeSoundName(sound.id),
-    volume: sound.volume ?? 50,
+    volume: sound.volume ?? getDefaultSoundscapeTrackVolume(sound.id),
     category: sound.category || 'Atmosphere',
     playing: true,
     loadState,
@@ -202,7 +203,7 @@ export const useSoundscapeStore = create((set, get) => ({
    * @param {string} category
    */
   toggleLibrarySound(soundId, category) {
-    const { tracks, userId, sessionPlaying } = get();
+    const { tracks, userId, sessionPlaying, spacesPaused } = get();
     const existing = tracks.find((t) => t.id === soundId);
 
     if (existing) {
@@ -211,7 +212,15 @@ export const useSoundscapeStore = create((set, get) => ({
     }
 
     const soundName = getSoundscapeSoundName(soundId);
-    let next = [...tracks, toTrack({ id: soundId, name: soundName, volume: 50, category })];
+    let next = [
+      ...tracks,
+      toTrack({
+        id: soundId,
+        name: soundName,
+        volume: getDefaultSoundscapeTrackVolume(soundId),
+        category,
+      }),
+    ];
 
     next = enforceSingleInstanceCategories(
       next.map((t) => ({ id: t.id, name: t.name, volume: t.volume, category: t.category }))
@@ -223,10 +232,21 @@ export const useSoundscapeStore = create((set, get) => ({
       next = next.slice(-MAX_TRACKS);
     }
 
-    set({ tracks: next });
+    // Adding composer layers must not pull Spaces into the mix.
+    // Keep Spaces muted unless it was already unmuted in an active session.
+    const keepSpacesMuted = !sessionPlaying || spacesPaused;
+    set({
+      tracks: next,
+      ...(keepSpacesMuted ? { spacesPaused: true } : {}),
+    });
+
+    if (keepSpacesMuted && userId) {
+      setSpacesUserMuted(userId, true);
+      duckSpacesAudio();
+    }
 
     get().persistTracks();
-    get().playSession({ userGesture: true, syncOnly: true });
+    get().playSession({ userGesture: true, syncOnly: true, bootstrapSpaces: false });
   },
 
   /** @param {string} trackId */

@@ -1,7 +1,8 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { createWorkspace } from '@/app/(b2b)/o/actions';
+import WorkspaceLogoField from '@/components/b2b/WorkspaceLogoField';
 import { workspacePrimaryButtonClass } from '@/components/b2b/workspaceShellClasses';
 
 const initialState = { error: null };
@@ -11,9 +12,10 @@ const inputClass =
 
 export default function CreateWorkspaceForm() {
   const [state, formAction, pending] = useActionState(createWorkspace, initialState);
+  const [name, setName] = useState('');
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <div>
         <label htmlFor="workspace-name" className="block text-sm font-semibold text-foreground mb-1.5">
           Company or team name
@@ -26,9 +28,14 @@ export default function CreateWorkspaceForm() {
           minLength={2}
           maxLength={80}
           placeholder="Acme Inc."
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           className={inputClass}
         />
       </div>
+
+      <WorkspaceLogoField nameHint={name} size="lg" />
+
       {state?.error ? (
         <p className="text-sm text-red-700 font-medium" role="alert">
           {state.error}

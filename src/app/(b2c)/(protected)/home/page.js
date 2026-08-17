@@ -19,17 +19,24 @@ import {
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { useAppNotifications } from '@/hooks/useAppNotifications';
 import { useSoundscapePlayback } from '@/hooks/useSoundscapePlayback';
+import { isAppNotificationInAlerts } from '@/lib/appNotifications';
 import { formatWorkspaceSyncError } from '@/lib/workspace/userMessages';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient, setSupabaseAuthToken, getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
-import { localDateKey, localStartOfDay } from '@/lib/dateRanges';
+import { addDaysToDateKey, localDateKey } from '@/lib/dateRanges';
 import { getClerkSupabaseToken } from '@/lib/clerkSupabaseToken';
+import { workspaceApiFetch } from '@/lib/workspace/clientApi';
+import { getFocusTrendRange, overlayLiveTodaySeconds, sumDaySeconds } from '@/lib/focusTrend';
 import { useTimer } from '@/contexts/TimerContext';
+import { useReportAuthDestinationReady } from '@/hooks/useReportAuthDestinationReady';
 import { openIntegrationsSettings } from '@/lib/openFocusSettings';
 import SpacesCrossfadeBackground from '@/components/landing_sections/SpacesCrossfadeBackground';
-import ThemeToggle from '@/components/ThemeToggle';
-import ProductivityTrendChart from '@/components/home/ProductivityTrendChart';
+import ThemeToolbarButton from '@/components/ThemeToolbarButton';
+import ProductivityTrendCard from '@/components/home/ProductivityTrendCard';
+import InlineLoader from '@/components/ui/InlineLoader';
+import ListSkeleton from '@/components/ui/ListSkeleton';
+import ProductiveTimeSkeleton, { SkeletonPulse } from '@/components/ui/DashboardSkeletons';
 import {
   appSurfaceClass,
   appSurfaceInsetClass,
@@ -39,7 +46,6 @@ import {
   appMutedTextClass,
   dashboardHeroCardClass,
   dashboardPanelClass,
-  dashboardWidePanelClass,
   dashboardAlertsPanelClass,
   dashboardGlowOrbClass,
   dashboardGlowOrbSmClass,
@@ -47,11 +53,7 @@ import {
   dashboardBadgeClass,
   dashboardIconChipClass,
   dashboardIconChipSmClass,
-  dashboardStatBadgeClass,
-  dashboardStatIconBoxClass,
 } from '@/lib/appShellClasses';
-
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function formatWorkspaceWhen(iso) {
   if (!iso) return '';
@@ -122,8 +124,11 @@ export default function Dashboard() {
 
   const [weeklyFocusSeconds, setWeeklyFocusSeconds] = useState([]);
   const [priorWeekTotalSeconds, setPriorWeekTotalSeconds] = useState(0);
+  const [trendError, setTrendError] = useState('');
   const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [homeLoading, setHomeLoading] = useState(true);
+  /** True only after the first home fetch with a real userId finishes. */
+  const [homeBootstrapDone, setHomeBootstrapDone] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef(null);
   const productivityTrendRef = useRef(null);
@@ -133,8 +138,9 @@ export default function Dashboard() {
   const {
     todayFocusSeconds,
     yesterdayLoggedFocusSeconds,
-    unloggedFocusSeconds,
     isFocusTimerRunningToday,
+    loggedFocusTotalsReady,
+    hydrateLoggedFocusTotals,
   } = useTimer();
 
   const {
@@ -158,6 +164,16 @@ export default function Dashboard() {
     loading: appNotificationsLoading,
     markRead: markAppNotificationRead,
   } = useAppNotifications({ enabled: Boolean(isSignedIn && userId) });
+
+  const dashboardReady =
+    Boolean(userId) &&
+    homeBootstrapDone &&
+    loggedFocusTotalsReady &&
+    !homeLoading &&
+    !workspaceLoading &&
+    !appNotificationsLoading;
+
+  useReportAuthDestinationReady(dashboardReady);
 
   const {
     displaySounds,
@@ -205,73 +221,65 @@ export default function Dashboard() {
     if (!userId || !isSignedIn) return;
     if (!silent) setHomeLoading(true);
     try {
-      const token = await getClerkSupabaseToken(getToken, isSignedIn);
-      if (!token) {
-        setHomeLoading(false);
-        return;
-      }
-      setSupabaseAuthToken(token);
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        setHomeLoading(false);
-        return;
-      }
-      const now = new Date();
-      const twoWeeksAgo = new Date(now);
-      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 13);
-      const periodStart = localStartOfDay(twoWeeksAgo);
-
-      const [weekRes, tasksRes] = await Promise.all([
-        supabase
-          .from('focus_sessions')
-          .select('completed_at, duration_seconds')
-          .eq('user_id', userId)
-          .eq('phase', 'session')
-          .gte('completed_at', periodStart)
-          .order('completed_at', { ascending: true }),
-        supabase
-          .from('tasks')
-          .select('id, title, due_date, column_key')
-          .eq('user_id', userId)
-          .or('column_key.eq.todaysFocus,column_key.eq.inProgress')
-          .is('completed_at', null)
-          .order('due_date', { ascending: true })
-          .limit(5),
-      ]);
-
-      const weekData = weekRes.data || [];
-      const byDay = {};
-      for (let i = 0; i < 14; i++) {
-        const d = new Date(twoWeeksAgo);
-        d.setDate(d.getDate() + i);
-        byDay[localDateKey(d)] = 0;
-      }
-      weekData.forEach((row) => {
-        const key = localDateKey(new Date(row.completed_at));
-        if (byDay[key] !== undefined) byDay[key] += row.duration_seconds || 0;
+      const range = getFocusTrendRange();
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const trendParams = new URLSearchParams({
+        start: range.startIso,
+        end: range.endIso,
+        tz,
       });
-
-      let priorTotal = 0;
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(twoWeeksAgo);
-        d.setDate(d.getDate() + i);
-        priorTotal += byDay[localDateKey(d)] || 0;
-      }
-      setPriorWeekTotalSeconds(priorTotal);
-
-      const dayOrder = [];
-      for (let i = 7; i < 14; i++) {
-        const d = new Date(twoWeeksAgo);
-        d.setDate(d.getDate() + i);
-        dayOrder.push(d);
-      }
-      setWeeklyFocusSeconds(
-        dayOrder.map((d) => ({
-          key: localDateKey(d),
-          label: DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1],
-          seconds: byDay[localDateKey(d)] || 0,
-        }))
+      const trendPromise = workspaceApiFetch(
+        `/api/analytics/focus-trend?${trendParams}`,
+        {},
+        getToken
       );
+
+      const supabaseToken = await getClerkSupabaseToken(getToken, isSignedIn);
+      if (supabaseToken) setSupabaseAuthToken(supabaseToken);
+      const supabase = supabaseToken ? getSupabaseClient() : null;
+      const tasksPromise = supabase
+        ? supabase
+            .from('tasks')
+            .select('id, title, due_date, column_key')
+            .eq('user_id', userId)
+            .or('column_key.eq.todaysFocus,column_key.eq.inProgress')
+            .is('completed_at', null)
+            .order('due_date', { ascending: true })
+            .limit(5)
+        : Promise.resolve({ data: [], error: null });
+
+      const [trendRes, tasksRes] = await Promise.all([trendPromise, tasksPromise]);
+
+      if (trendRes.ok) {
+        const trendJson = await trendRes.json();
+        const currentWeek = Array.isArray(trendJson.currentWeek) ? trendJson.currentWeek : [];
+        const allDays = Array.isArray(trendJson.days) ? trendJson.days : currentWeek;
+        setWeeklyFocusSeconds(
+          currentWeek.map((d) => ({
+            key: d.key,
+            label: d.label,
+            seconds: Number(d.seconds) || 0,
+            minutes: Math.round((Number(d.seconds) || 0) / 60),
+          }))
+        );
+        setPriorWeekTotalSeconds(Number(trendJson.priorWeekTotalSeconds) || 0);
+        setTrendError('');
+
+        const todayKey = trendJson.todayKey || range.todayKey;
+        const yesterdayKey = addDaysToDateKey(todayKey, -1);
+        let todaySec = 0;
+        let yesterdaySec = 0;
+        for (const day of allDays) {
+          if (!day?.key) continue;
+          const sec = Math.max(0, Number(day.seconds) || 0);
+          if (day.key === todayKey) todaySec = sec;
+          if (day.key === yesterdayKey) yesterdaySec = sec;
+        }
+        hydrateLoggedFocusTotals(todaySec, yesterdaySec);
+      } else {
+        const trendJson = await trendRes.json().catch(() => ({}));
+        setTrendError(trendJson.error || 'Could not load focus trend');
+      }
 
       const tasks = (tasksRes.data || []).map((t) => ({
         id: t.id,
@@ -282,16 +290,19 @@ export default function Dashboard() {
       setUpcomingTasks(tasks);
     } catch (e) {
       console.error('Home data load error:', e);
+      setTrendError(e instanceof Error ? e.message : 'Could not load focus trend');
     } finally {
       setHomeLoading(false);
+      setHomeBootstrapDone(true);
     }
-  }, [userId, isSignedIn, getToken]);
+  }, [userId, isSignedIn, getToken, hydrateLoggedFocusTotals]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !userId) {
-      setHomeLoading(false);
+      // Keep loading=true while auth/userId settle so login overlay does not dismiss early.
       return;
     }
+    setHomeBootstrapDone(false);
     loadHomeData();
   }, [isLoaded, isSignedIn, userId, loadHomeData]);
 
@@ -333,19 +344,17 @@ export default function Dashboard() {
       : (productiveSecondsToday > 0 ? 100 : 0);
   const todayKey = typeof window !== 'undefined' ? localDateKey() : '';
   const weeklyFocusMinutes = useMemo(
-    () =>
-      weeklyFocusSeconds.map((d) => ({
-        ...d,
-        minutes: Math.round(
-          (d.seconds + (d.key === todayKey ? unloggedFocusSeconds : 0)) / 60
-        ),
-      })),
-    [weeklyFocusSeconds, unloggedFocusSeconds, todayKey]
+    () => overlayLiveTodaySeconds(weeklyFocusSeconds, todayKey, todayFocusSeconds),
+    [weeklyFocusSeconds, todayFocusSeconds, todayKey]
   );
-  const productivityPeakDay =
-    weeklyFocusMinutes.length > 0
-      ? weeklyFocusMinutes.reduce((best, d) => (d.minutes > best.minutes ? d : best), weeklyFocusMinutes[0])
-      : null;
+  const productivityPeakDay = useMemo(() => {
+    if (weeklyFocusMinutes.length === 0) return null;
+    const peak = weeklyFocusMinutes.reduce(
+      (best, d) => (d.minutes > best.minutes ? d : best),
+      weeklyFocusMinutes[0]
+    );
+    return peak.minutes > 0 ? peak : null;
+  }, [weeklyFocusMinutes]);
   const weekAvg =
     weeklyFocusMinutes.length > 0
       ? Math.round(
@@ -354,12 +363,8 @@ export default function Dashboard() {
       : 0;
 
   const currentWeekTotalSeconds = useMemo(
-    () =>
-      weeklyFocusSeconds.reduce(
-        (sum, d) => sum + d.seconds + (d.key === todayKey ? unloggedFocusSeconds : 0),
-        0
-      ),
-    [weeklyFocusSeconds, unloggedFocusSeconds, todayKey]
+    () => sumDaySeconds(weeklyFocusMinutes),
+    [weeklyFocusMinutes]
   );
   const hasPriorWeekBaseline = priorWeekTotalSeconds > 0;
   const vsPriorWeek = hasPriorWeekBaseline
@@ -464,9 +469,30 @@ export default function Dashboard() {
       });
     }
 
+    for (const n of appNotifications) {
+      if (!isAppNotificationInAlerts(n.created_at)) continue;
+      items.push({
+        key: `app-${n.id}`,
+        kind: 'app',
+        notificationId: n.id,
+        sortAt: new Date(n.created_at).getTime(),
+        title: n.title || 'Notification',
+        when: formatWorkspaceWhen(n.created_at),
+        preview: n.body || null,
+        href: n.link_url || null,
+        isRead: Boolean(n.is_read),
+      });
+    }
+
     items.sort((a, b) => {
       if (a.kind === 'meeting-now') return -1;
       if (b.kind === 'meeting-now') return 1;
+      if (a.kind === 'app' && b.kind !== 'app') return -1;
+      if (b.kind === 'app' && a.kind !== 'app') return 1;
+      if (a.kind === 'app' && b.kind === 'app') {
+        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+        return b.sortAt - a.sortAt;
+      }
       if (a.kind === 'calendar' && b.kind === 'calendar') return a.sortAt - b.sortAt;
       if (a.kind === 'gmail' && b.kind === 'gmail') return b.sortAt - a.sortAt;
       if (a.kind === 'calendar' && b.kind === 'gmail') return -1;
@@ -475,7 +501,7 @@ export default function Dashboard() {
     });
 
     return items.slice(0, 12);
-  }, [inMeeting, currentMeeting, upcomingMeetings, workspaceNotifications]);
+  }, [inMeeting, currentMeeting, upcomingMeetings, workspaceNotifications, appNotifications]);
 
   const hasWorkspaceAlerts = workspaceAlertFeed.length > 0;
   const workspaceSyncMessage = formatWorkspaceSyncError(googleConnection?.sync_error);
@@ -515,7 +541,7 @@ export default function Dashboard() {
                 </div>
               )
             ) : null}
-            <ThemeToggle variant="compact" className="shrink-0" />
+            <ThemeToolbarButton className="rounded-full p-0.5" />
             <button
               type="button"
               onClick={() => setNotificationsOpen((o) => !o)}
@@ -540,7 +566,7 @@ export default function Dashboard() {
                 </div>
                 <div className="max-h-64 overflow-y-auto">
                   {appNotificationsLoading && appNotifications.length === 0 ? (
-                    <div className="px-4 py-4 text-center text-muted-foreground text-sm">Loading…</div>
+                    <InlineLoader size="sm" message="Loading notifications" />
                   ) : appNotifications.length === 0 ? (
                     <div className="px-4 py-4 text-center text-muted-foreground text-sm">
                       You&apos;re all caught up.
@@ -697,7 +723,9 @@ export default function Dashboard() {
                     </div>
                     <span className="text-muted-foreground font-semibold text-[10px] sm:text-xs tracking-wider uppercase">Productive time</span>
                   </div>
-                  {hasYesterdayFocus ? (
+                  {!loggedFocusTotalsReady ? (
+                    <SkeletonPulse className="h-7 w-20 rounded-xl" />
+                  ) : hasYesterdayFocus ? (
                     <div className={`${vsYesterday >= 0 ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/45 dark:to-green-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-500/25' : 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/45 dark:to-orange-950/30 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-500/25'} text-[9px] sm:text-[10px] font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1.5 shrink-0 shadow-sm border`}>
                       <ArrowUpRight size={11} className={`sm:w-3.5 sm:h-3.5 ${vsYesterday < 0 ? 'rotate-180' : ''}`} />
                       <span className="font-bold">{vsYesterday >= 0 ? '+' : ''}{vsYesterday}%</span>
@@ -709,7 +737,11 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
-                
+
+                {!loggedFocusTotalsReady ? (
+                  <ProductiveTimeSkeleton />
+                ) : (
+                  <>
                 <div className="mb-3 sm:mb-4 md:mb-5">
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground leading-none">{productiveHours}</span>
@@ -725,10 +757,10 @@ export default function Dashboard() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
                     {isFocusTimerRunningToday
-                      ? 'Focus timer running — updates live'
+                      ? 'Focus session active — updates live'
                       : productiveSecondsToday > 0
-                        ? 'From focus timer sessions today'
-                        : 'Start the focus timer to track productive time'}
+                        ? 'From Focus sessions today'
+                        : 'Open Focus to start tracking productive time'}
                   </p>
                 </div>
                 
@@ -785,6 +817,8 @@ export default function Dashboard() {
                       : 'No history to compare yet. Focus today and this bar tracks your pace from tomorrow.'}
                   </p>
                 </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -890,95 +924,18 @@ export default function Dashboard() {
         {/* --- Bottom Grid --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 md:gap-8 pb-4 sm:pb-6 md:pb-8 lg:items-start">
           
-          {/* Productivity Trend Graph — natural height; right card matches this on lg */}
-          <div
-            ref={productivityTrendRef}
-            className={dashboardWidePanelClass}
-          >
-            {/* Background decorative elements */}
-            <div className={`absolute top-0 right-0 w-32 h-32 ${dashboardGlowOrbClass} rounded-full blur-2xl`}></div>
-            <div className={`absolute bottom-0 left-0 w-24 h-24 ${dashboardGlowOrbSmClass} rounded-full blur-xl`}></div>
-            
-            <div className="relative z-10 flex flex-col">
-              <div className="flex justify-between items-start mb-4 sm:mb-5 md:mb-6 gap-4 shrink-0">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className={dashboardIconChipSmClass}>
-                      <div className="w-2 h-2 bg-[#615FFF] rounded-full"></div>
-                    </div>
-                    <h3 className="text-base sm:text-lg md:text-xl font-semibold text-foreground">Productivity Trend</h3>
-                  </div>
-                  <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1">Weekly focus efficiency</p>
-                </div>
-                {homeLoading ? (
-                  <div className={`${dashboardStatBadgeClass} opacity-60`}>
-                    <span className="font-bold">…</span>
-                  </div>
-                ) : hasPriorWeekBaseline || currentWeekTotalSeconds > 0 ? (
-                  <div
-                    className={`${
-                      vsPriorWeek >= 0
-                        ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/45 dark:to-green-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-500/25'
-                        : 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/45 dark:to-orange-950/30 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-500/25'
-                    } text-[10px] sm:text-xs font-semibold px-3 sm:px-3.5 py-1.5 rounded-full shrink-0 shadow-sm border flex items-center gap-1.5`}
-                  >
-                    <ArrowUpRight
-                      size={12}
-                      className={`sm:w-3.5 sm:h-3.5 ${vsPriorWeek < 0 ? 'rotate-180' : ''}`}
-                    />
-                    <span className="font-bold">
-                      {vsPriorWeek >= 0 ? '+' : ''}
-                      {vsPriorWeek}%
-                    </span>
-                    <span className="font-medium hidden sm:inline text-[9px] opacity-80">vs prior week</span>
-                  </div>
-                ) : (
-                  <div className="text-[10px] sm:text-xs font-semibold px-3 sm:px-3.5 py-1.5 rounded-full shrink-0 shadow-sm border bg-muted/50 text-muted-foreground border-border">
-                    First week
-                  </div>
-                )}
-              </div>
-              
-              {/* Enhanced SVG Chart - real weekly data */}
-              <ProductivityTrendChart
-                data={weeklyFocusMinutes}
-                peakDay={productivityPeakDay}
-                todayKey={todayKey}
-                loading={homeLoading}
-              />
-              
-              <div className="flex justify-between mt-2 sm:mt-3 text-[9px] sm:text-[10px] text-muted-foreground font-semibold uppercase tracking-wider px-1 sm:px-2">
-                {weeklyFocusMinutes.length > 0
-                  ? weeklyFocusMinutes.map((d) => <span key={d.key}>{d.label}</span>)
-                  : DAY_LABELS.map((day) => <span key={day}>{day}</span>)}
-              </div>
-              
-              <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-border flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-1">
-                  <div className={dashboardStatIconBoxClass}>
-                    <svg className="w-5 h-5 text-[#615FFF] dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Peak Day</p>
-                    <p className="text-sm sm:text-base font-semibold text-foreground">{productivityPeakDay?.label ?? '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 flex-1 justify-end">
-                  <div className="text-right">
-                    <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Avg (min/day)</p>
-                    <p className="text-base sm:text-lg font-bold text-[#615FFF] dark:text-indigo-400">{weekAvg}m</p>
-                  </div>
-                  <div className={dashboardStatIconBoxClass}>
-                    <svg className="w-5 h-5 text-[#615FFF] dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ProductivityTrendCard
+            cardRef={productivityTrendRef}
+            data={weeklyFocusMinutes}
+            peakDay={productivityPeakDay}
+            todayKey={todayKey}
+            weekAvg={weekAvg}
+            currentWeekTotalSeconds={currentWeekTotalSeconds}
+            vsPriorWeek={vsPriorWeek}
+            hasPriorWeekBaseline={hasPriorWeekBaseline}
+            loading={homeLoading && weeklyFocusMinutes.length === 0}
+            error={trendError}
+          />
 
           {/* Upcoming & Alerts — same height as Productivity Trend on lg; list scrolls inside */}
           <div
@@ -1080,25 +1037,28 @@ export default function Dashboard() {
                   </button>
                 ) : null}
 
-                {workspaceLoading && !hasWorkspaceAlerts && hasConnection ? (
-                  <div className="py-5 text-center text-sm text-muted-foreground">Loading Gmail & Calendar…</div>
+                {workspaceLoading && !hasWorkspaceAlerts ? (
+                  <ListSkeleton rows={3} message="Loading Gmail and Calendar" />
                 ) : null}
 
                 {!workspaceLoading && hasConnection && !hasWorkspaceAlerts ? (
                   <AlertsSectionEmpty onSync={openIntegrationsSettings} />
                 ) : null}
 
-                {!workspaceLoading && hasWorkspaceAlerts ? (
+                {hasWorkspaceAlerts ? (
                   <div className="space-y-2 sm:space-y-2.5">
                     {workspaceAlertFeed.map((alert) => {
                       const isNow = alert.kind === 'meeting-now';
                       const isCal = alert.kind === 'calendar';
+                      const isApp = alert.kind === 'app';
                       const isMeeting = isNow || isCal;
-                      const Icon = isNow ? Video : isCal ? Calendar : Mail;
+                      const Icon = isNow ? Video : isCal ? Calendar : isApp ? Bell : Mail;
                       const iconClass = isNow
                         ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200/60 dark:border-amber-500/30'
                         : isCal
                           ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/60 dark:border-indigo-500/30'
+                          : isApp
+                            ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border-orange-200/60 dark:border-orange-500/30'
                           : 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border-violet-200/60 dark:border-violet-500/30';
                       const row = (
                         <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
@@ -1114,7 +1074,9 @@ export default function Dashboard() {
                             <p className="text-[10px] sm:text-[11px] text-muted-foreground font-medium mt-0.5 truncate">
                               {alert.when}
                               {isCal && alert.isOnline ? ' · Video call' : ''}
-                              {alert.kind === 'gmail' ? ' · Important' : isCal ? ' · Calendar' : ''}
+                              {alert.kind === 'gmail' ? ' · Important' : ''}
+                              {isCal ? ' · Calendar' : ''}
+                              {isApp ? ' · Workspace' : ''}
                             </p>
                             {alert.preview ? (
                               <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{alert.preview}</p>
@@ -1133,12 +1095,25 @@ export default function Dashboard() {
                       const rowClassName = `flex p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all ${
                         isNow
                           ? 'border-amber-200/80 dark:border-amber-500/30 ring-1 ring-amber-100/50 dark:ring-amber-500/20 bg-card hover:bg-amber-50/40 dark:hover:bg-amber-950/25'
+                          : isApp && !alert.isRead
+                            ? 'border-orange-200/80 dark:border-orange-500/30 bg-orange-50/30 dark:bg-orange-950/20 hover:bg-orange-50/60 dark:hover:bg-orange-950/35'
                           : 'border-border bg-card hover:bg-indigo-50/40 dark:hover:bg-indigo-950/25 hover:border-indigo-100 dark:hover:border-indigo-500/25'
                       }`;
 
+                      const onAppOpen = () => {
+                        if (isApp && alert.notificationId && !alert.isRead) {
+                          void markAppNotificationRead(alert.notificationId);
+                        }
+                      };
+
                       if (alert.href?.startsWith('/')) {
                         return (
-                          <Link key={alert.key} href={alert.href} className={rowClassName}>
+                          <Link
+                            key={alert.key}
+                            href={alert.href}
+                            onClick={onAppOpen}
+                            className={rowClassName}
+                          >
                             {row}
                           </Link>
                         );
@@ -1151,10 +1126,24 @@ export default function Dashboard() {
                             href={alert.href}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={onAppOpen}
                             className={rowClassName}
                           >
                             {row}
                           </a>
+                        );
+                      }
+
+                      if (isApp) {
+                        return (
+                          <button
+                            key={alert.key}
+                            type="button"
+                            onClick={onAppOpen}
+                            className={`${rowClassName} w-full text-left cursor-pointer`}
+                          >
+                            {row}
+                          </button>
                         );
                       }
 
@@ -1172,7 +1161,7 @@ export default function Dashboard() {
                 </p>
 
                 {homeLoading ? (
-                  <div className="py-5 text-center text-sm text-muted-foreground">Loading tasks…</div>
+                  <ListSkeleton rows={3} message="Loading tasks" />
                 ) : upcomingTasks.length > 0 ? (
                   <div className="space-y-2 sm:space-y-2.5">
                   {upcomingTasks.map((task) => {

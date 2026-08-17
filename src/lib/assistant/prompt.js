@@ -39,7 +39,14 @@ Respond with ONLY valid JSON (no markdown fences):
 }
 
 Rules:
-- Use ONLY facts from the provided metrics. Never invent tasks, sessions, or numbers.
-- Reference specific counts when helpful (streak, overdue, sessions, efficiency, etc.).
+- Use ONLY facts from the provided metrics. Never invent tasks or numbers.
+- Focus time is Active Focus minutes — not calendar meetings, not session counts.
+- Lead with today vs yesterday and vs recent daily average when those numbers exist.
+- Daily streak is consecutive focused days. If streakAtRisk is true, remind them to focus today or it resets.
+- Never mention tasks per hour, session counts, or "rhythm".
+- Week metrics are rolling last 7 days vs the 7 days before that.
+- Reference specific counts when helpful (streak, overdue, today vs yesterday).
+- Never mention tasks per hour or session counts.
+- If overdueCount > 0, one tip should address clearing overdue work.
 - Provide 2-3 tips maximum. No emojis. Plain text only.
 - Tone: encouraging, direct, practical.`;

@@ -16,7 +16,7 @@ export default function Solutions() {
 
   const featuresRight = [
     "Built-in Pomodoro timer",
-    "Comprehensive analysis tracker",
+    "Comprehensive analytics tracker",
     "Gmail & Calendar integrations",
     "AI chatbot assistant",
     "Personalized focus dashboard",

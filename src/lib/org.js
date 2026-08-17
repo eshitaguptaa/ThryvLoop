@@ -1,5 +1,8 @@
 import { clerkClient } from '@clerk/nextjs/server';
 import { cache } from 'react';
+import { headers } from 'next/headers';
+import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
+import { canAccessMemberPersonalReport } from '@/lib/orgRoles';
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { ensureWorkspaceInSupabase } from '@/lib/orgSync';
 
@@ -9,6 +12,69 @@ export function getAppOrigin() {
   if (url) return url.replace(/\/$/, '');
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return 'http://localhost:3000';
+}
+
+function firstHeaderValue(value) {
+  if (!value) return '';
+  return value.split(',')[0].trim();
+}
+
+function isLocalhostOrigin(origin) {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+async function getRequestOrigin() {
+  try {
+    const h = await headers();
+    const host = firstHeaderValue(h.get('x-forwarded-host') || h.get('host'));
+    if (!host) return null;
+    const proto = firstHeaderValue(
+      h.get('x-forwarded-proto') || (host.includes('localhost') || host.startsWith('127.') ? 'http' : 'https')
+    );
+    return `${proto}://${host}`.replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Origin used in Clerk invitation emails. Prefer the public host the admin is
+ * actually on (tunnels / previews) so Gmail links open this deployment.
+ */
+export async function getInviteRedirectOrigin() {
+  const requestOrigin = await getRequestOrigin();
+  if (requestOrigin && !isLocalhostOrigin(requestOrigin)) return requestOrigin;
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '');
+  if (configured) return configured;
+  if (requestOrigin) return requestOrigin;
+  return getAppOrigin();
+}
+
+/** Name/slug for invite landing when the visitor is not a member yet. */
+export async function getWorkspacePublicPreview(orgSlug) {
+  const slug = decodeOrgSlug(orgSlug);
+  try {
+    const supabase = createSupabaseAdmin();
+    const { data } = await supabase
+      .from('organizations')
+      .select('name, slug')
+      .eq('slug', slug)
+      .maybeSingle();
+    if (data?.slug) {
+      return {
+        name: workspaceDisplayName(data.name, data.slug),
+        slug: data.slug,
+      };
+    }
+  } catch (e) {
+    console.warn('[org] public workspace preview failed:', e);
+  }
+  return { name: workspaceDisplayName(slug, slug), slug };
 }
 
 export function decodeOrgSlug(orgSlug) {
@@ -41,12 +107,14 @@ async function hydrateMembershipOrgFromClerk(membership) {
     const client = await clerkClient();
     const getter = client.organizations?.getOrganization;
     if (typeof getter === 'function') {
-      /** @type {{ name?: string; slug?: string } | undefined} */
+      /** @type {{ name?: string; slug?: string; imageUrl?: string; hasImage?: boolean } | undefined} */
       const full = await getter.call(client.organizations, { organizationId: orgId });
       if (full?.slug) merged.slug = full.slug;
       if (typeof full?.name === 'string' && full.name.trim()) {
         merged.name = full.name.trim();
       }
+      if (typeof full?.imageUrl === 'string') merged.imageUrl = full.imageUrl;
+      if (typeof full?.hasImage === 'boolean') merged.hasImage = full.hasImage;
     }
   } catch (e) {
     console.warn('[org] hydrate org from Clerk failed:', e);
@@ -158,11 +226,22 @@ async function membersFromSupabase(supabaseOrgId) {
 export const getOrgMembers = cache(async (organizationId) => {
   try {
     const client = await clerkClient();
-    const { data } = await client.organizations.getOrganizationMembershipList({
-      organizationId,
-      limit: 100,
-    });
-    if (data?.length) return data;
+    /** @type {import('@clerk/backend').OrganizationMembership[]} */
+    const all = [];
+    let offset = 0;
+    const limit = 100;
+    for (let page = 0; page < 20; page += 1) {
+      const { data } = await client.organizations.getOrganizationMembershipList({
+        organizationId,
+        limit,
+        offset,
+      });
+      const batch = data ?? [];
+      all.push(...batch);
+      if (batch.length < limit) break;
+      offset += limit;
+    }
+    if (all.length) return all;
   } catch (e) {
     console.error('[org] Clerk getOrgMembers failed, using Supabase fallback:', e);
   }
@@ -205,22 +284,50 @@ export const getWorkspaceContext = cache(async (userId, orgSlug) => {
   if (!membership) return null;
 
   const supabase = createSupabaseAdmin();
-  const { data: orgRow } = await supabase
+  let res = await supabase
     .from('organizations')
-    .select('id')
+    .select('id, insights_policy, focus_hours, name, slug')
     .eq('clerk_organization_id', membership.organization.id)
     .maybeSingle();
 
+  if (res.error) {
+    res = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('clerk_organization_id', membership.organization.id)
+      .maybeSingle();
+  }
+
+  const orgRow = res.data;
   let supabaseOrgId = orgRow?.id ?? null;
   if (!supabaseOrgId) {
     supabaseOrgId = await ensureWorkspaceInSupabase(membership, userId);
   }
+
+  let insightsPolicy =
+    orgRow?.insights_policy === 'full_individual' ? 'full_individual' : 'team_only';
+  let focusHours = orgRow?.focus_hours ?? null;
 
   return {
     membership,
     clerkOrgId: membership.organization.id,
     slug: membership.organization.slug,
     name: membership.organization.name,
+    imageUrl:
+      membership.organization.hasImage && membership.organization.imageUrl
+        ? membership.organization.imageUrl
+        : null,
+    hasImage: Boolean(membership.organization.hasImage),
     supabaseOrgId,
+    insightsPolicy,
+    focusHours,
   };
 });
+
+/**
+ * Whether the viewer may open / download a member's personal report PDF.
+ * @see canAccessMemberPersonalReport — self always; peers only for admins under full transparency.
+ */
+export function canViewMemberAnalytics(args) {
+  return canAccessMemberPersonalReport(args);
+}

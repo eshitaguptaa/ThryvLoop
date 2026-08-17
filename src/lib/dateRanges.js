@@ -7,6 +7,30 @@ export function localDateKey(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+/** YYYY-MM-DD in an IANA timezone (e.g. Asia/Kolkata). */
+export function dateKeyInTimeZone(d = new Date(), timeZone = 'UTC') {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  } catch {
+    return localDateKey(d);
+  }
+}
+
+/** Shift a YYYY-MM-DD key by whole days (timezone-safe). */
+export function addDaysToDateKey(dateKey, delta) {
+  const [y, m, day] = String(dateKey)
+    .split('-')
+    .map((part) => Number(part));
+  if (!y || !m || !day) return dateKey;
+  const utc = new Date(Date.UTC(y, m - 1, day + Number(delta)));
+  return utc.toISOString().slice(0, 10);
+}
+
 /** Local calendar day bounds (for matching user-visible "today"). */
 export function localStartOfDay(d = new Date()) {
   const x = new Date(d);

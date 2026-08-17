@@ -17,6 +17,7 @@ export function validateReportPayload(body) {
     chartData,
     taskDistribution,
     peakByDayHour,
+    todayByHour,
     dayLabels,
     maxPeakCell,
     categoryCounts,
@@ -38,9 +39,9 @@ export function validateReportPayload(body) {
 
   const normalizedCharts = {};
   if (charts && typeof charts === 'object') {
-    for (const key of ['focusSessions', 'sessionsPerDay', 'taskDistribution']) {
+    for (const key of ['focusTrend', 'workPipeline', 'focusSessions', 'sessionsPerDay', 'taskDistribution']) {
       const val = charts[key];
-      if (typeof val === 'string' && val.startsWith('data:image/')) {
+      if (typeof val === 'string' && (val.startsWith('data:image/') || val.startsWith('data:image/svg+xml'))) {
         if (val.length > MAX_CHART_DATA_URL_LEN) {
           return { ok: false, error: 'Chart image too large' };
         }
@@ -65,16 +66,31 @@ export function validateReportPayload(body) {
       userName: typeof userName === 'string' ? userName.slice(0, 120) : 'User',
       dateString: typeof dateString === 'string' ? dateString.slice(0, 120) : new Date().toDateString(),
       generatedAt: new Date().toLocaleString('en-US', {
+        weekday: 'short',
         month: 'short',
         day: 'numeric',
         year: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
       }),
+      generatedAtDate: new Date().toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      generatedAtTime: new Date().toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      }),
+      reportDateKey: new Date().toISOString().slice(0, 10),
       metrics,
       chartData: chartData.slice(0, 31),
       taskDistribution: Array.isArray(taskDistribution) ? taskDistribution.slice(0, 20) : [],
       peakByDayHour,
+      todayByHour: Array.isArray(todayByHour)
+        ? todayByHour.slice(0, 24).map((n) => Number(n) || 0)
+        : Array.from({ length: 24 }, () => 0),
       dayLabels,
       maxPeakCell: typeof maxPeakCell === 'number' ? maxPeakCell : 1,
       categoryCounts:

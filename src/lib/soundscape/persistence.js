@@ -50,10 +50,12 @@ export function loadSessionPlaying(userId) {
   return sessionActive && isPlaying;
 }
 
-/** @param {string | null} userId — true only when user explicitly muted Spaces in composer */
+/** @param {string | null} userId — true when muted or never explicitly unmuted */
 export function loadSpacesPaused(userId) {
-  if (typeof window === 'undefined' || !userId) return false;
-  return getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused') === 'true';
+  if (typeof window === 'undefined' || !userId) return true;
+  const raw = getUserStorageItem(userId, 'focus-spaces-paused', 'focus-spaces-paused');
+  if (raw == null || raw === '') return true;
+  return raw === 'true';
 }
 
 /** @param {string | null} userId */

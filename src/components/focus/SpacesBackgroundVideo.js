@@ -5,11 +5,10 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { getUserStorageItem, setUserStorageItem } from '@/utils/userStorage';
-import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId, getSpacesDisplayName } from '@/lib/spacesConstants';
+import { DEFAULT_SPACES_VIDEO_ID, resolveSpacesVideoId } from '@/lib/spacesConstants';
 import { isSpacesPausedByUser, isSpacesPlaybackIntent, hasSpacesMediaConfigured, shouldShowSpacesBackground } from '@/lib/spacesPlayback';
 import { loadYouTubeIframeApi } from '@/lib/youtubeIframeApi';
 import { buildYouTubeEmbedUrl, YOUTUBE_IFRAME_ALLOW, YOUTUBE_IFRAME_REFERRER_POLICY } from '@/lib/youtubeEmbed';
-import { useSpacesPictureInPicture } from '@/hooks/useSpacesPictureInPicture';
 
 const DEFAULT_VIDEO_ID = DEFAULT_SPACES_VIDEO_ID;
 
@@ -68,32 +67,6 @@ export default function SpacesBackgroundVideo() {
   const isSpacesPlaybackActive = useCallback(() => {
     return isSpacesPlaybackIntent(userIdRef.current);
   }, []);
-
-  const shouldShowSpacesPip = useCallback(() => {
-    if (!isOnFocusRoute) return false;
-    const videoId = currentVideoIdRef.current || resolveSpacesVideoId(backgroundVideoId);
-    return !!videoId;
-  }, [backgroundVideoId, isOnFocusRoute]);
-
-  const getPipPlaybackSnapshot = useCallback(() => {
-    let startSeconds = 0;
-    try {
-      if (playerRef.current?.getCurrentTime) {
-        startSeconds = playerRef.current.getCurrentTime() || 0;
-      }
-    } catch (_) {}
-    return {
-      videoId: currentVideoIdRef.current || resolveSpacesVideoId(backgroundVideoId),
-      startSeconds,
-    };
-  }, [backgroundVideoId]);
-
-  useSpacesPictureInPicture({
-    enabled: isOnFocusRoute,
-    spaceLabel: getSpacesDisplayName(currentVideoId),
-    shouldShowPip: shouldShowSpacesPip,
-    getPipPlaybackSnapshot,
-  });
 
   const shouldRunPlayer = () => playerActivated;
 

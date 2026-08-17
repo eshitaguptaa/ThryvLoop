@@ -30,7 +30,8 @@ async function persistTokenPatch(supabase, rowId, patch) {
 }
 
 /**
- * Refresh via Clerk OAuth token (sign-in with Google path — no refresh token stored).
+ * Refresh via Clerk OAuth token for older connections that stored no refresh token.
+ * New Calendar/Gmail links use in-app OAuth and always store a refresh token.
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  * @param {{ id: string, user_id: string, scopes?: string[] | null }} row
  */

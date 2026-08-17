@@ -4,9 +4,12 @@ import { useAuth } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
 import { FocusProvider } from '@/contexts/FocusContext';
 import { TimerProvider } from '@/contexts/TimerContext';
+import { FocusSessionProvider } from '@/contexts/FocusSessionContext';
 import { CelebrationProvider } from '@/contexts/CelebrationContext';
 import CelebrationModal from '@/components/CelebrationModal';
 import CelebrationToast from '@/components/CelebrationToast';
+import StreakCelebrationModal from '@/components/StreakCelebrationModal';
+import StillFocusingCheckIn from '@/components/focus/StillFocusingCheckIn';
 import SupabaseAuthBridge from '@/components/SupabaseAuthBridge';
 import UserPreferencesHydrator from '@/components/UserPreferencesHydrator';
 import AuthenticatedAppShell from '@/components/AuthenticatedAppShell';
@@ -37,10 +40,10 @@ export default function AppSessionProviders({ children }) {
   const pathname = usePathname();
   const authTransition = useAuthTransitionActive();
   const isSsoCallback = pathname?.startsWith('/auth/sso-callback') ?? false;
+  // During login, keep mounting the destination under the overlay so it can
+  // fetch; only hide the marketing shell on `/` so it does not flash.
   const hideUnderLoader =
-    authTransition &&
-    !isSsoCallback &&
-    (isProtectedAppRoute(pathname) || pathname === '/');
+    authTransition && !isSsoCallback && (pathname === '/' || !isSignedIn);
   const clerkLoadingProtected =
     !isLoaded && isProtectedAppRoute(pathname) && !authTransition;
 
@@ -60,7 +63,7 @@ export default function AppSessionProviders({ children }) {
       <>
         <UserPreferencesHydrator />
         <AuthTransitionHost />
-        {children}
+        {hideUnderLoader ? null : children}
       </>
     );
   }
@@ -74,17 +77,21 @@ export default function AppSessionProviders({ children }) {
       <SupabaseAuthBridge />
       <CelebrationProvider>
         <CelebrationModal />
+        <StreakCelebrationModal />
         <CelebrationToast />
         <CalendarReminderHost />
         <AssistantProvider>
           <FocusProvider>
-            <TimerProvider>
-              {hideUnderLoader ? null : showAppShell ? (
-                <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
-              ) : (
-                children
-              )}
-            </TimerProvider>
+            <FocusSessionProvider>
+              <TimerProvider>
+                <StillFocusingCheckIn />
+                {showAppShell ? (
+                  <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
+                ) : (
+                  children
+                )}
+              </TimerProvider>
+            </FocusSessionProvider>
           </FocusProvider>
         </AssistantProvider>
       </CelebrationProvider>

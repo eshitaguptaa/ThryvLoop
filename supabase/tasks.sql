@@ -10,7 +10,8 @@ create table if not exists public.tasks (
   priority jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  archived_at timestamptz
 );
 
 alter table public.tasks enable row level security;

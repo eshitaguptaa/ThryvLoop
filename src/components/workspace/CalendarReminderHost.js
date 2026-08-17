@@ -4,10 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { useCelebration } from '@/contexts/CelebrationContext';
 import { workspaceApiFetch } from '@/lib/workspace/clientApi';
-import {
-  checkCalendarReminders,
-  ensureCalendarNotificationPermission,
-} from '@/lib/calendarReminderPrefs';
+import { checkCalendarReminders } from '@/lib/calendarReminderPrefs';
 
 const POLL_MS = 30_000;
 
@@ -27,13 +24,16 @@ function formatReminderTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+/**
+ * Polls calendar events and fires in-app ThryvLoop toasts for reminders.
+ * Does not request browser Notification permission.
+ */
 export default function CalendarReminderHost() {
   const { isSignedIn, getToken, isLoaded } = useAuth();
   const { user } = useUser();
   const userId = user?.id || null;
   const { showToast } = useCelebration();
   const eventsRef = useRef([]);
-  const permissionRequestedRef = useRef(false);
 
   const fetchUpcomingEvents = useCallback(async () => {
     if (!isLoaded || !isSignedIn) return;
@@ -61,17 +61,6 @@ export default function CalendarReminderHost() {
         `${payload.title}`,
         `Starting in ${payload.minutes} min · ${timeLabel}`
       );
-
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        try {
-          new Notification(`In ${payload.minutes} minutes: ${payload.title}`, {
-            body: `Starts at ${timeLabel}`,
-            tag: payload.eventKey,
-          });
-        } catch {
-          // ignore notification errors
-        }
-      }
     },
     [showToast]
   );
@@ -100,13 +89,6 @@ export default function CalendarReminderHost() {
       window.removeEventListener('focus', onFocus);
     };
   }, [fetchUpcomingEvents, isLoaded, isSignedIn, tick]);
-
-  useEffect(() => {
-    if (!permissionRequestedRef.current && isSignedIn) {
-      permissionRequestedRef.current = true;
-      void ensureCalendarNotificationPermission();
-    }
-  }, [isSignedIn]);
 
   return null;
 }

@@ -6,6 +6,9 @@ import { useFocus } from '@/contexts/FocusContext';
 import TimerWidget from '@/components/focus/TimerWidget';
 import MusicWidget from '@/components/focus/MusicWidget';
 import FocusTaskBar from '@/components/focus/FocusTaskBar';
+import ThemeToggle from '@/components/ThemeToggle';
+import FocusSessionToggle from '@/components/focus/FocusSessionToggle';
+import StreakPreviewButton from '@/components/StreakPreviewButton';
 
 export default function FocusPage() {
   const pathname = usePathname();
@@ -151,6 +154,16 @@ export default function FocusPage() {
       {showTask && <FocusTaskBar />}
       {showTimer && <TimerWidget />}
       {showMusic && <MusicWidget />}
+
+      {/* Session + Theme — top right of Focus / Spaces canvas */}
+      <div className="fixed top-4 right-4 z-30 flex items-center gap-2">
+        <StreakPreviewButton />
+        <FocusSessionToggle />
+        <ThemeToggle
+          variant="compact"
+          className="rounded-2xl bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/[0.08] hover:border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.3)] [&_button]:text-white [&_button]:hover:text-white [&_button]:hover:bg-white/10"
+        />
+      </div>
       
       {/* Fullscreen button */}
       <button

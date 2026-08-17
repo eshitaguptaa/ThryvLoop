@@ -220,7 +220,7 @@ export default function Features() {
                 <TasksShowcase />
                 </ScrollItem>
 
-                {/* Feature Card 3: Analysis Tracker (interactive) */}
+                {/* Feature Card 3: Analytics Tracker (interactive) */}
                 <ScrollItem className="feature-compact-card">
                 <AnalysisTrackerShowcase />
                 </ScrollItem>

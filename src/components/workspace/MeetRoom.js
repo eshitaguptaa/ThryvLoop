@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, ExternalLink, Video } from 'lucide-react';
 import { useAuth } from '@clerk/nextjs';
 import { workspaceApiFetch } from '@/lib/workspace/clientApi';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function MeetRoom({ meetingId }) {
   const router = useRouter();
@@ -94,14 +95,20 @@ export default function MeetRoom({ meetingId }) {
           <Video size={18} className="shrink-0 text-indigo-400" />
           <p className="truncate text-sm font-semibold sm:text-base">{session.title || 'Google Meet'}</p>
         </div>
-        <button
-          type="button"
-          onClick={openMeetPopup}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-2 text-xs font-semibold text-white/90 hover:bg-white/10 transition-colors"
-        >
-          <ExternalLink size={14} />
-          Pop-out
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <ThemeToggle
+            variant="compact"
+            className="rounded-full border border-white/15 bg-white/5 text-white/90 hover:bg-white/10"
+          />
+          <button
+            type="button"
+            onClick={openMeetPopup}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-2 text-xs font-semibold text-white/90 hover:bg-white/10 transition-colors"
+          >
+            <ExternalLink size={14} />
+            Pop-out
+          </button>
+        </div>
       </header>
 
       <div className="relative flex flex-1 min-h-0 flex-col">

@@ -1,5 +1,5 @@
 /**
- * Build a YouTube embed URL for Spaces / PiP players.
+ * Build a YouTube embed URL for Spaces background players.
  * @param {string} videoId
  * @param {{ startSeconds?: number, mute?: boolean }} [options]
  */

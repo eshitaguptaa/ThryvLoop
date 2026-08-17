@@ -9,8 +9,10 @@ const PAUSED_KEY = 'focus-spaces-paused';
 
 /** User explicitly muted Spaces in Soundscape Composer (not a transient session pause). */
 export function isSpacesUserMuted(userId) {
-  if (!userId || typeof window === 'undefined') return false;
-  return getUserStorageItem(userId, PAUSED_KEY, PAUSED_KEY) === 'true';
+  if (!userId || typeof window === 'undefined') return true;
+  const raw = getUserStorageItem(userId, PAUSED_KEY, PAUSED_KEY);
+  if (raw == null || raw === '') return true;
+  return raw === 'true';
 }
 
 /** @param {string | null} userId */
@@ -21,12 +23,13 @@ export function setSpacesUserMuted(userId, muted) {
 
 /**
  * Whether Spaces ambient audio should join the mix when the user hits play.
- * Spaces plays unless the user muted it in the composer (toggle or volume at 0).
+ * Only when the user has explicitly unmuted Spaces (not the default muted state).
  */
 export function shouldBootstrapSpacesOnPlay(userId) {
   if (!userId || !hasSpacesMediaConfigured(userId)) return false;
-  if (isSpacesUserMuted(userId)) return false;
-  return true;
+  if (typeof window === 'undefined') return false;
+  // Require an explicit unmute — missing/default means muted.
+  return getUserStorageItem(userId, PAUSED_KEY, PAUSED_KEY) === 'false';
 }
 
 /** Temporarily silence Spaces without persisting a user mute preference. */

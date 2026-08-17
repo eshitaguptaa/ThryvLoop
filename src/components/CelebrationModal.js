@@ -90,16 +90,9 @@ const FOCUS_VARIANTS = [
   { headline: 'Focus time: complete', subtext: (p) => `${p?.sessionMinutes ?? 25} min in the books. Nice one.`, emoji: '✨' },
 ];
 
-const STREAK_VARIANTS = [
-  { headline: 'Streak unlocked!', subtext: (p) => p?.days ? `${p.days} days in a row. You're on fire.` : "You're building a habit. Keep it up.", emoji: '🔥' },
-  { headline: 'Consistency wins', subtext: (p) => p?.days ? `${p.days} days straight. That’s discipline.` : "You're building a habit. Keep it up.", emoji: '💪' },
-  { headline: 'Streak alert!', subtext: (p) => p?.days ? `${p.days} days in a row. Don’t stop.` : "You're building a habit. Keep it up.", emoji: '⭐' },
-];
-
 const SHARED_BY_TYPE = {
   task: { cta: 'Keep going', gradient: 'from-indigo-500/25 via-[#5043F3]/20 to-violet-500/25', accent: THRYV_PURPLE },
   focus_session: { cta: 'Start another', gradient: 'from-indigo-500/25 via-[#5043F3]/20 to-violet-500/25', accent: THRYV_PURPLE },
-  streak: { cta: 'View progress', gradient: 'from-amber-500/20 via-orange-500/10 to-rose-500/20', accent: '#f59e0b' },
 };
 
 function pickRandom(arr) {
@@ -109,7 +102,7 @@ function pickRandom(arr) {
 function getContent(payload) {
   const type = payload?.type ?? 'task';
   const shared = SHARED_BY_TYPE[type] || SHARED_BY_TYPE.task;
-  const variants = type === 'task' ? TASK_VARIANTS : type === 'focus_session' ? FOCUS_VARIANTS : type === 'streak' ? STREAK_VARIANTS : TASK_VARIANTS;
+  const variants = type === 'focus_session' ? FOCUS_VARIANTS : TASK_VARIANTS;
   const variant = pickRandom(variants);
   return { ...shared, ...variant };
 }
@@ -140,7 +133,7 @@ export default function CelebrationModal() {
   }, [celebration]);
 
   if (!celebration) return null;
-  if (celebration.type === 'focus_session') return null;
+  if (celebration.type === 'focus_session' || celebration.type === 'streak') return null;
 
   const content = getContent(celebration);
 

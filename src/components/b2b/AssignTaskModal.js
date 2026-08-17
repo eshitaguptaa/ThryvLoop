@@ -1,11 +1,13 @@
 'use client';
 
 import { X } from 'lucide-react';
+import WorkspaceSelect from '@/components/b2b/WorkspaceSelect';
+import { workspaceInputClass } from '@/components/b2b/workspaceShellClasses';
+import DatePickerField from '@/components/ui/DatePickerField';
 
 const CATEGORIES = ['General', 'Project', 'Operations', 'Support', 'Other'];
 
-const fieldClass =
-  'w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-[#5D3FD3]/35';
+const fieldClass = workspaceInputClass;
 
 export default function AssignTaskModal({
   open,
@@ -14,6 +16,7 @@ export default function AssignTaskModal({
   form,
   setForm,
   members,
+  projects = [],
   saving,
   onSubmit,
 }) {
@@ -62,46 +65,65 @@ export default function AssignTaskModal({
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Assign to
           </label>
-          <select
+          <WorkspaceSelect
             required
             value={form.assigneeUserId}
             onChange={(e) => setForm({ ...form, assigneeUserId: e.target.value })}
-            className={fieldClass}
+            className="w-full block"
+            size="md"
           >
             {members.map((m) => (
               <option key={m.userId} value={m.userId}>
                 {m.label}
               </option>
             ))}
-          </select>
+          </WorkspaceSelect>
           <div className="grid grid-cols-2 gap-3">
-            <input
-              type="date"
+            <DatePickerField
               value={form.dueDate}
-              onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-              className={fieldClass}
+              onChange={(next) => setForm({ ...form, dueDate: next })}
+              placeholder="Due date"
+              aria-label="Due date"
+              triggerClassName={fieldClass}
             />
-            <select
+            <WorkspaceSelect
               value={form.priority}
               onChange={(e) => setForm({ ...form, priority: e.target.value })}
-              className={fieldClass}
+              className="w-full block"
+              size="md"
             >
               <option value="high">High</option>
               <option value="medium">Medium</option>
               <option value="low">Low</option>
-            </select>
+            </WorkspaceSelect>
           </div>
-          <select
+          <WorkspaceSelect
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
-            className={fieldClass}
+            className="w-full block"
+            size="md"
           >
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
-          </select>
+          </WorkspaceSelect>
+          {projects.length > 0 ? (
+            <WorkspaceSelect
+              value={form.projectId || ''}
+              onChange={(e) => setForm({ ...form, projectId: e.target.value })}
+              className="w-full block"
+              size="md"
+            >
+              <option value="">No project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </WorkspaceSelect>
+          ) : null}
           <div className="flex gap-2 pt-2">
             <button
               type="button"

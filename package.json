@@ -10,7 +10,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "validate:env": "node scripts/validate-env.mjs"
+    "validate:env": "node scripts/validate-env.mjs",
+    "verify:team-insights": "node scripts/verify-team-insights.mjs",
+    "verify:task-archive": "node scripts/verify-task-archive.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.0",
