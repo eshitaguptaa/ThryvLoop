@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSignUp } from '@clerk/nextjs';
 import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
-import AppLoadingScreen from '@/components/ui/AppLoadingScreen';
 import { AFTER_AUTH_PATH, authModalUrl } from '@/lib/authRoutes';
-import { markAuthLoginTransition } from '@/lib/authTransition';
+import { ensureAuthLoginTransition, setAuthLoginProgress } from '@/lib/authTransition';
 import { formatClerkActionError } from '@/lib/clerkErrors';
 
 /**
@@ -35,10 +34,16 @@ export default function AuthContinuePage() {
   const canSubmit = needsName || needsLegal || needsPassword;
 
   useEffect(() => {
+    ensureAuthLoginTransition();
+    setAuthLoginProgress({ percent: 58, message: 'Finish creating your account' });
+  }, []);
+
+  useEffect(() => {
     if (!isLoaded || !signUp) return;
 
     if (signUp.status === 'complete' && signUp.createdSessionId && setActive) {
-      markAuthLoginTransition();
+      ensureAuthLoginTransition();
+      setAuthLoginProgress({ percent: 72, message: 'Opening your workspace' });
       void setActive({ session: signUp.createdSessionId }).then(() => {
         router.replace(AFTER_AUTH_PATH);
       });
@@ -54,7 +59,8 @@ export default function AuthContinuePage() {
     const status = result?.status ?? signUp?.status;
     const sessionId = result?.createdSessionId ?? signUp?.createdSessionId;
     if (status === 'complete' && sessionId && setActive) {
-      markAuthLoginTransition();
+      ensureAuthLoginTransition();
+      setAuthLoginProgress({ percent: 72, message: 'Opening your workspace' });
       await setActive({ session: sessionId });
       router.replace(AFTER_AUTH_PATH);
       return true;
@@ -89,16 +95,12 @@ export default function AuthContinuePage() {
     }
   };
 
-  if (!isLoaded) {
-    return <AppLoadingScreen message="Signing you in" />;
-  }
-
-  if (signUp?.status === 'complete') {
-    return <AppLoadingScreen message="Signing you in" />;
+  if (!isLoaded || signUp?.status === 'complete') {
+    return null;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="auth-continue-panel min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
         <h1 className="text-xl font-bold text-foreground">Finish creating your account</h1>
         <p className="text-sm text-muted-foreground mt-1">

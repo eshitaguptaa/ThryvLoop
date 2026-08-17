@@ -7,18 +7,21 @@ import { usePathname } from 'next/navigation';
 import AppLoadingScreen from '@/components/ui/AppLoadingScreen';
 import {
   AUTH_DESTINATION_READY_EVENT,
+  AUTH_LOGIN_PROGRESS_EVENT,
   AUTH_TRANSITION_EVENT,
   clearAuthTransition,
+  getAuthLoginProgress,
   getAuthTransitionMode,
   isAuthDestinationReady,
   isProtectedAppRoute,
+  setAuthLoginProgress,
+  ensureAuthLoginTransition,
 } from '@/lib/authTransition';
 import { authTransitionMessage } from '@/lib/authTransitionMessages';
 
-const LOGIN_FINISH_DELAY_MS = 320;
+const LOGIN_FINISH_DELAY_MS = 280;
 const LOGOUT_FINISH_DELAY_MS = 380;
-/** Keep the loader up until the destination reports ready; fail open eventually. */
-const LOGIN_SAFETY_TIMEOUT_MS = 25000;
+const LOGIN_SAFETY_TIMEOUT_MS = 20000;
 
 /** Full-screen loader during explicit login / logout transitions. */
 export default function AuthTransitionHost() {
@@ -27,6 +30,7 @@ export default function AuthTransitionHost() {
   const [mode, setMode] = useState(null);
   const [finishing, setFinishing] = useState(false);
   const [destinationReady, setDestinationReady] = useState(false);
+  const [loginProgress, setLoginProgress] = useState(() => getAuthLoginProgress());
   const finishTimerRef = useRef(null);
   const safetyTimerRef = useRef(null);
 
@@ -35,6 +39,7 @@ export default function AuthTransitionHost() {
     setMode(next);
     if (next === 'login') {
       setDestinationReady(isAuthDestinationReady());
+      setLoginProgress(getAuthLoginProgress());
     } else {
       setDestinationReady(false);
     }
@@ -60,10 +65,20 @@ export default function AuthTransitionHost() {
   }, []);
 
   useLayoutEffect(() => {
+    if (pathname === '/auth/sso-callback') {
+      ensureAuthLoginTransition();
+    }
     syncMode();
     window.addEventListener(AUTH_TRANSITION_EVENT, syncMode);
     return () => window.removeEventListener(AUTH_TRANSITION_EVENT, syncMode);
-  }, [syncMode]);
+  }, [pathname, syncMode]);
+
+  useEffect(() => {
+    const syncProgress = () => setLoginProgress(getAuthLoginProgress());
+    syncProgress();
+    window.addEventListener(AUTH_LOGIN_PROGRESS_EVENT, syncProgress);
+    return () => window.removeEventListener(AUTH_LOGIN_PROGRESS_EVENT, syncProgress);
+  }, []);
 
   useEffect(() => {
     if (mode !== 'login') return undefined;
@@ -73,7 +88,29 @@ export default function AuthTransitionHost() {
     return () => window.removeEventListener(AUTH_DESTINATION_READY_EVENT, onReady);
   }, [mode]);
 
-  // Login dismisses only after the destination page signals ready (never on route alone).
+  useEffect(() => {
+    if (mode !== 'login' || finishing) return;
+    if (!isLoaded || !isSignedIn) return;
+    if (!isProtectedAppRoute(pathname)) return;
+    setAuthLoginProgress({ percent: 78, message: 'Loading your workspace' });
+  }, [mode, finishing, isLoaded, isSignedIn, pathname]);
+
+  useEffect(() => {
+    if (mode !== 'login' || pathname !== '/auth/sso-callback') return undefined;
+    const node = document.getElementById('clerk-captcha');
+    if (!node) return undefined;
+
+    const syncCaptcha = () => {
+      if (node.childElementCount > 0) {
+        setAuthLoginProgress({ percent: 52, message: 'Confirm you are human' });
+      }
+    };
+    syncCaptcha();
+    const observer = new MutationObserver(syncCaptcha);
+    observer.observe(node, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [mode, pathname]);
+
   const isLoginReady =
     mode === 'login' &&
     isLoaded &&
@@ -110,7 +147,6 @@ export default function AuthTransitionHost() {
   useEffect(() => {
     if (mode !== 'login' || finishing) return;
     if (!isLoaded || !isSignedIn) return;
-    // Only start the safety clock once we have reached a protected destination.
     if (!isProtectedAppRoute(pathname)) return;
 
     safetyTimerRef.current = window.setTimeout(beginFinish, LOGIN_SAFETY_TIMEOUT_MS);
@@ -122,11 +158,15 @@ export default function AuthTransitionHost() {
     };
   }, [beginFinish, finishing, isLoaded, isSignedIn, mode, pathname]);
 
-  if (!mode) return null;
+  const isSso = pathname === '/auth/sso-callback';
+  if (!mode && !isSso) return null;
+
+  const loginMessage = loginProgress.message || authTransitionMessage('login');
 
   return createPortal(
     <AppLoadingScreen
-      message={authTransitionMessage(mode)}
+      message={mode === 'logout' ? authTransitionMessage('logout') : loginMessage}
+      percent={mode === 'logout' ? null : loginProgress.percent}
       finishing={finishing}
       onFinish={handleFinish}
     />,

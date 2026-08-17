@@ -12,6 +12,7 @@ import {
 } from '@/components/b2b/workspaceShellClasses';
 import { formatClerkActionError } from '@/lib/clerkErrors';
 import { getOauthRedirectUrls, setPostAuthRedirect } from '@/lib/authRoutes';
+import { markAuthLoginTransition, setAuthLoginProgress } from '@/lib/authTransition';
 import { suspendClerkAuthRequests } from '@/lib/clerkSupabaseToken';
 
 function JoiningMessage({ title = 'Joining workspace…', detail = 'Completing your invitation' }) {
@@ -273,6 +274,8 @@ export default function AcceptOrgInvitation({
       }
       const returnPath = `${cleanUrl}?from_invite=1`;
       setPostAuthRedirect(returnPath);
+      markAuthLoginTransition('Signing in with Google');
+      setAuthLoginProgress({ percent: 18, message: 'Redirecting to Google' });
       const { redirectUrl, redirectUrlComplete } = getOauthRedirectUrls(returnPath);
       await signIn.authenticateWithRedirect({
         strategy: 'oauth_google',

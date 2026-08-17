@@ -30,6 +30,7 @@ import { workspaceApiFetch } from '@/lib/workspace/clientApi';
 import { getFocusTrendRange, overlayLiveTodaySeconds, sumDaySeconds } from '@/lib/focusTrend';
 import { useTimer } from '@/contexts/TimerContext';
 import { useReportAuthDestinationReady } from '@/hooks/useReportAuthDestinationReady';
+import { isAuthTransitionActive, setAuthLoginProgress } from '@/lib/authTransition';
 import { openIntegrationsSettings } from '@/lib/openFocusSettings';
 import SpacesCrossfadeBackground from '@/components/landing_sections/SpacesCrossfadeBackground';
 import ThemeToolbarButton from '@/components/ThemeToolbarButton';
@@ -174,6 +175,15 @@ export default function Dashboard() {
     !appNotificationsLoading;
 
   useReportAuthDestinationReady(dashboardReady);
+
+  useEffect(() => {
+    if (!isAuthTransitionActive()) return;
+    if (userId) setAuthLoginProgress({ percent: 82, message: 'Loading your workspace' });
+    if (homeBootstrapDone) setAuthLoginProgress({ percent: 88, message: 'Loading your workspace' });
+    if (userId && !workspaceLoading) {
+      setAuthLoginProgress({ percent: 92, message: 'Loading your workspace' });
+    }
+  }, [userId, homeBootstrapDone, workspaceLoading]);
 
   const {
     displaySounds,

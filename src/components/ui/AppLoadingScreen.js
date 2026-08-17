@@ -7,21 +7,33 @@ import { useTheme } from 'next-themes';
 import { resolveLoaderThemeDark } from '@/lib/themePreferences';
 
 /**
- * Full-screen ThryvLoop boot loader — logo + glowing progress bar.
- * @param {{ message?: string, finishing?: boolean, onFinish?: () => void }} props
+ * Full-screen ThryvLoop boot loader — logo + progress bar.
+ * Pass `percent` for real login progress (0–100). Without it, the bar is
+ * indeterminate and eases toward 90% only.
+ *
+ * @param {{
+ *   message?: string,
+ *   finishing?: boolean,
+ *   percent?: number | null,
+ *   children?: import('react').ReactNode,
+ *   onFinish?: () => void,
+ * }} props
  */
 export default function AppLoadingScreen({
   message = 'Preparing your workspace',
   finishing = false,
+  percent = null,
+  children = null,
   onFinish,
 }) {
   const { resolvedTheme } = useTheme();
   const [isDark, setIsDark] = useState(resolveLoaderThemeDark);
-  const [progress, setProgress] = useState(8);
+  const start = typeof percent === 'number' ? percent : 8;
+  const [progress, setProgress] = useState(start);
   const [visible, setVisible] = useState(true);
   const rafRef = useRef(null);
   const finishStartedRef = useRef(false);
-  const progressRef = useRef(8);
+  const progressRef = useRef(start);
 
   useEffect(() => {
     if (resolvedTheme === 'dark') setIsDark(true);
@@ -36,12 +48,21 @@ export default function AppLoadingScreen({
   useEffect(() => {
     if (finishing) return undefined;
 
-    let value = 8;
     const tick = () => {
-      const headroom = 90 - value;
-      value += Math.max(0.25, headroom * 0.045);
-      if (value > 90) value = 90;
-      setProgress(value);
+      const current = progressRef.current;
+      let target;
+      if (typeof percent === 'number') {
+        target = Math.min(99, Math.max(0, percent));
+      } else {
+        const headroom = 90 - current;
+        target = current + Math.max(0.12, headroom * 0.02);
+        if (target > 90) target = 90;
+      }
+
+      const next = current + (target - current) * (typeof percent === 'number' ? 0.16 : 1);
+      const clamped = Math.abs(target - next) < 0.15 ? target : next;
+      progressRef.current = clamped;
+      setProgress(clamped);
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -49,19 +70,19 @@ export default function AppLoadingScreen({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [finishing]);
+  }, [finishing, percent]);
 
   useEffect(() => {
     if (!finishing || finishStartedRef.current) return;
     finishStartedRef.current = true;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
-    const start = performance.now();
+    const startAt = performance.now();
     const from = progressRef.current;
     const duration = 420;
 
     const animate = (now) => {
-      const t = Math.min((now - start) / duration, 1);
+      const t = Math.min((now - startAt) / duration, 1);
       const eased = 1 - (1 - t) ** 3;
       setProgress(from + (100 - from) * eased);
       if (t < 1) {
@@ -82,7 +103,7 @@ export default function AppLoadingScreen({
         <motion.div
           className="app-loading-screen"
           data-theme-paint={isDark ? 'dark' : 'light'}
-          initial={{ opacity: 0 }}
+          initial={{ opacity: 1 }}
           animate={{ opacity: finishing ? 0 : 1, pointerEvents: finishing ? 'none' : 'auto' }}
           exit={{ opacity: 0, pointerEvents: 'none' }}
           transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
@@ -137,6 +158,9 @@ export default function AppLoadingScreen({
                 </div>
               </div>
               <p className="app-loading-screen__message">{message}</p>
+              {children ? (
+                <div className="app-loading-screen__captcha">{children}</div>
+              ) : null}
             </motion.div>
           </div>
         </motion.div>

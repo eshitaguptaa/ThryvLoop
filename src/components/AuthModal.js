@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSignIn, useSignUp } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
-import { markAuthLoginTransition } from '@/lib/authTransition';
+import { markAuthLoginTransition, setAuthLoginProgress, clearAuthTransition } from '@/lib/authTransition';
 import { getOauthRedirectUrls, setPostAuthRedirect } from '@/lib/authRoutes';
 
 const inputClass =
@@ -110,7 +110,8 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       : '/home';
     navigatingAfterAuthRef.current = true;
     unlockBodyScroll();
-    markAuthLoginTransition();
+    markAuthLoginTransition('Signing you in');
+    setAuthLoginProgress({ percent: 36, message: 'Opening your workspace' });
     onClose();
     router.replace(destination);
   }, [searchParams, onClose, router]);
@@ -142,7 +143,9 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
         ? afterAuth
         : undefined;
       if (afterAuthPath) setPostAuthRedirect(afterAuthPath);
-      markAuthLoginTransition();
+      const oauthLabel = strategy === 'oauth_microsoft' ? 'Microsoft' : 'Google';
+      markAuthLoginTransition(`Signing in with ${oauthLabel}`);
+      setAuthLoginProgress({ percent: 18, message: `Redirecting to ${oauthLabel}` });
       const { redirectUrl, redirectUrlComplete } = getOauthRedirectUrls(afterAuthPath);
       await signIn.authenticateWithRedirect({
         strategy,
@@ -151,6 +154,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       });
     } catch (error) {
       setOauthLoading(null);
+      clearAuthTransition();
       const message =
         error?.errors?.[0]?.longMessage ||
         error?.errors?.[0]?.message ||
