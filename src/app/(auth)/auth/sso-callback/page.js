@@ -1,41 +1,60 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useClerk } from '@clerk/nextjs';
+import { AuthenticateWithRedirectCallback, useAuth, useSignUp } from '@clerk/nextjs';
 import AppLoadingScreen from '@/components/ui/AppLoadingScreen';
-import { AFTER_AUTH_PATH, authModalUrl } from '@/lib/authRoutes';
+import { AFTER_AUTH_PATH, authModalUrl, consumePostAuthRedirect } from '@/lib/authRoutes';
+import { markAuthLoginTransition } from '@/lib/authTransition';
 
 const CONTINUE_PATH = '/auth/continue';
 
+function canonicalOrigin() {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '');
+  if (configured) return configured;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+}
+
+function go(path) {
+  const origin = canonicalOrigin();
+  const next = path.startsWith('/') ? path : AFTER_AUTH_PATH;
+  window.location.replace(`${origin}${next}`);
+}
+
 /**
- * Completes Clerk's OAuth handshake after Google/Microsoft.
- * Missing required fields (name, legal) must go to /auth/continue — the landing
- * signup modal cannot resume this SignUp object, which is why the loader hung.
+ * Google returns here. Only the Clerk callback component may consume the
+ * handshake. When a session exists, leave this page with a full navigation.
  */
 export default function SSOCallbackPage() {
-  const clerk = useClerk();
-  const started = useRef(false);
+  const { isLoaded, isSignedIn } = useAuth();
+  const { signUp } = useSignUp();
+  const left = useRef(false);
 
   useEffect(() => {
-    if (!clerk?.loaded || started.current) return;
-    started.current = true;
+    if (!isLoaded || left.current) return;
 
-    void clerk.handleRedirectCallback({
-      continueSignUpUrl: CONTINUE_PATH,
-      continueSignInUrl: CONTINUE_PATH,
-      signInUrl: authModalUrl('signin'),
-      signUpUrl: authModalUrl('signup'),
-      firstFactorUrl: authModalUrl('signin'),
-      secondFactorUrl: authModalUrl('signin'),
-      resetPasswordUrl: authModalUrl('signin'),
-      transferable: true,
-      signInFallbackRedirectUrl: AFTER_AUTH_PATH,
-      signUpFallbackRedirectUrl: AFTER_AUTH_PATH,
-    });
-  }, [clerk]);
+    if (isSignedIn) {
+      left.current = true;
+      markAuthLoginTransition();
+      go(consumePostAuthRedirect() || AFTER_AUTH_PATH);
+      return;
+    }
+
+    if (signUp?.status === 'missing_requirements') {
+      left.current = true;
+      go(CONTINUE_PATH);
+    }
+  }, [isLoaded, isSignedIn, signUp?.status]);
 
   return (
     <>
+      <AuthenticateWithRedirectCallback
+        continueSignUpUrl={CONTINUE_PATH}
+        signInUrl={authModalUrl('signin')}
+        signUpUrl={authModalUrl('signup')}
+        firstFactorUrl={authModalUrl('signin')}
+        transferable
+      />
       <div id="clerk-captcha" />
       <AppLoadingScreen message="Signing you in" />
     </>

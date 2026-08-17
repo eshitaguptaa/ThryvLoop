@@ -34,10 +34,15 @@ const isPublicWorkspaceApi = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (req.nextUrl.hostname === 'thryvloop.com') {
+  const host = (req.headers.get('x-forwarded-host') || req.nextUrl.hostname || '')
+    .split(',')[0]
+    .trim()
+    .replace(/:\d+$/, '');
+  if (host === 'thryvloop.com') {
     const url = req.nextUrl.clone();
     url.hostname = 'www.thryvloop.com';
     url.protocol = 'https:';
+    url.port = '';
     return NextResponse.redirect(url, 308);
   }
 

@@ -26,6 +26,12 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'thryvloop.com' }],
+        destination: 'https://www.thryvloop.com/:path*',
+        permanent: true,
+      },
+      {
         source: '/analysis',
         destination: '/analytics',
         permanent: true,

@@ -56,6 +56,9 @@ export default function RootLayout({ children }) {
               'https://www.thryvloop.com',
               'https://thryvloop.com',
             ]}
+            taskUrls={{
+              'choose-organization': '/o',
+            }}
           >
             <AppSessionProviders>{children}</AppSessionProviders>
           </ClerkProvider>
