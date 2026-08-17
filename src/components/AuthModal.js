@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
 import { markAuthLoginTransition, setAuthLoginProgress, clearAuthTransition } from '@/lib/authTransition';
 import { getOauthRedirectUrls, setPostAuthRedirect } from '@/lib/authRoutes';
+import { invitedEmailFromPath } from '@/lib/inviteJoin';
 
 const inputClass =
   'w-full px-3 py-1.25 rounded-lg sm:py-1.5 bg-muted border border-border focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-sm sm:text-base text-foreground placeholder:text-muted-foreground';
@@ -69,6 +70,11 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
   const [oauthLoading, setOauthLoading] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const navigatingAfterAuthRef = useRef(false);
+  const lockedInviteEmail = invitedEmailFromPath(searchParams.get('redirect_url'));
+
+  useEffect(() => {
+    if (isOpen && lockedInviteEmail) setEmail(lockedInviteEmail);
+  }, [isOpen, lockedInviteEmail]);
 
   useEffect(() => {
     setMode(initialMode);
@@ -151,6 +157,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
         strategy,
         redirectUrl,
         redirectUrlComplete,
+        ...(lockedInviteEmail ? { oidcPrompt: 'select_account' } : {}),
       });
     } catch (error) {
       setOauthLoading(null);
@@ -179,7 +186,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     try {
       if (!isSignInLoaded) return;
       const result = await signIn.create({
-        identifier: email,
+        identifier: lockedInviteEmail || email,
         password,
       });
 
@@ -218,7 +225,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
     try {
       if (!isSignUpLoaded) return;
       const result = await signUp.create({
-        emailAddress: email,
+        emailAddress: lockedInviteEmail || email,
         password,
         firstName,
         lastName,
@@ -248,7 +255,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
       if (!isSignInLoaded) return;
       await signIn.create({
         strategy: 'reset_password_email_code',
-        identifier: email,
+        identifier: lockedInviteEmail || email,
       });
       setForgotStep('reset');
     } catch (error) {
@@ -498,9 +505,13 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       id="forgot-email"
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        if (lockedInviteEmail) return;
+                        setEmail(e.target.value);
+                      }}
                       required
                       disabled={forgotStep === 'reset'}
+                      readOnly={Boolean(lockedInviteEmail)}
                       className={inputClass}
                       placeholder="you@example.com"
                     />
@@ -612,8 +623,12 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
                       id="email"
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        if (lockedInviteEmail) return;
+                        setEmail(e.target.value);
+                      }}
                       required
+                      readOnly={Boolean(lockedInviteEmail)}
                       className={inputClass}
                       placeholder="you@example.com"
                     />

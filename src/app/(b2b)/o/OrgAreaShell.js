@@ -11,7 +11,11 @@ export default function OrgAreaShell({ children }) {
   const onWorkspacePath = pathname.startsWith('/o/') && pathname !== '/o/';
   const isInvite =
     onWorkspacePath
-    && (searchParams.has('__clerk_ticket') || searchParams.get('from_invite') === '1');
+    && (
+      searchParams.has('__clerk_ticket')
+      || searchParams.get('from_invite') === '1'
+      || searchParams.has('invite_email')
+    );
 
   if (!isLoaded) return null;
 

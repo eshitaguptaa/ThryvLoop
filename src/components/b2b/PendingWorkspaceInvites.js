@@ -1,94 +1,159 @@
 'use client';
 
-import { useOrganizationList } from '@clerk/nextjs';
+import { useOrganizationList, useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { acceptWorkspaceInvitation } from '@/app/(b2b)/o/actions';
+import { declineWorkspaceInvitation } from '@/app/(b2b)/o/actions';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import { buildInviteJoinPath, clearInviteJoin, rememberInviteJoin } from '@/lib/inviteJoin';
 import {
   workspaceCardClass,
   workspacePrimaryButtonClass,
+  workspaceSecondaryButtonClass,
 } from '@/components/b2b/workspaceShellClasses';
 
-/** Lets a signed-in invitee accept from /o when the email link skipped join. */
+function invitationEmail(invitation) {
+  return String(
+    invitation?.emailAddress
+    || invitation?.email_address
+    || '',
+  ).trim().toLowerCase();
+}
+
+function invitationSlug(invitation) {
+  return invitation?.publicOrganizationData?.slug || null;
+}
+
+/** Pending invites on /o. Join opens the overlay; Decline removes it. */
 export default function PendingWorkspaceInvites() {
   const router = useRouter();
-  const { isLoaded, userInvitations, setActive } = useOrganizationList({
+  const { user } = useUser();
+  const { isLoaded, userInvitations } = useOrganizationList({
     userInvitations: true,
   });
-  const [busyId, setBusyId] = useState(null);
+  const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
-
+  const [declineTarget, setDeclineTarget] = useState(null);
   const invites = userInvitations?.data || [];
+
   if (!isLoaded || invites.length === 0) return null;
 
-  const onAccept = async (invitation) => {
-    const slug = invitation.publicOrganizationData?.slug;
+  const onJoin = (invitation) => {
+    const slug = invitationSlug(invitation);
     if (!slug) return;
+    const email =
+      invitationEmail(invitation)
+      || String(user?.primaryEmailAddress?.emailAddress || '').trim().toLowerCase();
     setBusyId(invitation.id);
+    rememberInviteJoin({
+      slug,
+      email,
+      name: invitation.publicOrganizationData?.name || slug,
+      resume: true,
+    });
+    router.replace(buildInviteJoinPath(slug, email));
+  };
+
+  const onDecline = async () => {
+    if (!declineTarget) return;
+    const slug = invitationSlug(declineTarget);
+    setBusyId(declineTarget.id);
     setError('');
     try {
-      if (typeof invitation.accept === 'function') {
+      if (typeof declineTarget.reject === 'function') {
         try {
-          await invitation.accept();
+          await declineTarget.reject();
         } catch {
-          /* server join below is the source of truth */
+          /* server revoke is the source of truth */
         }
       }
-      const result = await acceptWorkspaceInvitation(slug);
-      if (!result?.success) {
-        setError(result?.error || 'Could not accept this invitation.');
+      const result = await declineWorkspaceInvitation(slug, declineTarget.id);
+      if (result?.error) {
+        setError(result.error);
         return;
       }
-      const orgId = result.organizationId || invitation.publicOrganizationData?.id;
-      if (orgId && setActive) {
-        await setActive({ organization: orgId });
-      }
-      router.replace(`/o/${encodeURIComponent(slug)}`);
+      clearInviteJoin();
+      setDeclineTarget(null);
+      await userInvitations?.revalidate?.();
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not accept invitation.');
+      setError(e instanceof Error ? e.message : 'Could not decline this invitation.');
     } finally {
-      setBusyId(null);
+      setBusyId('');
     }
   };
 
   return (
-    <section className={`${workspaceCardClass} mb-6 overflow-hidden`}>
-      <div className="px-4 py-3 border-b border-border">
-        <h2 className="text-sm font-semibold text-foreground">Pending invitations</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Accept to join the workspace. Use the Gmail the invite was sent to.
-        </p>
-      </div>
-      {error ? (
-        <p className="px-4 py-2 text-sm text-red-600" role="alert">
-          {error}
-        </p>
-      ) : null}
-      <ul className="divide-y divide-border">
-        {invites.map((invitation) => {
-          const name =
-            invitation.publicOrganizationData?.name
-            || invitation.publicOrganizationData?.slug
-            || 'Workspace';
-          return (
-            <li
-              key={invitation.id}
-              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-            >
-              <p className="text-sm font-semibold text-foreground">{name}</p>
-              <button
-                type="button"
-                disabled={busyId === invitation.id}
-                onClick={() => void onAccept(invitation)}
-                className={workspacePrimaryButtonClass}
+    <>
+      <section className={`${workspaceCardClass} mb-6 overflow-hidden`}>
+        <div className="px-4 py-3 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground">Pending invitations</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Join with the exact Gmail the invite was sent to. Decline if you do not want to join.
+          </p>
+        </div>
+        {error ? (
+          <p className="px-4 py-2 text-sm text-rose-600" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <ul className="divide-y divide-border">
+          {invites.map((invitation) => {
+            const name =
+              invitation.publicOrganizationData?.name
+              || invitation.publicOrganizationData?.slug
+              || 'Workspace';
+            const slug = invitationSlug(invitation);
+            const email = invitationEmail(invitation);
+            const busy = busyId === invitation.id;
+            return (
+              <li
+                key={invitation.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
               >
-                {busyId === invitation.id ? 'Joining…' : 'Accept invitation'}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{name}</p>
+                  {email ? (
+                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{email}</p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={!slug || Boolean(busyId)}
+                    onClick={() => setDeclineTarget(invitation)}
+                    className={workspaceSecondaryButtonClass}
+                  >
+                    Decline
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!slug || Boolean(busyId)}
+                    onClick={() => onJoin(invitation)}
+                    className={workspacePrimaryButtonClass}
+                  >
+                    {busy && !declineTarget ? 'Opening…' : 'Join workspace'}
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+      <ConfirmModal
+        open={Boolean(declineTarget)}
+        title="Decline this invitation?"
+        description="You will not join the workspace. An admin can send a new invite later if you change your mind."
+        confirmLabel={busyId && declineTarget ? 'Declining…' : 'Decline invite'}
+        cancelLabel="Keep invite"
+        tone="danger"
+        busy={Boolean(busyId) && Boolean(declineTarget)}
+        onCancel={() => {
+          if (busyId) return;
+          setDeclineTarget(null);
+        }}
+        onConfirm={() => void onDecline()}
+      />
+    </>
   );
 }

@@ -5,6 +5,9 @@ import { B2B_WORKSPACES_ENABLED } from '@/lib/featureFlags';
 import { canAccessMemberPersonalReport } from '@/lib/orgRoles';
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { ensureWorkspaceInSupabase } from '@/lib/orgSync';
+import { createAppNotification } from '@/lib/appNotifications';
+import { logOrgActivity } from '@/lib/orgActivity';
+import { hasInviteEmailProvider, sendMemberJoinedEmail } from '@/lib/inviteEmail';
 
 /** Base URL for invite redirects (set NEXT_PUBLIC_APP_URL to your ngrok URL in dev). */
 export function getAppOrigin() {
@@ -264,6 +267,37 @@ export const getOrgMembers = cache(async (organizationId) => {
 });
 
 export async function getPendingInvitations(organizationId) {
+  const rows = await listOrgInvitations(organizationId);
+  return rows.filter(invitationIsLive);
+}
+
+function invitationEmail(invitation) {
+  return String(
+    invitation?.emailAddress
+    || invitation?.email_address
+    || invitation?.email
+    || '',
+  ).toLowerCase();
+}
+
+function invitationExpiresAt(invitation) {
+  return invitation?.expiresAt || invitation?.expires_at || null;
+}
+
+function invitationIsExpired(invitation) {
+  const exp = invitationExpiresAt(invitation);
+  if (!exp) return false;
+  const t = new Date(exp).getTime();
+  return !Number.isNaN(t) && t <= Date.now();
+}
+
+function invitationIsLive(invitation) {
+  const status = String(invitation?.status || '').toLowerCase();
+  if (status && status !== 'pending') return false;
+  return !invitationIsExpired(invitation);
+}
+
+async function listOrgInvitations(organizationId) {
   try {
     const client = await clerkClient();
     const { data } = await client.organizations.getOrganizationInvitationList({
@@ -271,15 +305,117 @@ export async function getPendingInvitations(organizationId) {
       status: ['pending'],
       limit: 100,
     });
-    return data ?? [];
+    if (data?.length) return data;
   } catch (e) {
     console.error('[org] getPendingInvitations failed:', e);
+  }
+
+  try {
+    const client = await clerkClient();
+    const { data } = await client.organizations.getOrganizationInvitationList({
+      organizationId,
+      limit: 100,
+    });
+    return data ?? [];
+  } catch (e) {
+    console.error('[org] invitation list fallback failed:', e);
     return [];
   }
 }
 
-function invitationEmail(invitation) {
-  return String(invitation?.emailAddress || invitation?.email_address || '').toLowerCase();
+async function listAllOrgInvitations(organizationId) {
+  try {
+    const client = await clerkClient();
+    const { data } = await client.organizations.getOrganizationInvitationList({
+      organizationId,
+      limit: 100,
+    });
+    return data ?? [];
+  } catch (e) {
+    console.warn('[org] full invitation list failed:', e);
+    return listOrgInvitations(organizationId);
+  }
+}
+
+function invitationOrgSlug(invitation) {
+  return (
+    invitation?.publicOrganizationData?.slug
+    || invitation?.organization?.slug
+    || invitation?.public_organization_data?.slug
+    || null
+  );
+}
+
+function invitationOrgId(invitation) {
+  return (
+    invitation?.organizationId
+    || invitation?.organization_id
+    || invitation?.publicOrganizationData?.id
+    || invitation?.organization?.id
+    || null
+  );
+}
+
+async function listUserPendingInvitations(client, userId) {
+  try {
+    const { data } = await client.users.getOrganizationInvitationList({
+      userId,
+      status: 'pending',
+      limit: 100,
+    });
+    return data ?? [];
+  } catch (e) {
+    console.warn('[org] user invitation list failed:', e);
+    return [];
+  }
+}
+
+async function notifyInviterMemberJoined({
+  inviterUserId,
+  joinerName,
+  joinerEmail,
+  joinerUserId,
+  org,
+}) {
+  if (!inviterUserId) return;
+  const joinedQuery = joinerUserId
+    ? `?joined=${encodeURIComponent(joinerUserId)}`
+    : '';
+  const peoplePath = `/o/${encodeURIComponent(org.slug)}/people${joinedQuery}`;
+  try {
+    await createAppNotification({
+      userId: inviterUserId,
+      title: `${joinerName} joined ${org.name}`,
+      body: `${joinerEmail || 'A teammate'} is now in ${org.name}.`,
+      linkUrl: peoplePath,
+      linkLabel: 'View People',
+    });
+  } catch (notifyError) {
+    console.warn('[org] inviter notification failed:', notifyError);
+  }
+
+  if (!hasInviteEmailProvider()) return;
+  try {
+    const client = await clerkClient();
+    const inviter = await client.users.getUser(inviterUserId);
+    const emails = inviter?.emailAddresses || [];
+    const to =
+      emails.find((entry) => entry.id === inviter.primaryEmailAddressId)?.emailAddress
+      || emails[0]?.emailAddress
+      || '';
+    if (!to) return;
+    const origin = await getInviteRedirectOrigin();
+    await sendMemberJoinedEmail({
+      to,
+      joinerName,
+      joinerEmail,
+      workspaceName: org.name,
+      peopleUrl: `${origin}${peoplePath}`,
+      origin,
+    });
+  } catch (emailError) {
+    console.warn('[org] inviter email failed:', emailError);
+  }
 }
 
 async function resolveClerkOrgBySlug(slug) {
@@ -319,8 +455,9 @@ async function resolveClerkOrgBySlug(slug) {
  * Used when the invite email is opened while already signed in — Clerk then
  * sets __clerk_status=complete without calling invitation.accept().
  */
-export async function acceptPendingInviteForSignedInUser(userId, orgSlug) {
+export async function acceptPendingInviteForSignedInUser(userId, orgSlug, options = {}) {
   const slug = decodeOrgSlug(orgSlug);
+  const expectedEmail = String(options.expectedEmail || '').trim().toLowerCase();
   if (!userId || !slug) {
     return { error: 'Missing workspace or user.' };
   }
@@ -333,6 +470,10 @@ export async function acceptPendingInviteForSignedInUser(userId, orgSlug) {
       .filter(Boolean),
   );
 
+  if (expectedEmail && !emails.has(expectedEmail)) {
+    return { error: 'wrong_email', code: 'wrong_email' };
+  }
+
   const org = await resolveClerkOrgBySlug(slug);
   if (!org?.id) {
     return { error: 'Workspace not found.' };
@@ -340,7 +481,15 @@ export async function acceptPendingInviteForSignedInUser(userId, orgSlug) {
 
   const already = await membershipFromClerk(userId, slug);
   const pending = await getPendingInvitations(org.id);
-  const match = pending.find((inv) => emails.has(invitationEmail(inv))) || null;
+  const userInvites = await listUserPendingInvitations(client, userId);
+  const match =
+    pending.find((inv) => emails.has(invitationEmail(inv)))
+    || userInvites.find((inv) => {
+      const inviteEmail = invitationEmail(inv);
+      const emailOk = !inviteEmail || emails.has(inviteEmail);
+      return emailOk && (invitationOrgSlug(inv) === org.slug || invitationOrgId(inv) === org.id);
+    })
+    || null;
 
   if (already) {
     if (match?.id) {
@@ -354,17 +503,33 @@ export async function acceptPendingInviteForSignedInUser(userId, orgSlug) {
       }
     }
     await ensureWorkspaceInSupabase(already, userId);
-    return { success: true, organizationId: org.id, alreadyMember: true };
+    return { success: true, organizationId: org.id, alreadyMember: true, workspaceName: org.name };
   }
 
-  if (!match) {
+  if (!match?.id) {
+    const history = await listAllOrgInvitations(org.id);
+    const prior = history.find((inv) => emails.has(invitationEmail(inv))) || null;
+    const status = String(prior?.status || '').toLowerCase();
+    const reason = invitationIsExpired(prior) || status === 'expired'
+      ? 'expired'
+      : status === 'accepted'
+        ? 'used'
+        : status === 'revoked'
+          ? 'revoked'
+          : 'missing';
     return {
-      error:
-        'No pending invitation for this account. Sign out and open the email link with the invited Gmail.',
+      error: 'This invite is no longer valid. Ask an admin to resend it from People.',
+      code: 'invite_unavailable',
+      reason,
     };
   }
 
   const role = match.role === 'org:admin' ? 'org:admin' : 'org:member';
+  const joinerEmail = invitationEmail(match) || expectedEmail || [...emails][0] || '';
+  const joinerName =
+    user.firstName
+    || (joinerEmail ? joinerEmail.split('@')[0] : 'A teammate');
+  const inviterUserId = match.inviterUserId || match.inviter_user_id || null;
   let membership = null;
   try {
     membership = await client.organizations.createOrganizationMembership({
@@ -389,7 +554,7 @@ export async function acceptPendingInviteForSignedInUser(userId, orgSlug) {
         });
       } catch (retryError) {
         console.error('[org] create membership after invite failed:', createError, retryError);
-        return { error: 'Could not join this workspace. Ask an admin to resend the invite.' };
+        return { error: 'Could not join this workspace. Ask an admin to resend the invite.', code: 'join_failed' };
       }
     }
   }
@@ -411,7 +576,91 @@ export async function acceptPendingInviteForSignedInUser(userId, orgSlug) {
         organization: { id: org.id, name: org.name, slug: org.slug },
       };
   await ensureWorkspaceInSupabase(forSync, userId);
-  return { success: true, organizationId: org.id };
+
+  if (inviterUserId && inviterUserId !== userId) {
+    await notifyInviterMemberJoined({
+      inviterUserId,
+      joinerName,
+      joinerEmail,
+      joinerUserId: userId,
+      org,
+    });
+  }
+
+  try {
+    const { data: orgRow } = await createSupabaseAdmin()
+      .from('organizations')
+      .select('id')
+      .eq('clerk_organization_id', org.id)
+      .maybeSingle();
+    if (orgRow?.id) {
+      await logOrgActivity({
+        organizationId: orgRow.id,
+        actorUserId: userId,
+        eventType: 'member_joined',
+        summary: `${joinerName} joined the workspace`,
+        metadata: { email: joinerEmail },
+      });
+    }
+  } catch (activityError) {
+    console.warn('[org] join activity log failed:', activityError);
+  }
+
+  return { success: true, organizationId: org.id, workspaceName: org.name };
+}
+
+/** Invitee declines a pending workspace invite (revokes it for their email only). */
+export async function declinePendingInviteForSignedInUser(userId, orgSlug, invitationId) {
+  const slug = decodeOrgSlug(orgSlug);
+  if (!userId || !slug) {
+    return { error: 'Missing workspace or user.' };
+  }
+
+  const client = await clerkClient();
+  const user = await client.users.getUser(userId);
+  const emails = new Set(
+    (user.emailAddresses || [])
+      .map((entry) => String(entry.emailAddress || '').toLowerCase())
+      .filter(Boolean),
+  );
+
+  const org = await resolveClerkOrgBySlug(slug);
+  if (!org?.id) {
+    return { error: 'Workspace not found.' };
+  }
+
+  const pending = await getPendingInvitations(org.id);
+  const match =
+    (invitationId ? pending.find((inv) => inv.id === invitationId) : null)
+    || pending.find((inv) => emails.has(invitationEmail(inv)))
+    || null;
+
+  if (!match?.id) {
+    return {
+      error: 'This invite is no longer valid.',
+      code: 'invite_unavailable',
+    };
+  }
+
+  if (!emails.has(invitationEmail(match))) {
+    return { error: 'This invite is for a different email.', code: 'wrong_email' };
+  }
+
+  try {
+    await client.organizations.revokeOrganizationInvitation({
+      organizationId: org.id,
+      invitationId: match.id,
+    });
+  } catch (e) {
+    return { error: formatClerkDeclineError(e) };
+  }
+
+  return { success: true };
+}
+
+function formatClerkDeclineError(e) {
+  const message = e && typeof e === 'object' && 'message' in e ? String(e.message) : '';
+  return message || 'Could not decline this invitation.';
 }
 
 /** Clerk membership + Supabase tenant UUID (after webhook sync). */

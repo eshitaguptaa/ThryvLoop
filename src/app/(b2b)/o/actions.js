@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
   acceptPendingInviteForSignedInUser,
+  declinePendingInviteForSignedInUser,
   getInviteRedirectOrigin,
   getMembershipForSlug,
   getOrgMembers,
@@ -266,14 +267,32 @@ export async function resendInvitation(orgSlug, invitationId) {
   return { success: true };
 }
 
-export async function acceptWorkspaceInvitation(orgSlug) {
+export async function declineWorkspaceInvitation(orgSlug, invitationId) {
   assertB2BWorkspacesEnabled();
   const { userId } = await auth();
   if (!userId) return { error: 'You must be signed in.' };
   if (!orgSlug) return { error: 'Missing workspace.' };
 
   try {
-    const result = await acceptPendingInviteForSignedInUser(userId, orgSlug);
+    const result = await declinePendingInviteForSignedInUser(userId, orgSlug, invitationId);
+    revalidatePath('/o');
+    if (orgSlug) revalidateOrg(String(orgSlug));
+    return result;
+  } catch (e) {
+    return { error: formatClerkActionError(e, 'Could not decline the invitation.') };
+  }
+}
+
+export async function acceptWorkspaceInvitation(orgSlug, expectedEmail) {
+  assertB2BWorkspacesEnabled();
+  const { userId } = await auth();
+  if (!userId) return { error: 'You must be signed in.' };
+  if (!orgSlug) return { error: 'Missing workspace.' };
+
+  try {
+    const result = await acceptPendingInviteForSignedInUser(userId, orgSlug, {
+      expectedEmail,
+    });
     if (result?.error) return result;
     const slug = String(orgSlug);
     revalidatePath('/o');

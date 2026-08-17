@@ -38,11 +38,13 @@ function formatInvitedAgo(createdAt) {
   return `Invited ${days} days ago`;
 }
 
-export default async function PeoplePage({ params }) {
+export default async function PeoplePage({ params, searchParams }) {
   const { userId } = await auth();
   if (!userId) redirect(authModalUrl('signin'));
 
   const { orgSlug } = await params;
+  const query = await searchParams;
+  const joinedUserId = typeof query?.joined === 'string' ? query.joined : '';
   const ctx = await getWorkspaceContext(userId, orgSlug);
   if (!ctx) notFound();
 
@@ -144,6 +146,7 @@ export default async function PeoplePage({ params }) {
           currentUserId={userId}
           workload={workload}
           insightsPolicy={ctx.insightsPolicy}
+          highlightUserId={joinedUserId}
         />
       </section>
 

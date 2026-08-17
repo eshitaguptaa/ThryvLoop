@@ -7,6 +7,7 @@ import WorkspaceRouteLoading from '@/components/b2b/WorkspaceRouteLoading';
 import AcceptOrgInvitation from '@/components/b2b/AcceptOrgInvitation';
 import OrgWorkspaceNav from '@/components/b2b/OrgWorkspaceNav';
 import OrgPresenceSync from '@/components/b2b/OrgPresenceSync';
+import OrgJoinNotice from '@/components/b2b/OrgJoinNotice';
 import SetActiveOrg from '@/components/b2b/SetActiveOrg';
 import WorkspaceAtmosphere from '@/components/b2b/WorkspaceAtmosphere';
 import WorkspaceSwitcher from '@/components/b2b/WorkspaceSwitcher';
@@ -69,6 +70,7 @@ export default async function OrgSlugLayout({ children, params }) {
       <WorkspaceAtmosphere variant="org" />
       <SetActiveOrg organizationId={org.id} />
       <OrgPresenceSync organizationId={ctx.supabaseOrgId} userId={userId} />
+      <OrgJoinNotice orgSlug={org.slug} />
       <Suspense fallback={null}>
         <AcceptOrgInvitation orgSlug={decodedSlug} mode="inline" />
       </Suspense>

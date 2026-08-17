@@ -1,4 +1,5 @@
 import { hasInviteEmailProvider, sendWorkspaceInviteEmail } from '@/lib/inviteEmail';
+import { buildInviteJoinPath } from '@/lib/inviteJoin';
 
 export function inviterProfile(user) {
   const first = user?.firstName?.trim() || '';
@@ -28,7 +29,7 @@ export async function createInvitationAndNotify({
   slug,
   origin,
 }) {
-  const joinUrl = `${origin}/o/${encodeURIComponent(slug)}?from_invite=1`;
+  const joinUrl = `${origin}${buildInviteJoinPath(slug, email)}`;
   const useResend = hasInviteEmailProvider();
 
   const invitation = await client.organizations.createOrganizationInvitation({

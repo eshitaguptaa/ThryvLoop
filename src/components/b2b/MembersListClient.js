@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronDown, Search } from 'lucide-react';
 import { removeMember, updateMemberRole } from '@/app/(b2b)/o/actions';
@@ -54,11 +55,27 @@ export default function MembersListClient({
   currentUserId,
   workload = {},
   insightsPolicy = 'team_only',
+  highlightUserId = '',
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [openMenuId, setOpenMenuId] = useState(null);
   const [message, setMessage] = useState('');
   const [pending, startTransition] = useTransition();
+  const [highlightOn, setHighlightOn] = useState(Boolean(highlightUserId));
+
+  useEffect(() => {
+    if (!highlightUserId) {
+      setHighlightOn(false);
+      return undefined;
+    }
+    setHighlightOn(true);
+    const timer = window.setTimeout(() => {
+      setHighlightOn(false);
+      router.replace(`/o/${encodeURIComponent(orgSlug)}/people`, { scroll: false });
+    }, 4500);
+    return () => window.clearTimeout(timer);
+  }, [highlightUserId, orgSlug, router]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -144,7 +161,9 @@ export default function MembersListClient({
               return (
                 <li
                   key={m.id}
-                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-muted/30"
+                  className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-muted/30 ${
+                    highlightOn && userId && userId === highlightUserId ? 'people-row-joined' : ''
+                  }`}
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div
@@ -164,6 +183,11 @@ export default function MembersListClient({
                               you
                             </span>
                           ) : null}
+                          {highlightOn && userId && userId === highlightUserId ? (
+                            <span className="ml-1.5 text-[11px] font-semibold text-[#5D3FD3] dark:text-[#c4b5fd]">
+                              just joined
+                            </span>
+                          ) : null}
                         </Link>
                       ) : (
                         <p className="text-sm font-semibold text-foreground truncate">
@@ -171,6 +195,11 @@ export default function MembersListClient({
                           {userId === currentUserId ? (
                             <span className="ml-1.5 text-[11px] font-medium text-muted-foreground">
                               you
+                            </span>
+                          ) : null}
+                          {highlightOn && userId && userId === highlightUserId ? (
+                            <span className="ml-1.5 text-[11px] font-semibold text-[#5D3FD3] dark:text-[#c4b5fd]">
+                              just joined
                             </span>
                           ) : null}
                         </p>

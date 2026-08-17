@@ -8,6 +8,7 @@ import {
   ensureAuthLoginTransition,
   setAuthLoginProgress,
 } from '@/lib/authTransition';
+import { peekInviteJoinPath } from '@/lib/inviteJoin';
 
 const CONTINUE_PATH = '/auth/continue';
 
@@ -44,8 +45,11 @@ export default function SSOCallbackPage() {
 
     if (isSignedIn || signIn?.status === 'complete' || signUp?.status === 'complete') {
       left.current = true;
-      setAuthLoginProgress({ percent: 72, message: 'Opening your workspace' });
-      const next = consumePostAuthRedirect() || AFTER_AUTH_PATH;
+      const next = peekInviteJoinPath() || consumePostAuthRedirect() || AFTER_AUTH_PATH;
+      setAuthLoginProgress({
+        percent: 72,
+        message: next.includes('from_invite') ? 'Joining your team' : 'Opening your workspace',
+      });
       router.replace(next);
       return;
     }

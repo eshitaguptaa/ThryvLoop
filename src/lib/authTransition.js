@@ -139,6 +139,7 @@ export function isProtectedAppRoute(pathname) {
     pathname.startsWith('/focus') ||
     pathname.startsWith('/meet') ||
     pathname.startsWith('/settings') ||
+    pathname === '/o' ||
     pathname.startsWith('/o/')
   );
 }

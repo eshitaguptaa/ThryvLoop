@@ -130,6 +130,58 @@ export async function sendWorkspaceInviteEmail({
   return { ok: true };
 }
 
+export async function sendMemberJoinedEmail({
+  to,
+  joinerName,
+  joinerEmail,
+  workspaceName,
+  peopleUrl,
+  origin,
+}) {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) return { ok: false, reason: 'missing_api_key' };
+  const from = inviteFromAddress();
+  if (!from) return { ok: false, reason: 'missing_from' };
+
+  const who = escapeHtml(joinerName || joinerEmail || 'A teammate');
+  const workspace = escapeHtml(workspaceName || 'your workspace');
+  const href = escapeHtml(peopleUrl || '');
+  const emailLabel = escapeHtml(joinerEmail || 'A teammate');
+  const logoUrl = escapeHtml(`${String(origin || '').replace(/\/$/, '')}/LandingPageImages/logo.png`);
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: `${who} joined ${workspace} on ThryvLoop`,
+      html: `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#16141f;">
+        <img src="${logoUrl}" alt="ThryvLoop" width="36" height="36" />
+        <p style="margin:16px 0 0;font-size:13px;letter-spacing:0.16em;text-transform:uppercase;color:#5D3FD3;font-weight:700;">ThryvLoop</p>
+        <h1 style="margin:10px 0 0;font-size:22px;">${who} joined ${workspace}</h1>
+        <p style="margin:12px 0 0;font-size:15px;line-height:1.55;color:#3f3b4d;">
+          ${emailLabel} is now in the team workspace.
+        </p>
+        <p style="margin:22px 0 0;">
+          <a href="${href}" style="display:inline-block;background:#5D3FD3;color:#ffffff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:10px;">View People</a>
+        </p>
+      </body></html>`,
+      text: `${who} joined ${workspace} on ThryvLoop.\n\n${joinerEmail || 'A teammate'} is now in the team.\n\nView People: ${href}`,
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text();
+    console.error('[inviteEmail] member-joined send failed:', detail);
+    return { ok: false, reason: 'send_failed' };
+  }
+  return { ok: true };
+}
+
 export function hasInviteEmailProvider() {
   return Boolean(process.env.RESEND_API_KEY?.trim() && inviteFromAddress());
 }

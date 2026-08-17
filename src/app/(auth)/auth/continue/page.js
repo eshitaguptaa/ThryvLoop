@@ -6,6 +6,7 @@ import { useSignUp } from '@clerk/nextjs';
 import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
 import { AFTER_AUTH_PATH, authModalUrl } from '@/lib/authRoutes';
 import { ensureAuthLoginTransition, setAuthLoginProgress } from '@/lib/authTransition';
+import { peekInviteJoinPath } from '@/lib/inviteJoin';
 import { formatClerkActionError } from '@/lib/clerkErrors';
 
 /**
@@ -21,6 +22,12 @@ export default function AuthContinuePage() {
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const [isInviteJoin, setIsInviteJoin] = useState(false);
+
+  useEffect(() => {
+    setIsInviteJoin(Boolean(peekInviteJoinPath()));
+  }, []);
 
   const missing = signUp?.missingFields || [];
   const needsName =
@@ -45,7 +52,7 @@ export default function AuthContinuePage() {
       ensureAuthLoginTransition();
       setAuthLoginProgress({ percent: 72, message: 'Opening your workspace' });
       void setActive({ session: signUp.createdSessionId }).then(() => {
-        router.replace(AFTER_AUTH_PATH);
+        router.replace(peekInviteJoinPath() || AFTER_AUTH_PATH);
       });
       return;
     }
@@ -62,7 +69,7 @@ export default function AuthContinuePage() {
       ensureAuthLoginTransition();
       setAuthLoginProgress({ percent: 72, message: 'Opening your workspace' });
       await setActive({ session: sessionId });
-      router.replace(AFTER_AUTH_PATH);
+      router.replace(peekInviteJoinPath() || AFTER_AUTH_PATH);
       return true;
     }
     return false;
@@ -102,9 +109,13 @@ export default function AuthContinuePage() {
   return (
     <div className="auth-continue-panel min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
-        <h1 className="text-xl font-bold text-foreground">Finish creating your account</h1>
+        <h1 className="text-xl font-bold text-foreground">
+          {isInviteJoin ? 'Finish joining your team' : 'Finish creating your account'}
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Google verified your email. Add the details Clerk still requires, then continue.
+          {isInviteJoin
+            ? 'Google verified your email. Add the last details Clerk needs, then you will join the workspace.'
+            : 'Google verified your email. Add the details Clerk still requires, then continue.'}
         </p>
 
         <form onSubmit={onSubmit} className="mt-5 space-y-3">

@@ -435,7 +435,7 @@ export const HELP_CATEGORIES = [
         id: 'invite-members',
         question: 'How do I invite team members?',
         answer:
-          'Open your workspace → **People**. Send an email invite (Gmail or any inbox) and pick a role. The invitee gets a join link: existing accounts are signed in and added; new accounts can continue with Google or create a password, then land in the workspace. Admins can resend or revoke pending invites, change roles, and remove members.',
+          'Open your workspace → **People**. Send an email invite and pick a role. The invitee opens the join link and signs in with **that exact Gmail** (Google creates an account if they do not have one). They are added automatically. A wrong Google account is signed out and not added. Expired or already-used links ask them to have an admin resend. On Workspaces they can **Join** or **Decline**. Admins can resend or revoke pending invites, change roles, and remove members.',
         keywords: ['invite', 'members', 'team', 'roles'],
       },
       {

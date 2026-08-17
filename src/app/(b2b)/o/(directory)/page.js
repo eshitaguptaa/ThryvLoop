@@ -7,6 +7,7 @@ import WorkspaceAtmosphere from '@/components/b2b/WorkspaceAtmosphere';
 import WorkspaceDirectory from '@/components/b2b/WorkspaceDirectory';
 import WorkspaceDirectoryTheme from '@/components/b2b/WorkspaceDirectoryTheme';
 import PendingWorkspaceInvites from '@/components/b2b/PendingWorkspaceInvites';
+import InviteJoinRedirect from '@/components/b2b/InviteJoinRedirect';
 import {
   workspaceDirectoryContentClass,
   workspaceEyebrowClass,
@@ -61,6 +62,7 @@ export default async function WorkspacesPage() {
             <WorkspaceDirectoryTheme />
           </header>
 
+          <InviteJoinRedirect />
           <PendingWorkspaceInvites />
 
           {items.length === 0 ? (
