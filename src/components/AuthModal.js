@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSignIn, useSignUp } from '@clerk/nextjs';
@@ -50,7 +50,7 @@ function unlockBodyScroll() {
   delete document.body.dataset.authModalOpen;
 }
 
-export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
+function AuthModalInner({ isOpen, onClose, initialMode = 'signin' }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useMobileViewport();
@@ -742,5 +742,13 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }) {
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+export default function AuthModal(props) {
+  return (
+    <Suspense fallback={null}>
+      <AuthModalInner {...props} />
+    </Suspense>
   );
 }
