@@ -13,15 +13,17 @@ export function buildWorkspaceWelcomePath(slug) {
 
 export function rememberInviteJoin({ slug, email, name, resume = false }) {
   if (typeof window === 'undefined' || !slug) return;
-  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const existing = peekInviteJoin();
+  const normalizedEmail = String(email || existing?.email || '').trim().toLowerCase();
+  const keepResume = existing?.slug === slug && existing.resume;
   sessionStorage.setItem(
     INVITE_JOIN_STORAGE_KEY,
     JSON.stringify({
       slug,
       email: normalizedEmail,
-      name: name || '',
+      name: name || existing?.name || '',
       path: buildInviteJoinPath(slug, normalizedEmail),
-      resume: Boolean(resume),
+      resume: Boolean(resume) || keepResume,
     }),
   );
 }
@@ -36,6 +38,11 @@ export function peekInviteJoinPath() {
   const value = peekInviteJoin();
   if (!value?.resume || !value.path) return null;
   return value.path;
+}
+
+export function hasInviteJoinResume(slug) {
+  const value = peekInviteJoin();
+  return Boolean(value?.resume && value.slug === slug);
 }
 
 export function peekInviteJoin() {

@@ -8,7 +8,13 @@ import {
   ensureAuthLoginTransition,
   setAuthLoginProgress,
 } from '@/lib/authTransition';
-import { peekInviteJoinPath } from '@/lib/inviteJoin';
+import {
+  invitedEmailFromPath,
+  markInviteJoinResume,
+  peekInviteJoin,
+  peekInviteJoinPath,
+  rememberInviteJoin,
+} from '@/lib/inviteJoin';
 
 const CONTINUE_PATH = '/auth/continue';
 
@@ -46,6 +52,21 @@ export default function SSOCallbackPage() {
     if (isSignedIn || signIn?.status === 'complete' || signUp?.status === 'complete') {
       left.current = true;
       const next = peekInviteJoinPath() || consumePostAuthRedirect() || AFTER_AUTH_PATH;
+      if (next.includes('from_invite') || next.includes('invite_email')) {
+        const stored = peekInviteJoin();
+        const slugMatch = next.match(/^\/o\/([^/?#]+)/);
+        const slug = stored?.slug || (slugMatch ? decodeURIComponent(slugMatch[1]) : '');
+        if (slug) {
+          rememberInviteJoin({
+            slug,
+            email: stored?.email || invitedEmailFromPath(next),
+            name: stored?.name,
+            resume: true,
+          });
+        } else {
+          markInviteJoinResume();
+        }
+      }
       setAuthLoginProgress({
         percent: 72,
         message: next.includes('from_invite') ? 'Joining your team' : 'Opening your workspace',

@@ -14,6 +14,7 @@ import {
   clearInviteJoin,
   clearInviteJustJoined,
   consumeInviteWrongEmail,
+  hasInviteJoinResume,
   markInviteJoinResume,
   markInviteJustJoined,
   markInviteWrongEmail,
@@ -42,19 +43,6 @@ async function acceptPendingInvitationForOrg(user, orgSlug) {
   if (!match?.accept) return false;
   await match.accept();
   return true;
-}
-
-async function completeTicketSignIn(signIn, setActive, token) {
-  if (!signIn?.create) {
-    throw new Error('Clerk sign-in is not ready. Refresh and try again.');
-  }
-  await signIn.create({ strategy: 'ticket', ticket: token });
-  if (signIn.status !== 'complete') {
-    throw new Error('Additional sign-in steps are required. Try opening the invite link again.');
-  }
-  if (setActive && signIn.createdSessionId) {
-    await setActive({ session: signIn.createdSessionId });
-  }
 }
 
 /**
@@ -90,14 +78,7 @@ export default function AcceptOrgInvitation({
   const cleanUrl = `/o/${encodeURIComponent(orgSlug)}`;
   const welcomeUrl = buildWorkspaceWelcomePath(orgSlug);
   const displayName = workspaceName || joinedName || 'this workspace';
-  const hasInviteIntent = Boolean(
-    token
-    || fromInvite
-    || invitedEmail
-    || accountStatus === 'complete'
-    || accountStatus === 'sign_in'
-    || accountStatus === 'sign_up',
-  );
+  const hasInviteIntent = Boolean(fromInvite || invitedEmail);
   const shouldAutoJoin = mode === 'gate' || hasInviteIntent;
   const invitePath = invitedEmail
     ? `${cleanUrl}?from_invite=1&invite_email=${encodeURIComponent(invitedEmail)}`
@@ -137,7 +118,12 @@ export default function AcceptOrgInvitation({
 
   useEffect(() => {
     attempted.current = false;
-  }, [token, accountStatus, orgSlug, invitedEmail]);
+  }, [orgSlug, invitedEmail]);
+
+  useEffect(() => {
+    if (!token && !accountStatus) return;
+    router.replace(invitePath, { scroll: false });
+  }, [token, accountStatus, invitePath, router]);
 
   const finishJoin = async (organizationId) => {
     if (organizationId && setActiveClerk) {
@@ -207,9 +193,12 @@ export default function AcceptOrgInvitation({
     }
 
     if (invitedEmail && !userHasInviteEmail(user, invitedEmail)) {
+      if (!hasInviteJoinResume(orgSlug)) return;
       rejectWrongEmail();
       return;
     }
+
+    if (!hasInviteJoinResume(orgSlug)) return;
 
     if (alreadyInWorkspace) {
       if (peekInviteJustJoined()?.slug === orgSlug || welcome) {
@@ -300,45 +289,6 @@ export default function AcceptOrgInvitation({
     alreadyInWorkspace,
   ]);
 
-  useEffect(() => {
-    if (
-      !token
-      || (accountStatus && accountStatus !== 'sign_in')
-      || alreadyInWorkspace
-      || !authLoaded
-      || !signInLoaded
-      || !signIn
-      || isSignedIn
-      || attempted.current
-    ) {
-      return;
-    }
-    attempted.current = true;
-    setPhase('joining');
-
-    const run = async () => {
-      try {
-        await completeTicketSignIn(signIn, setActiveFromSignIn, token);
-      } catch (e) {
-        console.error('[invite] ticket sign-in failed', formatClerkActionError(e, 'sign-in failed'));
-        setPhase('prompt');
-        attempted.current = false;
-      }
-    };
-
-    void run();
-  }, [
-    token,
-    accountStatus,
-    alreadyInWorkspace,
-    orgSlug,
-    authLoaded,
-    signInLoaded,
-    signIn,
-    isSignedIn,
-    setActiveFromSignIn,
-  ]);
-
   const handleGoogleJoin = async () => {
     if (!signInLoaded || !signIn) return;
     setOauthLoading(true);
@@ -423,13 +373,19 @@ export default function AcceptOrgInvitation({
   }
 
   const overlaySurface = mode === 'inline' ? 'dialog' : 'page';
+  const joinAuthorized = hasInviteJoinResume(orgSlug);
 
   if (!authLoaded) {
     return (
       <InviteJoinModal
-        phase="joining"
+        phase="prompt"
         workspaceName={displayName}
         invitedEmail={invitedEmail}
+        oauthLoading={oauthLoading}
+        onGoogle={() => void handleGoogleJoin()}
+        onEmailJoin={invitedEmail ? handleEmailJoin : undefined}
+        emailLoading={emailLoading}
+        emailError={emailError}
         surface={overlaySurface}
       />
     );
@@ -470,7 +426,7 @@ export default function AcceptOrgInvitation({
     );
   }
 
-  if (isSignedIn && (phase === 'joining' || shouldAutoJoin)) {
+  if (isSignedIn && (phase === 'joining' || joinAuthorized)) {
     return (
       <InviteJoinModal
         phase="joining"

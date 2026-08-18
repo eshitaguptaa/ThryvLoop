@@ -6,7 +6,7 @@ import { useSignUp } from '@clerk/nextjs';
 import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
 import { AFTER_AUTH_PATH, authModalUrl } from '@/lib/authRoutes';
 import { ensureAuthLoginTransition, setAuthLoginProgress } from '@/lib/authTransition';
-import { peekInviteJoinPath } from '@/lib/inviteJoin';
+import { markInviteJoinResume, peekInviteJoinPath } from '@/lib/inviteJoin';
 import { formatClerkActionError } from '@/lib/clerkErrors';
 
 /**
@@ -52,7 +52,9 @@ export default function AuthContinuePage() {
       ensureAuthLoginTransition();
       setAuthLoginProgress({ percent: 72, message: 'Opening your workspace' });
       void setActive({ session: signUp.createdSessionId }).then(() => {
-        router.replace(peekInviteJoinPath() || AFTER_AUTH_PATH);
+        const next = peekInviteJoinPath() || AFTER_AUTH_PATH;
+        if (next.includes('from_invite') || next.includes('invite_email')) markInviteJoinResume();
+        router.replace(next);
       });
       return;
     }
@@ -69,7 +71,9 @@ export default function AuthContinuePage() {
       ensureAuthLoginTransition();
       setAuthLoginProgress({ percent: 72, message: 'Opening your workspace' });
       await setActive({ session: sessionId });
-      router.replace(peekInviteJoinPath() || AFTER_AUTH_PATH);
+      const next = peekInviteJoinPath() || AFTER_AUTH_PATH;
+      if (next.includes('from_invite') || next.includes('invite_email')) markInviteJoinResume();
+      router.replace(next);
       return true;
     }
     return false;

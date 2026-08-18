@@ -34,46 +34,9 @@ function isPublicAppRoute(pathname) {
   return false;
 }
 
-/** Session-wide providers + shell that survive navigation between route groups (e.g. Focus ↔ Workspaces). */
-export default function AppSessionProviders({ children }) {
-  const { isSignedIn, isLoaded } = useAuth();
-  const pathname = usePathname();
-  const authTransition = useAuthTransitionActive();
-  const isSsoCallback = pathname?.startsWith('/auth/sso-callback') ?? false;
-  // During login, keep mounting the destination under the overlay so it can
-  // fetch; only hide the marketing shell on `/` so it does not flash.
-  const hideUnderLoader =
-    authTransition && !isSsoCallback && (pathname === '/' || !isSignedIn);
-  const clerkLoadingProtected =
-    !isLoaded && isProtectedAppRoute(pathname) && !authTransition;
-
-  if (!isLoaded) {
-    return (
-      <>
-        <UserPreferencesHydrator />
-        <AuthTransitionHost />
-        {clerkLoadingProtected ? <ClerkShellLoader /> : null}
-        {hideUnderLoader ? null : children}
-      </>
-    );
-  }
-
-  if (!isSignedIn) {
-    return (
-      <>
-        <UserPreferencesHydrator />
-        <AuthTransitionHost />
-        {hideUnderLoader ? null : children}
-      </>
-    );
-  }
-
-  const showAppShell = !isPublicAppRoute(pathname);
-
+function SignedInSession({ children, showAppShell }) {
   return (
     <>
-      <UserPreferencesHydrator />
-      <AuthTransitionHost />
       <SupabaseAuthBridge />
       <CelebrationProvider>
         <CelebrationModal />
@@ -95,6 +58,33 @@ export default function AppSessionProviders({ children }) {
           </FocusProvider>
         </AssistantProvider>
       </CelebrationProvider>
+    </>
+  );
+}
+
+/** Session-wide providers + shell that survive navigation between route groups (e.g. Focus ↔ Workspaces). */
+export default function AppSessionProviders({ children }) {
+  const { isSignedIn, isLoaded } = useAuth();
+  const pathname = usePathname();
+  const authTransition = useAuthTransitionActive();
+  const isSsoCallback = pathname?.startsWith('/auth/sso-callback') ?? false;
+  const hideUnderLoader =
+    authTransition && !isSsoCallback && (pathname === '/' || !isSignedIn);
+  const clerkLoadingProtected =
+    !isLoaded && isProtectedAppRoute(pathname) && !authTransition;
+  const showAppShell = isLoaded && isSignedIn && !isPublicAppRoute(pathname);
+  const signedOutTree = !isLoaded || !isSignedIn;
+
+  return (
+    <>
+      <UserPreferencesHydrator />
+      <AuthTransitionHost />
+      {clerkLoadingProtected ? <ClerkShellLoader /> : null}
+      {signedOutTree ? (
+        hideUnderLoader ? null : children
+      ) : (
+        <SignedInSession showAppShell={showAppShell}>{children}</SignedInSession>
+      )}
     </>
   );
 }

@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic';
-
 import LandingJsonLd from '@/components/landing/LandingJsonLd';
 import { landingFont } from '@/lib/landingFont';
 import { DEFAULT_DESCRIPTION, getSiteUrl, SEO_KEYWORDS, SITE_NAME, SITE_TAGLINE } from '@/lib/siteConfig';
@@ -58,6 +56,14 @@ export const metadata = {
 export default function LandingLayout({ children }) {
   return (
     <div className={`landing-page ${landingFont.variable} ${landingFont.className}`}>
+      <link rel="preload" as="image" href="/LandingPageImages/logo.png" />
+      <link rel="preload" as="image" href="/LandingPageImages/analytics-hero-light.png" media="(min-width: 768px)" />
+      <link rel="preload" as="image" href="/LandingPageImages/analytics-hero-dark.png" media="(min-width: 768px)" />
+      <link rel="preload" as="image" href="/LandingPageImages/ambience.png" media="(min-width: 768px)" />
+      <link rel="preload" as="image" href="/LandingPageImages/Tasks.png" media="(min-width: 768px)" />
+      <link rel="preload" as="image" href="/LandingPageImages/Integrations.png" media="(min-width: 768px)" />
+      <link rel="preload" as="image" href="/LandingPageImages/landing-dark-image-1.png" media="(min-width: 768px)" />
+      <link rel="preload" as="image" href="/LandingPageImages/landing-dark-image-2.png" media="(min-width: 768px)" />
       <LandingJsonLd />
       {children}
     </div>

@@ -81,18 +81,30 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   if (req.nextUrl.pathname.startsWith('/signin')) {
+    const ticket = req.nextUrl.searchParams.get('__clerk_ticket');
     const returnPath = req.nextUrl.searchParams.get('redirect_url');
+    if (ticket && returnPath && returnPath.startsWith('/o/')) {
+      const dest = new URL(returnPath, req.url);
+      dest.searchParams.delete('__clerk_ticket');
+      dest.searchParams.delete('__clerk_status');
+      if (dest.searchParams.get('from_invite') !== '1') {
+        dest.searchParams.set('from_invite', '1');
+      }
+      return NextResponse.redirect(dest);
+    }
     return NextResponse.redirect(new URL(authModalUrl('signin', returnPath), req.url));
   }
 
   if (req.nextUrl.pathname.startsWith('/signup')) {
     const ticket = req.nextUrl.searchParams.get('__clerk_ticket');
-    const status = req.nextUrl.searchParams.get('__clerk_status') || 'sign_up';
     const redirectUrl = req.nextUrl.searchParams.get('redirect_url');
     if (ticket && redirectUrl && redirectUrl.startsWith('/o/')) {
       const dest = new URL(redirectUrl, req.url);
-      dest.searchParams.set('__clerk_ticket', ticket);
-      dest.searchParams.set('__clerk_status', status);
+      dest.searchParams.delete('__clerk_ticket');
+      dest.searchParams.delete('__clerk_status');
+      if (dest.searchParams.get('from_invite') !== '1') {
+        dest.searchParams.set('from_invite', '1');
+      }
       return NextResponse.redirect(dest);
     }
     return NextResponse.redirect(new URL(authModalUrl('signup', redirectUrl), req.url));
@@ -107,6 +119,16 @@ export default clerkMiddleware(async (auth, req) => {
 
   if (isProtectedWorkspaceApi(req) && !isPublicWorkspaceApi(req)) {
     await auth.protect();
+  }
+
+  if (isB2BWorkspaceRoute(req) && req.nextUrl.searchParams.has('__clerk_ticket')) {
+    const url = req.nextUrl.clone();
+    url.searchParams.delete('__clerk_ticket');
+    url.searchParams.delete('__clerk_status');
+    if (url.searchParams.get('from_invite') !== '1') {
+      url.searchParams.set('from_invite', '1');
+    }
+    return NextResponse.redirect(url);
   }
 
   if (isB2BWorkspaceRoute(req) && req.nextUrl.searchParams.get('welcome') === '1') {

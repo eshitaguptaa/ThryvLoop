@@ -18,7 +18,7 @@ import { getUserStorageItem } from '@/utils/userStorage';
  */
 export default function UserPreferencesHydrator() {
   const { user, isLoaded } = useUser();
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const hydratedForUser = useRef(null);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function UserPreferencesHydrator() {
 
       if (cancelled) return;
 
-      setTheme(saved);
+      if (saved !== theme) setTheme(saved);
       hydratedForUser.current = userId;
       window.dispatchEvent(new CustomEvent('user-preferences-hydrated'));
     })();
@@ -62,7 +62,7 @@ export default function UserPreferencesHydrator() {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, user?.id, setTheme]);
+  }, [isLoaded, user?.id, setTheme, theme]);
 
   return null;
 }
