@@ -3,7 +3,12 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthenticateWithRedirectCallback, useAuth, useSignIn, useSignUp } from '@clerk/nextjs';
-import { AFTER_AUTH_PATH, consumePostAuthRedirect } from '@/lib/authRoutes';
+import {
+  AFTER_AUTH_PATH,
+  SSO_CALLBACK_PATH,
+  authModalUrl,
+  consumePostAuthRedirect,
+} from '@/lib/authRoutes';
 import {
   ensureAuthLoginTransition,
   setAuthLoginProgress,
@@ -86,7 +91,22 @@ export default function SSOCallbackPage() {
     <>
       {/* Above the login overlay so Clerk bot-protection can render and be clicked. */}
       <div id="clerk-captcha" className="sso-callback-captcha" />
-      <AuthenticateWithRedirectCallback continueSignUpUrl={CONTINUE_PATH} transferable />
+      {/*
+        Only run Clerk's callback handler while the OAuth attempt is still pending.
+        Clerk often finishes Google sign-in server-side before this page loads; if the
+        handler runs anyway it finds nothing to process and falls back to Clerk's
+        hosted /sign-in page. Explicit URLs keep every fallback inside this app.
+      */}
+      {isLoaded && !isSignedIn ? (
+        <AuthenticateWithRedirectCallback
+          signInUrl={authModalUrl('signin')}
+          signUpUrl={authModalUrl('signup')}
+          signInFallbackRedirectUrl={SSO_CALLBACK_PATH}
+          signUpFallbackRedirectUrl={SSO_CALLBACK_PATH}
+          continueSignUpUrl={CONTINUE_PATH}
+          transferable
+        />
+      ) : null}
     </>
   );
 }

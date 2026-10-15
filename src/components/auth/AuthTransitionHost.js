@@ -31,6 +31,7 @@ export default function AuthTransitionHost() {
   const [finishing, setFinishing] = useState(false);
   const [destinationReady, setDestinationReady] = useState(false);
   const [loginProgress, setLoginProgress] = useState(() => getAuthLoginProgress());
+  const [mounted, setMounted] = useState(false);
   const finishTimerRef = useRef(null);
   const safetyTimerRef = useRef(null);
 
@@ -72,6 +73,19 @@ export default function AuthTransitionHost() {
     window.addEventListener(AUTH_TRANSITION_EVENT, syncMode);
     return () => window.removeEventListener(AUTH_TRANSITION_EVENT, syncMode);
   }, [pathname, syncMode]);
+
+  // A login flag left in sessionStorage by an abandoned attempt (closed Google tab,
+  // back button, failed redirect) would cover a signed-out page with the loader
+  // forever. On a fresh page load, drop it unless we are mid-OAuth or signed in.
+  const staleCheckDoneRef = useRef(false);
+  useEffect(() => {
+    if (staleCheckDoneRef.current || !isLoaded) return;
+    staleCheckDoneRef.current = true;
+    if (getAuthTransitionMode() !== 'login') return;
+    if (isSignedIn) return;
+    if (pathname?.startsWith('/auth/')) return;
+    clearAuthTransition();
+  }, [isLoaded, isSignedIn, pathname]);
 
   useEffect(() => {
     const syncProgress = () => setLoginProgress(getAuthLoginProgress());
@@ -158,7 +172,14 @@ export default function AuthTransitionHost() {
     };
   }, [beginFinish, finishing, isLoaded, isSignedIn, mode, pathname]);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const isSso = pathname === '/auth/sso-callback';
+  // Portals need document.body: never render during SSR (the callback page is
+  // server-rendered, so this used to throw "document is not defined").
+  if (!mounted) return null;
   if (!mode && !isSso) return null;
 
   const loginMessage = loginProgress.message || authTransitionMessage('login');

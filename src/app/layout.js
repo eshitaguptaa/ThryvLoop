@@ -34,6 +34,32 @@ export const viewport = {
   maximumScale: 5,
 };
 
+/**
+ * Clerk only redirects back to these origins after OAuth. Include the app's own
+ * URL (NEXT_PUBLIC_APP_URL) and localhost in dev, or Google sign-in on localhost
+ * falls back to Clerk's hosted sign-in page.
+ */
+function originOf(url) {
+  try {
+    return url ? new URL(url).origin : null;
+  } catch {
+    return null;
+  }
+}
+
+const ALLOWED_REDIRECT_ORIGINS = Array.from(
+  new Set(
+    [
+      'https://www.thryvloop.com',
+      'https://thryvloop.com',
+      originOf(process.env.NEXT_PUBLIC_APP_URL),
+      ...(process.env.NODE_ENV === 'development'
+        ? ['http://localhost:3000', 'http://127.0.0.1:3000']
+        : []),
+    ].filter(Boolean),
+  ),
+);
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -52,10 +78,7 @@ export default function RootLayout({ children }) {
             signInFallbackRedirectUrl="/home"
             signUpFallbackRedirectUrl="/home"
             afterSignOutUrl="/"
-            allowedRedirectOrigins={[
-              'https://www.thryvloop.com',
-              'https://thryvloop.com',
-            ]}
+            allowedRedirectOrigins={ALLOWED_REDIRECT_ORIGINS}
             taskUrls={{
               'choose-organization': '/o/invite-continue',
             }}

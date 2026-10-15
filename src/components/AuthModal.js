@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useSignIn, useSignUp } from '@clerk/nextjs';
+import { useAuth, useSignIn, useSignUp } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import LegalAuthConsent from '@/components/legal/LegalAuthConsent';
 import { markAuthLoginTransition, setAuthLoginProgress, clearAuthTransition } from '@/lib/authTransition';
@@ -50,11 +50,33 @@ function unlockBodyScroll() {
   delete document.body.dataset.authModalOpen;
 }
 
+const AUTH_TRAIL_KEY = 'thryvloop-auth-debug';
+
+/** Dev-only breadcrumb trail of OAuth attempts (localStorage, last 40 entries). */
+function authTrail(step, data) {
+  if (process.env.NODE_ENV === 'production' || typeof window === 'undefined') return;
+  try {
+    const entries = JSON.parse(window.localStorage.getItem(AUTH_TRAIL_KEY) || '[]');
+    entries.push({
+      at: new Date().toISOString(),
+      origin: window.location.origin,
+      step,
+      data: data == null ? undefined : String(data).slice(0, 500),
+    });
+    window.localStorage.setItem(AUTH_TRAIL_KEY, JSON.stringify(entries.slice(-40)));
+    // Mirror to the dev server so attempts from any browser/profile land in one log.
+    navigator.sendBeacon?.('/api/dev/auth-trail', JSON.stringify(entries[entries.length - 1]));
+  } catch {
+    /* ignore */
+  }
+}
+
 function AuthModalInner({ isOpen, onClose, initialMode = 'signin' }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useMobileViewport();
   const { isLoaded: isSignInLoaded, signIn, setActive } = useSignIn();
+  const { isSignedIn } = useAuth();
   const { isLoaded: isSignUpLoaded, signUp, setActive: setActiveSignUp } = useSignUp();
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState('');
@@ -132,16 +154,83 @@ function AuthModalInner({ isOpen, onClose, initialMode = 'signin' }) {
         visible: { opacity: 1, scale: 1, y: 0 },
       };
 
+  const goToApp = useCallback(() => {
+    const target = searchParams.get('redirect_url');
+    router.replace(target?.startsWith('/') && !target.startsWith('//') ? target : '/home');
+  }, [router, searchParams]);
+
+  // Warm up the connection to the OAuth providers as soon as the modal opens, so a
+  // slow first DNS lookup / TLS handshake (proxies, campus or VPN networks) happens
+  // while the user reads the modal, not after they click "Continue with Google".
+  useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return;
+    const origins = ['https://accounts.google.com', 'https://login.microsoftonline.com'];
+    const links = origins.flatMap((origin) => {
+      const preconnect = document.createElement('link');
+      preconnect.rel = 'preconnect';
+      preconnect.href = origin;
+      preconnect.crossOrigin = 'anonymous';
+      const dns = document.createElement('link');
+      dns.rel = 'dns-prefetch';
+      dns.href = origin;
+      document.head.append(preconnect, dns);
+      return [preconnect, dns];
+    });
+    const started = performance.now();
+    fetch('https://accounts.google.com/generate_204', { mode: 'no-cors', cache: 'no-store' })
+      .then(() => authTrail('google-warmup', `${Math.round(performance.now() - started)}ms`))
+      .catch((e) => authTrail('google-warmup-failed', `${Math.round(performance.now() - started)}ms ${e?.message || e}`));
+    return () => links.forEach((link) => link.remove());
+  }, [isOpen]);
+
+  // Already signed in (e.g. a session from an earlier tab): skip the form entirely.
+  useEffect(() => {
+    if (isOpen && isSignedIn) goToApp();
+  }, [isOpen, isSignedIn, goToApp]);
+
   const handleOauth = async (strategy) => {
+    if (isSignedIn) {
+      goToApp();
+      return;
+    }
     setErrorMessage('');
     setOauthLoading(strategy);
+    const oauthLabel = strategy === 'oauth_microsoft' ? 'Microsoft' : 'Google';
+    // If Clerk never navigates away (blocked request, unsolved captcha, network),
+    // drop the full-screen loader and show an error instead of hanging forever.
+    let leftPage = false;
+    const onPageHide = () => {
+      leftPage = true;
+      window.clearTimeout(watchdog);
+    };
+    const watchdog = window.setTimeout(() => {
+      if (leftPage) return;
+      authTrail('watchdog-fired', JSON.stringify({
+        signInStatus: signIn?.status ?? null,
+        verification: signIn?.firstFactorVerification?.status ?? null,
+        hasExternalUrl: Boolean(signIn?.firstFactorVerification?.externalVerificationRedirectURL),
+        online: navigator.onLine,
+      }));
+      window.removeEventListener('pagehide', onPageHide);
+      setOauthLoading(null);
+      clearAuthTransition();
+      setErrorMessage(
+        `${oauthLabel} is taking too long to respond. Check your connection and try again.`,
+      );
+    }, 30000);
+    window.addEventListener('pagehide', onPageHide, { once: true });
+    authTrail('click', JSON.stringify({ strategy, isSignInLoaded, hasSignIn: Boolean(signIn) }));
     try {
       // Always use sign-in OAuth: Clerk signs in existing users and creates new
       // ones from Google/Microsoft. Sign-up OAuth + an existing account dumps
       // users on Clerk's hosted Account Portal instead of this app.
       // Do not pass additionalScopes. Calendar/Gmail consent is in-app only.
       if (!isSignInLoaded || !signIn) {
+        window.clearTimeout(watchdog);
+        window.removeEventListener('pagehide', onPageHide);
         setOauthLoading(null);
+        authTrail('clerk-not-loaded');
+        setErrorMessage('Sign-in is still loading. Please try again in a moment.');
         return;
       }
       const afterAuth = searchParams.get('redirect_url');
@@ -149,22 +238,93 @@ function AuthModalInner({ isOpen, onClose, initialMode = 'signin' }) {
         ? afterAuth
         : undefined;
       if (afterAuthPath) setPostAuthRedirect(afterAuthPath);
-      const oauthLabel = strategy === 'oauth_microsoft' ? 'Microsoft' : 'Google';
       markAuthLoginTransition(`Signing in with ${oauthLabel}`);
       setAuthLoginProgress({ percent: 18, message: `Redirecting to ${oauthLabel}` });
       const { redirectUrl, redirectUrlComplete } = getOauthRedirectUrls(afterAuthPath);
-      await signIn.authenticateWithRedirect({
-        strategy,
-        redirectUrl,
-        redirectUrlComplete,
-        ...(lockedInviteEmail ? { oidcPrompt: 'select_account' } : {}),
+      // The first request to Clerk can stall on a dead pooled connection (VPN or
+      // network-filter extensions, sleeping Wi-Fi). Clerk's fetch has no timeout, so
+      // if it hasn't answered within a few seconds, fire a fresh attempt; whichever
+      // answers first wins, and Clerk redirects to the provider from that one.
+      let attemptNo = 0;
+      await new Promise((resolve, reject) => {
+        let settled = false;
+        let retryTimer = null;
+        const launch = () => {
+          attemptNo += 1;
+          const n = attemptNo;
+          const started = performance.now();
+          authTrail('request', `#${n} ${redirectUrl}`);
+          signIn
+            .authenticateWithRedirect({
+              strategy,
+              redirectUrl,
+              redirectUrlComplete,
+              ...(lockedInviteEmail ? { oidcPrompt: 'select_account' } : {}),
+            })
+            .then(
+              () => {
+                authTrail('attempt-responded', `#${n} after ${Math.round(performance.now() - started)}ms`);
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(retryTimer);
+                resolve();
+              },
+              (err) => {
+                authTrail('attempt-failed', `#${n} ${err?.errors?.[0]?.code || err?.message || err}`);
+                if (settled || n !== attemptNo) return;
+                settled = true;
+                window.clearTimeout(retryTimer);
+                reject(err);
+              },
+            );
+          if (n < 3) {
+            retryTimer = window.setTimeout(() => {
+              if (!settled && !leftPage) launch();
+            }, n === 1 ? 4000 : 5000);
+          }
+        };
+        launch();
       });
+      const externalUrl = signIn.firstFactorVerification?.externalVerificationRedirectURL;
+      authTrail('clerk-responded', JSON.stringify({ status: signIn.status, hasExternalUrl: Boolean(externalUrl) }));
+      // Clerk normally navigates by itself; if the page is still here shortly after,
+      // send the browser to the provider ourselves.
+      if (externalUrl) {
+        const href = externalUrl.toString();
+        if (typeof window.navigation?.addEventListener === 'function') {
+          window.navigation.addEventListener('navigateerror', (e) => {
+            authTrail('navigate-error', e?.message || e?.error?.message || 'unknown');
+          }, { once: true });
+        }
+        // On slow or filtered networks the first connection to the provider can stall
+        // while a fresh one goes straight through. Keep the loader up and restart the
+        // redirect every 3 seconds until the browser leaves (the 30s watchdog above is
+        // the last resort).
+        let renavigations = 0;
+        const renavigate = () => {
+          if (leftPage) return;
+          renavigations += 1;
+          authTrail('renavigate', JSON.stringify({
+            n: renavigations,
+            framed: window.top !== window.self,
+            visible: document.visibilityState,
+          }));
+          window.location.assign(href);
+          if (renavigations < 8) window.setTimeout(renavigate, 3000);
+        };
+        window.setTimeout(renavigate, 3000);
+      }
     } catch (error) {
+      window.clearTimeout(watchdog);
+      window.removeEventListener('pagehide', onPageHide);
+      console.error('[ThryvLoop] OAuth sign-in failed', error);
+      authTrail('error', `${error?.errors?.[0]?.code || ''} ${error?.errors?.[0]?.longMessage || error?.message || error}`);
       setOauthLoading(null);
       clearAuthTransition();
       const message =
         error?.errors?.[0]?.longMessage ||
         error?.errors?.[0]?.message ||
+        error?.message ||
         'Unable to start sign in. Please try again.';
       setErrorMessage(message);
     }
@@ -490,7 +650,8 @@ function AuthModalInner({ isOpen, onClose, initialMode = 'signin' }) {
                   {errorMessage}
                 </div>
               )}
-              <div id="clerk-captcha" className="mt-2" />
+              {/* During OAuth the full-screen loader covers the modal; lift Clerk's captcha above it. */}
+              <div id="clerk-captcha" className={oauthLoading ? 'sso-callback-captcha' : 'mt-2'} />
 
               {forgotStep ? (
                 <form

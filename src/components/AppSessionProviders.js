@@ -68,8 +68,14 @@ export default function AppSessionProviders({ children }) {
   const pathname = usePathname();
   const authTransition = useAuthTransitionActive();
   const isSsoCallback = pathname?.startsWith('/auth/sso-callback') ?? false;
+  // Hide content under the full-screen loader only where it would flash the wrong
+  // page: the landing page once signed in, or a protected page while signing out.
+  // While a signed-out user starts Google/Microsoft sign-in on the landing page the
+  // modal must stay mounted, so errors and Clerk's captcha can still be shown.
   const hideUnderLoader =
-    authTransition && !isSsoCallback && (pathname === '/' || !isSignedIn);
+    authTransition
+    && !isSsoCallback
+    && ((pathname === '/' && isSignedIn) || (!isSignedIn && pathname !== '/'));
   const clerkLoadingProtected =
     !isLoaded && isProtectedAppRoute(pathname) && !authTransition;
   const showAppShell = isLoaded && isSignedIn && !isPublicAppRoute(pathname);
